@@ -1,6 +1,6 @@
 # Easy Entity Styler Card
 
-A highly customizable dashboard card that organizes and displays your entities in a clean, visually appealing way. SEED Card gives you full control over the look and behavior of your entity cards.
+A highly customizable dashboard card that organizes and displays your entities in a clean way while giving you full control over the look and behavior of your entity cards.
 
 https://github.com/Ltek/easy-entity-styler-card
 
