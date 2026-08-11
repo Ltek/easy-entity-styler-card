@@ -33,6 +33,8 @@ https://github.com/Ltek/seed-card
 ### 📸 Screenshots
 
 Example showing just a fraction of the available options...
+<img width="915" height="1431" alt="stormaudio" src="https://github.com/user-attachments/assets/9e3c2012-506e-4ce8-835c-ad9cbd2264da" />
+
 
 
 
