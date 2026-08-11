@@ -1,0 +1,188 @@
+easy-entity-styler-card
+
+Visual Editor Styling Options
+
+Title
+• Title text
+• Icon (MDI)
+• Text Size
+• Icon Size
+• Weight (Normal/Semibold/Bold/Black)
+• Italic toggle
+• Text Color
+• Icon Color
+• Show "last changed" time
+• Show expand/collapse chevron
+
+Entity Filter
+• Filter Types (Text/Label/Group toggles)
+• Text strings to match (entity_id, platform, device name)
+• Labels to match
+• Groups to include members
+
+Section Header
+• Show entity count
+• Auto-close other sections
+
+Global Section Glow
+• Glow Rule (Never/Always/When Expanded)
+• Glow stronger on sides with borders
+• Glow Intensity (25-300%)
+• Glow Color
+
+Scaling
+• Overall Scale
+• Entity Icons
+• Section Title Icons
+• Section Title Text
+• Entity Text
+• Slider Width
+
+Global Section Borders
+• Enable/disable borders
+• Border Color
+• Border Weight
+• Corner Radius
+• Side toggles (Top/Bottom/Left/Right)
+• Corner toggles (TL/TR/BR/BL)
+
+Global Section Background & Shadow
+• Background Color
+• Transparent toggle
+• Enable drop-shadow
+• Shadow Color
+• X/Y Offset
+• Blur
+• Spread
+• Opacity
+
+Global Section Dividers
+• Divider Color
+• Enable above dividers
+• Line Weight (Above)
+• Length (Above)
+• Enable below dividers
+• Line Weight (Below)
+• Length (Below)
+
+Global Child Row Visuals
+• Row Indent
+• Gray out icons when off
+• Default Icon Color
+• Enable row borders
+• Border Color
+• Border Weight
+• Corner Radius
+• Side toggles (Top/Bottom/Left/Right)
+• Corner toggles (TL/TR/BR/BL)
+• First row top border
+• Last row bottom border
+
+Remove Text From Entity Names
+• Strip strings (substrings to remove from all entity names)
+
+Title Wrapper (Card Container)
+• Make whole card collapsible
+• Enable border
+• Border Color
+• Border Weight
+• Corner Radius
+• Side toggles (Top/Bottom/Left/Right)
+• Corner toggles (TL/TR/BR/BL)
+• Glow Condition (Never/Always/When Entity On)
+• Glow Entity
+• Glow stronger on sides with borders
+• Glow Intensity
+• Glow Color
+• Background Color
+• Transparent toggle
+• Enable drop-shadow
+• Shadow Color
+• X/Y Offset
+• Blur
+• Spread
+• Opacity
+
+Per-Section Settings
+
+Basic
+• Section Name
+• Show Title Row
+• Collapsible
+• Chips Only
+
+Background
+• Mode (Global/Custom/Transparent)
+• Color (Custom mode)
+
+Border
+• Mode (Global/Custom/None)
+• Color
+• Weight
+• Corner Radius
+• Side toggles (Top/Bottom/Left/Right)
+
+Glow
+• Mode (Global/Custom/None)
+• Color
+• Glow Rule (Always/When Expanded)
+• Glow stronger on sides with borders
+• Intensity
+
+Shadow
+• Mode (Global/Custom/None)
+• Color
+• X/Y Offset
+• Blur
+• Spread
+• Opacity
+
+Divider
+• Mode (Global/Custom)
+• Color
+• Show above toggle
+• Weight (Above)
+• Length (Above)
+• Show below toggle
+• Weight (Below)
+• Length (Below)
+
+Row Visuals
+• Mode (Global/Custom)
+• Row Indent
+• Enable row borders
+• Border Color
+• Border Weight
+• Corner Radius
+• Side toggles (Top/Bottom/Left/Right)
+
+Section Header Style
+• Icon (MDI)
+• Icon Color
+• Icon Size
+• Title Color
+• Title Font Size
+• Title Weight (Normal/Semibold/Bold/Black)
+• Italic toggle
+
+Entity Row Style
+• Icon Color
+• Icon Size
+• Text Color
+• Font Size
+• Text Weight (Normal/Semibold/Bold/Black)
+• Italic toggle
+
+Chip Style
+• Background Color
+• Border Color
+• Text Color
+• Chip Scale (50-250%)
+• Show icon on chip
+• Chip Icon Source (Auto/Entity/Section/None)
+• Show entity name
+• Hide chip when off
+• Layout (Wrap/Column/Grid)
+• Shape (Pill/Rounded/Square)
+• Corner Radius (Rounded shape)
+
