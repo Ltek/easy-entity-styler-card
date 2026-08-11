@@ -8,6 +8,7 @@ https://github.com/Ltek/easy-entity-styler-card
 
 * **Group entities into collapsible sections** – Organize your entities with sections that can be individually expanded or collapsed.
 * **Powerful filtering system** – Automatically populate sections using:
+
   * Text matching (entity ID, integration platform, or device name)
   * Home Assistant labels
   * Group helpers
@@ -25,9 +26,10 @@ https://github.com/Ltek/easy-entity-styler-card
 1. Create the folder `\config\www\community\easy-entity-styler-card`
 2. Download [`easy-entity-styler-card.js`](https://github.com/Ltek/seed-card/blob/main/easy-entity-styler-card.js) and place it in that folder.
 3. Add as a Dashboard Resource:
-  * Go to Settings > Dashboards > three-dot menu > Add Resource
-  * Enter `/local/community/easy-entity-styler-card/easy-entity-styler-card.js` and select "JavaScript Module"
-  * Click "Add"
+
+   * Go to Settings > Dashboards > three-dot menu > Add Resource
+   * Enter `/local/community/easy-entity-styler-card/easy-entity-styler-card.js` and select "JavaScript Module"
+   * Click "Add"
 4. Clear your browser cache and refresh.
 
 ### 📸 Screenshots
