@@ -1,8 +1,8 @@
-# Smart & Easy Entity Display (SEED) Card
+# Easy Entity Styler Card
 
 A highly customizable dashboard card that organizes and displays your entities in a clean, visually appealing way. SEED Card gives you full control over the look and behavior of your entity cards.
 
-https://github.com/Ltek/seed-card
+https://github.com/Ltek/easy-entity-styler-card
 
 ### ✨ Features
 
@@ -22,19 +22,17 @@ https://github.com/Ltek/seed-card
 
 ### 🚀 Installation
 
-1. Create the folder `\config\www\community\seed-card`
-2. Download [`seed-card.js`](https://github.com/Ltek/seed-card/blob/main/seed-card.js) and place it in that folder.
+1. Create the folder `\config\www\community\easy-entity-styler-card`
+2. Download [`easy-entity-styler-card.js`](https://github.com/Ltek/seed-card/blob/main/easy-entity-styler-card.js) and place it in that folder.
 3. Add as a Dashboard Resource:
   * Go to Settings > Dashboards > three-dot menu > Add Resource
-  * Enter `/local/community/seed-card/seed-card.js` and select "JavaScript Module"
+  * Enter `/local/community/easy-entity-styler-card/easy-entity-styler-card.js` and select "JavaScript Module"
   * Click "Add"
 4. Clear your browser cache and refresh.
 
 ### 📸 Screenshots
 
 Example showing just a fraction of the available options...
-<img width="915" height="1431" alt="stormaudio" src="https://github.com/user-attachments/assets/9e3c2012-506e-4ce8-835c-ad9cbd2264da" />
-
 
 
 
