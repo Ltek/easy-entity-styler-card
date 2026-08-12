@@ -2,11 +2,9 @@
 
 A highly customizable dashboard card that organizes and displays your entities in a clean way while giving you full control over the look and behavior of your entity cards. Bonus: 1000x easier and better performance than card-mod.
 
-Over 98 global card styling options
-
-Over 115 styling options per entity
-
-Over 162 options per card section
+* **Over 98 global card styling options**
+* **Over 115 styling options per entity**
+* **Over 162 options per card section**
 
 ... all in a super easy to use Visual Editor
 
