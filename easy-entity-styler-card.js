@@ -1,12 +1,19 @@
 // ============================================================================
-// SEED Card (Smart & Easy Entity Display) - Single File with Integrated Editor
-// Self-contained Lovelace card for displaying grouped entities.
+// Easy Entity Styer Card for Home Assistant
+// A highly customizable dashboard card that organizes and displays your
+// entities in a clean way while giving you full control over the look and
+// behavior of your entity cards.
+//
+// Over 98 global card styling options
+// Over 115 styling options per entity
+// Over 162 options per card section
+// … all in a super easy to use Visual Editor
 // ============================================================================
 
 // Debug logging - disabled by default
 let DEBUG = false;
 function debugLog(...args) {
-  if (DEBUG) console.log('[seed-card]', ...args);
+  if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
 const BUILD_NUMBER = 'v2026.08.11.40';
@@ -538,7 +545,7 @@ class SEEDCard extends HTMLElement {
   }
 
   static getConfigElement() {
-    return document.createElement('seed-card-editor');
+    return document.createElement('easy-entity-styler-card-editor');
   }
 
   static getStubConfigForEditor() {
@@ -698,7 +705,7 @@ class SEEDCard extends HTMLElement {
   // supports an entity-driven condition since there's only one wrapper.
   updateCardGlow() {
     if (!this._config) return;
-    const wrapper = this.querySelector('.seed-card-wrapper');
+    const wrapper = this.querySelector('.easy-entity-styler-card-wrapper');
     if (!wrapper) return;
 
     const condition = this._config.card_glow_condition || 'never';
@@ -910,15 +917,15 @@ class SEEDCard extends HTMLElement {
           color: ${colors.secondary_text};
           flex-shrink: 0;
         }
-        .seed-card-wrapper {
+        .easy-entity-styler-card-wrapper {
           ${cardBorderCss}
           ${cardRadiusCss}
           box-shadow: none;
           overflow: hidden;
           background: ${this._config.card_bg_color || 'transparent'};
         }
-        details.seed-card-wrapper { background: ${this._config.card_bg_color || 'transparent'} !important; }
-        .seed-card-summary {
+        details.easy-entity-styler-card-wrapper { background: ${this._config.card_bg_color || 'transparent'} !important; }
+        .easy-entity-styler-card-summary {
           list-style: none;
           cursor: pointer;
           user-select: none;
@@ -927,17 +934,17 @@ class SEEDCard extends HTMLElement {
           gap: 8px;
           padding: var(--seed-pad) calc(var(--seed-pad) * 1.5);
         }
-        .seed-card-summary::-webkit-details-marker { display: none; }
-        .seed-card-summary::marker { content: ""; }
-        .seed-card-summary .seed-title { flex: 1; padding: 0; }
-        .seed-card-chevron {
+        .easy-entity-styler-card-summary::-webkit-details-marker { display: none; }
+        .easy-entity-styler-card-summary::marker { content: ""; }
+        .easy-entity-styler-card-summary .seed-title { flex: 1; padding: 0; }
+        .easy-entity-styler-card-chevron {
           transition: transform 0.25s ease;
           color: ${colors.secondary_text};
           --mdc-icon-size: calc(22px * var(--seed-scale));
           flex-shrink: 0;
         }
-        details.seed-card-wrapper[open] > .seed-card-summary .seed-card-chevron { transform: rotate(180deg); }
-        .seed-card-body {
+        details.easy-entity-styler-card-wrapper[open] > .easy-entity-styler-card-summary .easy-entity-styler-card-chevron { transform: rotate(180deg); }
+        .easy-entity-styler-card-body {
           display: flex;
           flex-direction: column;
           gap: var(--seed-gap);
@@ -946,8 +953,8 @@ class SEEDCard extends HTMLElement {
         /* Non-collapsible card: no summary bar above the body, so restore the
            top padding the summary would otherwise provide, and drop the title
            row's own horizontal padding so it lines up with the sections. */
-        .seed-card-wrapper.seed-card-static > .seed-card-body { padding-top: var(--seed-pad); }
-        .seed-card-body > .seed-title { padding-left: calc(var(--seed-pad) * 0.5); padding-right: calc(var(--seed-pad) * 0.5); }
+        .easy-entity-styler-card-wrapper.easy-entity-styler-card-static > .easy-entity-styler-card-body { padding-top: var(--seed-pad); }
+        .easy-entity-styler-card-body > .seed-title { padding-left: calc(var(--seed-pad) * 0.5); padding-right: calc(var(--seed-pad) * 0.5); }
         .seed-section {
           border-top: var(--sec-border-top, ${gSecBorderTop});
           border-bottom: var(--sec-border-bottom, ${gSecBorderBottom});
@@ -1403,20 +1410,20 @@ class SEEDCard extends HTMLElement {
       // pushes the chevron to the right.
       const summaryTitleHtml = titleHtml || '<div class="seed-title"><span class="seed-title-text"></span></div>';
       html += `
-        <details class="seed-card-wrapper" open>
-          <summary class="seed-card-summary">
+        <details class="easy-entity-styler-card-wrapper" open>
+          <summary class="easy-entity-styler-card-summary">
             ${summaryTitleHtml}
-            ${showCardChevronFlag ? '<ha-icon class="seed-card-chevron" icon="mdi:chevron-down"></ha-icon>' : ''}
+            ${showCardChevronFlag ? '<ha-icon class="easy-entity-styler-card-chevron" icon="mdi:chevron-down"></ha-icon>' : ''}
           </summary>
-          <div class="seed-card-body">${sectionsHtml}</div>
+          <div class="easy-entity-styler-card-body">${sectionsHtml}</div>
         </details>
       `;
     } else {
       // Non-collapsible: same wrapper (so border/glow/shadow still apply), but
       // a plain <div> with the title rendered at the top of the body.
       html += `
-        <div class="seed-card-wrapper seed-card-static">
-          <div class="seed-card-body">${titleHtml}${sectionsHtml}</div>
+        <div class="easy-entity-styler-card-wrapper easy-entity-styler-card-static">
+          <div class="easy-entity-styler-card-body">${titleHtml}${sectionsHtml}</div>
         </div>
       `;
     }
@@ -1853,7 +1860,7 @@ class SEEDCardEditor extends HTMLElement {
     if (configCopy.zones) {
       delete configCopy.zones;
     }
-    pre.textContent = toYaml({ type: 'custom:seed-card', ...configCopy });
+    pre.textContent = toYaml({ type: 'custom:easy-entity-styler-card', ...configCopy });
   }
 
   // Save which editor sections are currently open
@@ -4946,18 +4953,18 @@ class SEEDCardEditor extends HTMLElement {
 }
 
 // ============ REGISTER CUSTOM ELEMENTS ============
-console.log(`📦 Registering seed-card custom elements... [${BUILD_NUMBER}]`);
+console.log(`📦 Registering easy-entity-styler-card custom elements... [${BUILD_NUMBER}]`);
 
-customElements.define('seed-card', SEEDCard);
-customElements.define('seed-card-editor', SEEDCardEditor);
+customElements.define('easy-entity-styler-card', SEEDCard);
+customElements.define('easy-entity-styler-card-editor', SEEDCardEditor);
 
-console.log('[seed-card] Loaded successfully -', BUILD_NUMBER);
+console.log('[easy-entity-styler-card] Loaded successfully -', BUILD_NUMBER);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: 'seed-card',
+  type: 'easy-entity-styler-card',
   name: 'Smart & Easy Entity Display Card',
   description: 'Smart & Easy Entity Display Card',
 });
 
-console.log(`✅ seed-card registered successfully! [${BUILD_NUMBER}]`);
+console.log(`✅ easy-entity-styler-card registered successfully! [${BUILD_NUMBER}]`);
