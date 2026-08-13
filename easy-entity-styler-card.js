@@ -16,7 +16,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.08.11.40';
+const BUILD_NUMBER = 'v2026.08.13.41';
 
 const AUDIO_CHIP_KEYWORDS = [
   'audio_format', 'audio_codec', 'surround_mode', 'stormxt',
