@@ -16,7 +16,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.08.13.41';
+const BUILD_NUMBER = 'v2026.08.15.47';
 
 const AUDIO_CHIP_KEYWORDS = [
   'audio_format', 'audio_codec', 'surround_mode', 'stormxt',
@@ -191,7 +191,101 @@ function isSeedEntity(entityId, config, hass) {
   return false;
 }
 
-// Shared by SEEDCard.setConfig and SEEDCardEditor._normalizeConfig
+// One Entity Display Rule: compares an entity's live state to either a static
+// value or another entity's live state. Rules are evaluated per entity, in
+// order, and joined to the running result by each rule's `join` (AND/OR).
+//   operator: 'eq' (value is equal to) | 'ne' (value is not equal to)
+//   compare_type: 'value' (static text in `value`) | 'entity' (state of
+//     `compare_entity`)
+//   join: 'and' | 'or' — how this rule combines with the result of the rules
+//     above it (ignored for the first rule)
+function normalizeRule(r) {
+  r = r || {};
+  return {
+    operator: r.operator === 'ne' ? 'ne' : 'eq',
+    compare_type: r.compare_type === 'entity' ? 'entity' : 'value',
+    value: r.value != null ? String(r.value) : '',
+    compare_entity: r.compare_entity || '',
+    join: r.join === 'or' ? 'or' : 'and'
+  };
+}
+
+// Normalize a chip tap/hold action config. Supported actions:
+//   none         - do nothing
+//   more-info    - open the entity's more-info dialog (uses action_entity or
+//                  the chip's own entity)
+//   toggle       - call homeassistant.toggle on the target entity
+//   navigate     - navigate to navigation_path (a Lovelace path)
+//   url          - open url_path in a new tab
+//   call-service - call `service` ("domain.service") with service_data
+// action_entity overrides the target entity for more-info / toggle (blank =
+// use the chip's own entity).
+const CHIP_ACTIONS = ['none', 'more-info', 'toggle', 'navigate', 'url', 'call-service'];
+function normalizeAction(a, defaultAction) {
+  a = a || {};
+  const action = CHIP_ACTIONS.includes(a.action) ? a.action : (defaultAction || 'none');
+  return {
+    action,
+    action_entity: a.action_entity || '',
+    navigation_path: a.navigation_path || '',
+    url_path: a.url_path || '',
+    service: a.service || '',
+    service_data: (a.service_data && typeof a.service_data === 'object') ? a.service_data : {}
+  };
+}
+
+// Per-section style groups and the config keys each owns. The editor's Reset
+// button reverts just its group's keys to normalizeSection() defaults. Keys
+// listed here are exactly the ones each style block's controls edit.
+const SEED_STYLE_GROUPS = {
+  background: ['bg_mode', 'bg_color'],
+  border: ['border_mode', 'border_width', 'border_radius', 'border_top', 'border_bottom', 'border_left', 'border_right', 'border_corners', 'border_color'],
+  glow: ['glow_mode', 'glow_color', 'glow_condition', 'glow_borders_only', 'glow_intensity'],
+  shadow: ['shadow_mode', 'shadow_color', 'shadow_x', 'shadow_y', 'shadow_blur', 'shadow_spread', 'shadow_opacity'],
+  divider: ['divider_mode', 'divider_above', 'divider_above_width', 'divider_above_length', 'divider_below', 'divider_below_width', 'divider_below_length', 'divider_color'],
+  row_visuals: ['row_visuals_mode', 'row_indent', 'row_border_enabled', 'row_border_width', 'row_border_radius', 'row_border_top', 'row_border_bottom', 'row_border_left', 'row_border_right', 'row_border_corners', 'row_border_color'],
+  header: ['icon', 'icon_color', 'icon_size', 'title_color', 'title_font_size', 'title_font_weight', 'title_font_style', 'title_indent'],
+  entity_row: ['entity_icon_color', 'entity_icon_size', 'entity_text_color', 'entity_font_size', 'entity_font_weight', 'entity_font_style'],
+  chip: ['chip_bg', 'chip_border_color', 'chip_text_color', 'chip_scale', 'chip_show_icon', 'chip_icon_source', 'chip_show_name', 'chip_hide_state', 'chip_hide_off', 'chip_hide_unknown', 'chip_hide_unavailable', 'chip_layout', 'chip_shape', 'chip_radius'],
+  chip_actions: ['chip_tap_action', 'chip_hold_action'],
+  count: ['count_mode', 'count_prefix', 'count_color', 'count_font_size', 'count_font_weight', 'count_font_style']
+};
+
+// Evaluate a section's ordered Entity Display Rules against one entity.
+// Returns true if the entity should be shown. Empty rule list = always show.
+// Left-to-right evaluation with each rule's own AND/OR join (no precedence
+// beyond order, matching the documented "processed top to bottom" behavior).
+function entityPassesRules(entityId, rules, hass) {
+  if (!Array.isArray(rules) || rules.length === 0) return true;
+  const st = hass && hass.states ? hass.states[entityId] : null;
+  const entityVal = st ? st.state : '';
+
+  let result = null;
+  for (const rule of rules) {
+    let target;
+    if (rule.compare_type === 'entity') {
+      const cmp = rule.compare_entity && hass && hass.states ? hass.states[rule.compare_entity] : null;
+      target = cmp ? cmp.state : '';
+    } else {
+      target = rule.value != null ? String(rule.value) : '';
+    }
+    // Case-insensitive, trimmed comparison so "On" matches "on" etc.
+    const a = String(entityVal).trim().toLowerCase();
+    const b = String(target).trim().toLowerCase();
+    const pass = rule.operator === 'ne' ? a !== b : a === b;
+
+    if (result === null) {
+      result = pass;
+    } else if (rule.join === 'or') {
+      result = result || pass;
+    } else {
+      result = result && pass;
+    }
+  }
+  return result === null ? true : result;
+}
+
+// Shared by EasyEntityStylerCard.setConfig and the editor's _normalizeConfig
 // so the two never drift apart on defaults.
 function normalizeSection(s) {
   return {
@@ -211,6 +305,11 @@ function normalizeSection(s) {
     title_font_size: s.title_font_size || 14,
     title_font_weight: s.title_font_weight || 600,
     title_font_style: s.title_font_style || 'normal',
+    // Left indent of the section header row (px).
+    title_indent: s.title_indent ?? 0,
+    // Force the section open whenever it has visible entities (only meaningful
+    // for a collapsible section). Overrides auto-close while entities show.
+    keep_expanded_when_entities: s.keep_expanded_when_entities === true,
     // Entity row style, applied to every entity rendered in this section
     entity_icon_color: s.entity_icon_color || '',
     entity_icon_size: s.entity_icon_size || 20,
@@ -228,8 +327,19 @@ function normalizeSection(s) {
     // own icon, 'section' = this section's icon, 'none' = no icon on the chip
     chip_icon_source: s.chip_icon_source || 'auto',
     chip_show_name: s.chip_show_name === true,
-    // Hide the chip entirely when the entity's state is off/unknown/unavailable
-    chip_hide_when_off: s.chip_hide_when_off === true,
+    // Hide the chip entirely when the entity is in a given state. Three
+    // independent flags. The old single chip_hide_when_off boolean migrates
+    // to all three (its original behavior was off + unknown + unavailable).
+    chip_hide_off: s.chip_hide_off === true || s.chip_hide_when_off === true,
+    chip_hide_unknown: s.chip_hide_unknown === true || s.chip_hide_when_off === true,
+    chip_hide_unavailable: s.chip_hide_unavailable === true || s.chip_hide_when_off === true,
+    // Hide the entity's state/value text on the chip (show only the icon
+    // and, if enabled, the name).
+    chip_hide_state: s.chip_hide_state === true,
+    // Chip tap / hold actions (per section, applied to every chip). Default
+    // tap = more-info, hold = none. See normalizeAction for the shape.
+    chip_tap_action: normalizeAction(s.chip_tap_action, 'more-info'),
+    chip_hold_action: normalizeAction(s.chip_hold_action, 'none'),
     // Layout of chips within a "Chips Only" section: wrap (flex row, wraps),
     // column (one per line), or grid (fixed-width grid columns)
     chip_layout: s.chip_layout || 'wrap',
@@ -301,7 +411,28 @@ function normalizeSection(s) {
     row_border_left: s.row_border_left !== false,
     row_border_right: s.row_border_right !== false,
     row_border_corners: Array.isArray(s.row_border_corners) ? s.row_border_corners : [true, true, true, true],
-    row_border_color: s.row_border_color || ''
+    row_border_color: s.row_border_color || '',
+
+    // Entity Display Rules: ordered list of conditions evaluated per entity.
+    // An entity is shown only if it passes the rules (empty = show all).
+    entity_rules: Array.isArray(s.entity_rules) ? s.entity_rules.map(normalizeRule) : [],
+
+    // Section Display Condition: when 'hide_when_empty', the whole section
+    // (header included) is hidden if the rules leave zero entities visible.
+    // 'always' (default) always renders the section.
+    section_display: s.section_display === 'hide_when_empty' ? 'hide_when_empty' : 'always',
+
+    // Per-section entity count in the header.
+    //   count_mode: 'off' (default) | 'title' (next to the title, e.g.
+    //     "Alert Bypasses - 2") | 'right' (far right, replacing the time value)
+    //   count_prefix: text placed before the number in 'title' mode
+    //     (default " - ", giving "Name - 2")
+    count_mode: ['title', 'right'].includes(s.count_mode) ? s.count_mode : 'off',
+    count_prefix: s.count_prefix != null ? String(s.count_prefix) : ' - ',
+    count_color: s.count_color || '',
+    count_font_size: s.count_font_size ?? 13,
+    count_font_weight: s.count_font_weight || 400,
+    count_font_style: s.count_font_style || 'normal'
   };
 }
 
@@ -365,7 +496,7 @@ function toYaml(value, indent = 0) {
 }
 
 // ============================================================================
-// Main SEED Card
+// Main Card
 // ============================================================================
 
 class SEEDCard extends HTMLElement {
@@ -485,6 +616,9 @@ class SEEDCard extends HTMLElement {
       card_border_corners: [true, true, true, true],
       card_glow_condition: 'never',
       card_glow_entity: '',
+      // Target section id for the 'when_section_has_entities' /
+      // 'when_section_empty' card glow conditions.
+      card_glow_section: '',
       card_glow_intensity: 1.0,
       card_glow_borders_only: true,
       // Show relative "last changed" time next to the title
@@ -728,6 +862,12 @@ class SEEDCard extends HTMLElement {
       const entityId = this._config.card_glow_entity;
       const st = entityId && this._hass ? this._hass.states[entityId] : null;
       shouldGlow = !!(st && st.state === 'on');
+    } else if (condition === 'when_section_has_entities' || condition === 'when_section_empty') {
+      const section = (this._config.sections || []).find(s => s.id === this._config.card_glow_section);
+      if (section) {
+        const hasVisible = this._visibleCount(section) > 0;
+        shouldGlow = condition === 'when_section_has_entities' ? hasVisible : !hasVisible;
+      }
     }
 
     const glowStr = shouldGlow ? this._buildGlowShadow(colors.card_glow, sides, bordersOnly, intensity) : 'none';
@@ -743,6 +883,28 @@ class SEEDCard extends HTMLElement {
       : 'none';
     const parts = [glowStr, dropShadowStr].filter(s => s && s !== 'none');
     wrapper.style.boxShadow = parts.length ? parts.join(', ') : 'none';
+  }
+
+  // Whether an entity should currently be visible within a section, applying
+  // (in order) the per-state chip-hide flags and the section's Entity Display
+  // Rules. Used both at render time and live in updateStates(), so entities
+  // can appear/disappear as their state changes without a rebuild.
+  _isEntityVisible(entityId, section) {
+    const st = this._hass && this._hass.states ? this._hass.states[entityId] : null;
+    if (!st) return false;
+    const isChipRendered = section.chips_only || !!classifyChip(entityId);
+    if (isChipRendered) {
+      if (section.chip_hide_off && st.state === 'off') return false;
+      if (section.chip_hide_unknown && st.state === 'unknown') return false;
+      if (section.chip_hide_unavailable && st.state === 'unavailable') return false;
+    }
+    if (!entityPassesRules(entityId, section.entity_rules, this._hass)) return false;
+    return true;
+  }
+
+  // Count of currently-visible entities in a section (respects rules).
+  _visibleCount(section) {
+    return (section.entities || []).filter(id => this._isEntityVisible(id, section)).length;
   }
 
   // Most recent last_changed timestamp across every entity configured on
@@ -974,6 +1136,7 @@ class SEEDCard extends HTMLElement {
           align-items: center;
           gap: var(--seed-gap);
           padding: var(--seed-pad) calc(var(--seed-pad) * 1.5);
+          padding-left: calc(var(--seed-pad) * 1.5 + var(--sec-title-indent, 0px));
         }
         .seed-summary::-webkit-details-marker { display: none; }
         .seed-summary::marker { content: ""; }
@@ -997,6 +1160,21 @@ class SEEDCard extends HTMLElement {
         .seed-section-count {
           font-size: calc(11px * var(--seed-scale));
           color: ${colors.secondary_text};
+        }
+        /* Styled per-section count (count_mode 'right' or 'title') honors the
+           section's own color / size / weight / style vars. */
+        .seed-section-count-styled {
+          font-size: var(--sec-count-size, calc(13px * var(--seed-scale)));
+          color: var(--sec-count-color, ${colors.secondary_text});
+          font-weight: var(--sec-count-weight, 400);
+          font-style: var(--sec-count-style, normal);
+        }
+        .seed-section-count-inline {
+          font-size: var(--sec-count-size, calc(13px * var(--seed-scale)));
+          color: var(--sec-count-color, ${colors.secondary_text});
+          font-weight: var(--sec-count-weight, 400);
+          font-style: var(--sec-count-style, normal);
+          white-space: pre;
         }
         .seed-children {
           display: flex;
@@ -1207,20 +1385,18 @@ class SEEDCard extends HTMLElement {
       let count = 0;
 
       {
-        const visibleEntities = (section.entities || []).filter(id => {
-          const st = this._hass.states[id];
-          if (!st) return false;
-          if (section.chip_hide_when_off) {
-            const isChipRendered = section.chips_only || !!classifyChip(id);
-            if (isChipRendered && (st.state === 'off' || st.state === 'unknown' || st.state === 'unavailable')) {
-              return false;
-            }
-          }
-          return true;
-        });
+        // Render every configured entity that has a state, then hide the ones
+        // that currently fail visibility (per-state chip-hide flags + Entity
+        // Display Rules). Keeping hidden rows in the DOM lets updateStates() reveal
+        // them again when their state changes, without a full rebuild.
+        const presentEntities = (section.entities || []).filter(id => !!this._hass.states[id]);
+        const visibleEntities = presentEntities.filter(id => this._isEntityVisible(id, section));
         count = visibleEntities.length;
-        contentHtml = visibleEntities.length
-          ? visibleEntities.map(id => this.createRowHTML(id, section)).join('')
+        contentHtml = presentEntities.length
+          ? presentEntities.map(id => {
+              const hidden = !this._isEntityVisible(id, section);
+              return this.createRowHTML(id, section, hidden);
+            }).join('') + `<div class="seed-empty seed-empty-none"${visibleEntities.length ? ' style="display:none;"' : ''}>No entities available</div>`
           : `<div class="seed-empty">No entities available</div>`;
       }
 
@@ -1348,6 +1524,7 @@ class SEEDCard extends HTMLElement {
         `--sec-title-size: calc(${section.title_font_size}px * var(--seed-scale) * var(--seed-title-text-scale))`,
         `--sec-title-weight: ${section.title_font_weight || 600}`,
         `--sec-title-style: ${section.title_font_style || 'normal'}`,
+        `--sec-title-indent: ${section.title_indent ?? 0}px`,
         `--sec-entity-icon-color: ${section.entity_icon_color || colors.icon}`,
         `--sec-entity-icon-size: calc(${section.entity_icon_size}px * var(--seed-scale) * var(--seed-icon-scale))`,
         `--sec-entity-text-color: ${section.entity_text_color || colors.text}`,
@@ -1364,29 +1541,59 @@ class SEEDCard extends HTMLElement {
 
       const chipLayoutClass = section.chips_only ? ` chips-only chip-layout-${section.chip_layout || 'wrap'}` : '';
       const bodyHtml = `<div class="seed-children${chipLayoutClass}">${contentHtml}</div>`;
+
+      // Per-section entity count. The old global "show entity count" toggle
+      // (showSectionCount) still drives the plain right-side count; the new
+      // per-section count_mode, when set, overrides it: 'title' places the
+      // count right after the name ("Alert Bypasses - 2"), 'right' places a
+      // styled count on the far right in place of the plain one.
+      const countMode = section.count_mode || 'off';
+      const countStyleVars =
+        `--sec-count-color: ${section.count_color || colors.secondary_text}; ` +
+        `--sec-count-size: calc(${section.count_font_size ?? 13}px * var(--seed-scale)); ` +
+        `--sec-count-weight: ${section.count_font_weight || 400}; ` +
+        `--sec-count-style: ${section.count_font_style || 'normal'};`;
+      const titleCountHtml = countMode === 'title'
+        ? `<span class="seed-section-count-inline" data-section-id="${section.id}" style="${countStyleVars}">${section.count_prefix ?? ' - '}${count}</span>`
+        : '';
+      let rightCountHtml = '';
+      if (countMode === 'right') {
+        rightCountHtml = `<div class="seed-section-count seed-section-count-styled" data-section-id="${section.id}" style="${countStyleVars}">${count}</div>`;
+      } else if (countMode === 'off' && showSectionCount) {
+        rightCountHtml = `<div class="seed-section-count" data-section-id="${section.id}">${count}</div>`;
+      }
       const headerHtml = `
-        <div class="seed-section-name">${section.name}</div>
-        ${showSectionCount ? `<div class="seed-section-count">${count}</div>` : ''}
+        <div class="seed-section-name">${section.name}${titleCountHtml}</div>
+        ${rightCountHtml}
         <div class="seed-section-icon"><ha-icon icon="${sectionIcon}"></ha-icon></div>
       `;
+
+      // Section Display Condition: hide the whole section (header included)
+      // when the rules leave it empty. Rendered hidden (not omitted) so
+      // updateStates() can reveal it again when an entity's state changes.
+      const sectionHidden = section.section_display === 'hide_when_empty' && count === 0;
+      const sectionHiddenStyle = sectionHidden ? ' display:none;' : '';
 
       if (!sectionShowTitle) {
         // Title row removed entirely - just render the section body, always expanded.
         sectionsHtml += `
-          <div class="seed-section non-collapsible" data-section-id="${section.id}" style="${sectionStyle}"${sectionDisableGlowAttr}>
+          <div class="seed-section non-collapsible" data-section-id="${section.id}" style="${sectionStyle}${sectionHiddenStyle}"${sectionDisableGlowAttr}>
             ${bodyHtml}
           </div>
         `;
       } else if (collapsible) {
+        // Keep-expanded: force the section open at render when it has visible
+        // entities (re-asserted live in updateStates).
+        const forceOpen = section.keep_expanded_when_entities && count > 0;
         sectionsHtml += `
-          <details class="seed-section ${autoClose ? 'seed-autoclose' : ''}" data-section-id="${section.id}" style="${sectionStyle}"${sectionDisableGlowAttr}>
+          <details class="seed-section ${autoClose ? 'seed-autoclose' : ''}" data-section-id="${section.id}" style="${sectionStyle}${sectionHiddenStyle}"${sectionDisableGlowAttr}${forceOpen ? ' open' : ''}>
             <summary class="seed-summary">${headerHtml}</summary>
             ${bodyHtml}
           </details>
         `;
       } else {
         sectionsHtml += `
-          <div class="seed-section non-collapsible" data-section-id="${section.id}" style="${sectionStyle}"${sectionDisableGlowAttr}>
+          <div class="seed-section non-collapsible" data-section-id="${section.id}" style="${sectionStyle}${sectionHiddenStyle}"${sectionDisableGlowAttr}>
             <div class="seed-summary">${headerHtml}</div>
             ${bodyHtml}
           </div>
@@ -1444,7 +1651,15 @@ class SEEDCard extends HTMLElement {
     const rawName = state.attributes.friendly_name || entityId;
     const cleanName = stripEntityName(rawName, this._config.strip_entity_strings);
     const value = state.state && state.state !== 'unknown' && state.state !== 'unavailable' ? state.state : '—';
-    const text = section.chip_show_name ? `${cleanName}: ${value}` : value;
+    // chip_hide_state drops the state/value, leaving just the name (if shown)
+    // and icon. The data-hide-state flag lets updateStates() skip refreshing.
+    const hideState = section.chip_hide_state === true;
+    let text;
+    if (hideState) {
+      text = section.chip_show_name ? cleanName : '';
+    } else {
+      text = section.chip_show_name ? `${cleanName}: ${value}` : value;
+    }
 
     let iconHtml = '';
     if (section.chip_show_icon !== false) {
@@ -1464,21 +1679,23 @@ class SEEDCard extends HTMLElement {
       if (chipIcon) iconHtml = `<ha-icon icon="${chipIcon}"></ha-icon>`;
     }
 
-    return `<span class="seed-chip" data-entity-id="${entityId}">${iconHtml}<span class="seed-chip-text">${text}</span></span>`;
+    const sidAttr = section && section.id ? ` data-section-id="${section.id}"` : '';
+    return `<span class="seed-chip" data-entity-id="${entityId}"${sidAttr}${hideState ? ' data-hide-state="1"' : ''}>${iconHtml}<span class="seed-chip-text">${text}</span></span>`;
   }
 
-  createRowHTML(entityId, section) {
+  createRowHTML(entityId, section, hidden = false) {
     const state = this._hass.states[entityId];
     const domain = domainOf(entityId);
     const name = stripEntityName(state.attributes.friendly_name || entityId, this._config.strip_entity_strings);
     const sec = section || {};
     const chipType = classifyChip(entityId);
+    const hiddenStyle = hidden ? ' style="display:none;"' : '';
 
     // Chips-only sections: every entity renders as just its chip, no
     // row icon or name, laid out in a wrapping flex row (see
     // .seed-children.chips-only).
     if (sec.chips_only) {
-      return `<div class="seed-chip-only-item" data-entity-id="${entityId}">${this._buildChipHtml(entityId, state, sec)}</div>`;
+      return `<div class="seed-chip-only-item" data-entity-id="${entityId}"${hiddenStyle}>${this._buildChipHtml(entityId, state, sec)}</div>`;
     }
 
     const icon = state.attributes.icon || DOMAIN_ICONS[domain] || 'mdi:help-circle-outline';
@@ -1526,12 +1743,92 @@ class SEEDCard extends HTMLElement {
     }
 
     return `
-      <div class="seed-row" data-entity-id="${entityId}">
+      <div class="seed-row" data-entity-id="${entityId}"${hiddenStyle}>
         <div class="seed-row-icon"><ha-icon icon="${icon}"${iconColorStyle}></ha-icon></div>
         <div class="seed-row-name" data-entity-id="${entityId}">${name}</div>
         ${valueHtml}
       </div>
     `;
+  }
+
+  // Fire the more-info dialog for an entity.
+  _fireMoreInfo(entityId) {
+    if (!entityId) return;
+    this.dispatchEvent(new CustomEvent('hass-more-info', {
+      detail: { entityId }, bubbles: true, composed: true
+    }));
+  }
+
+  // Execute a normalized chip action (see normalizeAction). `entityId` is the
+  // chip's own entity, used as the default target for more-info / toggle.
+  _performAction(actionCfg, entityId) {
+    const cfg = normalizeAction(actionCfg, 'none');
+    const target = cfg.action_entity || entityId;
+    switch (cfg.action) {
+      case 'none':
+        return;
+      case 'toggle':
+        if (target) this._hass.callService('homeassistant', 'toggle', {}, { entity_id: target });
+        return;
+      case 'navigate':
+        if (cfg.navigation_path) {
+          history.pushState(null, '', cfg.navigation_path);
+          this.dispatchEvent(new CustomEvent('location-changed', { bubbles: true, composed: true, detail: { replace: false } }));
+        }
+        return;
+      case 'url':
+        if (cfg.url_path) window.open(cfg.url_path, '_blank');
+        return;
+      case 'call-service': {
+        if (!cfg.service || cfg.service.indexOf('.') === -1) return;
+        const [dom, svc] = cfg.service.split('.');
+        const data = (cfg.service_data && typeof cfg.service_data === 'object') ? cfg.service_data : {};
+        this._hass.callService(dom, svc, data);
+        return;
+      }
+      case 'more-info':
+      default:
+        this._fireMoreInfo(target);
+    }
+  }
+
+  // Attach tap/hold gesture handling to a chip element, dispatching to the
+  // owning section's chip_tap_action / chip_hold_action. Hold fires at 500ms;
+  // if a hold fires, the following tap/click is suppressed.
+  _attachChipGestures(el) {
+    const entityId = el.dataset.entityId;
+    const sectionId = el.dataset.sectionId;
+    const section = sectionId ? (this._config.sections || []).find(s => s.id === sectionId) : null;
+    const tapCfg = section ? section.chip_tap_action : { action: 'more-info' };
+    const holdCfg = section ? section.chip_hold_action : { action: 'none' };
+
+    let holdTimer = null;
+    let held = false;
+
+    const startHold = () => {
+      held = false;
+      holdTimer = setTimeout(() => {
+        held = true;
+        this._performAction(holdCfg, entityId);
+      }, 500);
+    };
+    const cancelHold = () => {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+    };
+
+    // Pointer events cover mouse + touch. Fall back to click for the tap.
+    el.addEventListener('pointerdown', e => { e.stopPropagation(); startHold(); });
+    el.addEventListener('pointerup', () => cancelHold());
+    el.addEventListener('pointerleave', () => cancelHold());
+    el.addEventListener('pointercancel', () => cancelHold());
+
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      cancelHold();
+      if (held) { held = false; return; } // a hold already handled this press
+      this._performAction(tapCfg, entityId);
+    });
   }
 
   attachEventListeners() {
@@ -1564,18 +1861,7 @@ class SEEDCard extends HTMLElement {
     });
 
     this.querySelectorAll('.seed-chip[data-entity-id]').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        e.stopPropagation();
-        const entityId = el.dataset.entityId;
-        this.dispatchEvent(
-          new CustomEvent('hass-more-info', {
-            detail: { entityId },
-            bubbles: true,
-            composed: true
-          })
-        );
-      });
+      this._attachChipGestures(el);
     });
 
     this.querySelectorAll('.seed-native-toggle').forEach(el => {
@@ -1621,7 +1907,9 @@ class SEEDCard extends HTMLElement {
         lastChangedEl.textContent = text;
       }
     }
-    if ((this._config.card_glow_condition || 'never') === 'when_entity_on') {
+    // Refresh card glow live for any state-dependent condition.
+    if (['when_entity_on', 'when_section_has_entities', 'when_section_empty']
+        .includes(this._config.card_glow_condition || 'never')) {
       this.updateCardGlow();
     }
 
@@ -1643,7 +1931,9 @@ class SEEDCard extends HTMLElement {
 
       if (chipType) {
         const chip = row.querySelector('.seed-chip');
-        if (chip) {
+        // Skip chips whose state is hidden (chip_hide_state) - their text was
+        // rendered without a value and must not be overwritten here.
+        if (chip && chip.dataset.hideState !== '1') {
           const textEl = chip.querySelector('.seed-chip-text');
           if (textEl) {
             const rawName = state.attributes.friendly_name || entityId;
@@ -1693,24 +1983,40 @@ class SEEDCard extends HTMLElement {
       }
     });
 
-    // Hide/show chip-rendered entities live as their state crosses the
-    // off/unknown/unavailable threshold, for sections with
-    // chip_hide_when_off enabled. (The visible-entity count in the section
-    // header is computed at render time and won't retroactively update -
-    // a minor cosmetic gap, not worth a full rebuild on every tick.)
-    this.querySelectorAll('.seed-row[data-entity-id], .seed-chip-only-item[data-entity-id]').forEach(el => {
-      const entityId = el.dataset.entityId;
-      const state = this._hass.states[entityId];
-      if (!state) return;
-      const sectionEl = el.closest('[data-section-id]');
-      const sectionId = sectionEl ? sectionEl.dataset.sectionId : null;
-      const section = sectionId ? (this._config.sections || []).find(s => s.id === sectionId) : null;
-      if (section && section.chip_hide_when_off) {
-        const isChipRendered = section.chips_only || !!classifyChip(entityId);
-        if (isChipRendered) {
-          const shouldHide = state.state === 'off' || state.state === 'unknown' || state.state === 'unavailable';
-          el.style.display = shouldHide ? 'none' : '';
-        }
+    // Live visibility pass: re-apply each section's per-state chip-hide flags
+    // AND its Entity Display Rules as states change, showing/hiding rows
+    // without a full rebuild. Then refresh the header count and, if the
+    // section is set to hide-when-empty, show/hide the whole section.
+    (this._config.sections || []).forEach(section => {
+      const sectionEl = this.querySelector(`.seed-section[data-section-id="${section.id}"]`);
+      if (!sectionEl) return;
+
+      sectionEl.querySelectorAll('.seed-row[data-entity-id], .seed-chip-only-item[data-entity-id]').forEach(el => {
+        const entityId = el.dataset.entityId;
+        if (!this._hass.states[entityId]) return;
+        el.style.display = this._isEntityVisible(entityId, section) ? '' : 'none';
+      });
+
+      const count = this._visibleCount(section);
+
+      // "No entities available" placeholder toggles with the visible count.
+      const emptyEl = sectionEl.querySelector('.seed-empty-none');
+      if (emptyEl) emptyEl.style.display = count === 0 ? '' : 'none';
+
+      // Refresh whichever count element this section rendered.
+      const inlineCount = sectionEl.querySelector('.seed-section-count-inline');
+      if (inlineCount) inlineCount.textContent = `${section.count_prefix ?? ' - '}${count}`;
+      const rightCount = sectionEl.querySelector('.seed-section-count');
+      if (rightCount) rightCount.textContent = String(count);
+
+      // Section Display Condition: hide-when-empty.
+      if (section.section_display === 'hide_when_empty') {
+        sectionEl.style.display = count === 0 ? 'none' : '';
+      }
+
+      // Keep-expanded: force the section open while it has visible entities.
+      if (section.keep_expanded_when_entities && sectionEl.tagName === 'DETAILS' && count > 0 && !sectionEl.open) {
+        sectionEl.open = true;
       }
     });
 
@@ -1722,7 +2028,8 @@ class SEEDCard extends HTMLElement {
       if (!state) return;
       const chip = item.querySelector('.seed-chip');
       const textEl = chip ? chip.querySelector('.seed-chip-text') : null;
-      if (textEl) {
+      // Skip chips whose state is hidden (chip_hide_state).
+      if (textEl && chip.dataset.hideState !== '1') {
         const rawName = state.attributes.friendly_name || entityId;
         const cleanName = stripEntityName(rawName, this._config.strip_entity_strings);
         const value = state.state && state.state !== 'unknown' && state.state !== 'unavailable' ? state.state : '—';
@@ -2025,6 +2332,46 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-row select option { background: #1c1c1c; }
         .seed-ed-row input[type="checkbox"] { cursor: pointer; }
         .seed-ed-hint { font-size: 11px; color: #888; }
+        /* Entity Display Rules editor */
+        .seed-ed-rules { display: flex; flex-direction: column; gap: 8px; }
+        .seed-ed-rule {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 6px;
+          padding: 6px;
+          border: 1px solid #333;
+          border-radius: 6px;
+          background: rgba(255,255,255,0.02);
+        }
+        .seed-ed-rule .seed-ed-rule-when { font-size: 11px; color: #888; font-weight: 600; }
+        .seed-ed-rule .seed-ed-rule-label { font-size: 12px; color: #ccc; }
+        .seed-ed-rule-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; }
+        .seed-ed-rule select, .seed-ed-rule input[type="text"] {
+          background: var(--secondary-background-color, #1c1c1c);
+          border: 1px solid #444;
+          border-radius: 6px;
+          padding: 5px 8px;
+          color: var(--primary-text-color, #e1e1e1);
+          font-size: 13px;
+        }
+        .seed-ed-rule input[type="text"] { flex: 1; min-width: 90px; }
+        .seed-ed-rule .ed-rule-join { font-weight: 700; }
+        .seed-ed-mini-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          align-self: flex-start;
+          font-size: 12px;
+          color: #2196F3;
+          cursor: pointer;
+          padding: 4px 8px;
+          border: 1px dashed #2196F3;
+          border-radius: 6px;
+          user-select: none;
+        }
+        .seed-ed-mini-btn:hover { background: rgba(33,150,243,0.08); }
+        .seed-ed-mini-btn ha-icon { --mdc-icon-size: 16px; }
         .seed-ed-colors { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
         .seed-ed-color {
           display: flex;
@@ -2103,7 +2450,28 @@ class SEEDCardEditor extends HTMLElement {
           text-transform: uppercase;
           letter-spacing: 0.04em;
           color: #999;
+          display: flex;
+          align-items: center;
+          gap: 8px;
         }
+        .seed-ed-style-title .seed-ed-reset-btn {
+          margin-left: auto;
+          font-size: 10px;
+          font-weight: 600;
+          text-transform: none;
+          letter-spacing: 0;
+          color: #2196F3;
+          cursor: pointer;
+          user-select: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 3px;
+          padding: 2px 6px;
+          border: 1px solid #2a4a63;
+          border-radius: 5px;
+        }
+        .seed-ed-style-title .seed-ed-reset-btn:hover { background: rgba(33,150,243,0.10); }
+        .seed-ed-style-title .seed-ed-reset-btn ha-icon { --mdc-icon-size: 13px; }
         .seed-ed-style-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
@@ -2111,6 +2479,8 @@ class SEEDCardEditor extends HTMLElement {
         }
         .seed-ed-style-field { display: flex; flex-direction: column; gap: 3px; }
         .seed-ed-style-field label { font-size: 10px; color: #999; font-weight: 400; }
+        .seed-ed-style-field label.seed-ed-custom-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+        .seed-ed-style-field label.seed-ed-custom-toggle input { cursor: pointer; }
         .seed-ed-style-field input[type="color"] {
           width: 100%;
           height: 30px;
@@ -2267,6 +2637,16 @@ class SEEDCardEditor extends HTMLElement {
         }
         .seed-ed-strip-tag .strip-remove { cursor: pointer; opacity: 0.7; font-weight: bold; }
         .seed-ed-strip-tag .strip-remove:hover { opacity: 1; color: #f44336; }
+        .seed-ed-strip-tag .ed-section-entity-remove { cursor: pointer; opacity: 0.7; font-weight: bold; }
+        .seed-ed-strip-tag .ed-section-entity-remove:hover { opacity: 1; color: #f44336; }
+        .seed-ed-select-allnone { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 12px; }
+        .seed-ed-select-allnone .ed-section-select-all,
+        .seed-ed-select-allnone .ed-section-select-none {
+          color: #2196F3; cursor: pointer; user-select: none;
+        }
+        .seed-ed-select-allnone .ed-section-select-all:hover,
+        .seed-ed-select-allnone .ed-section-select-none:hover { text-decoration: underline; }
+        .seed-ed-allnone-sep { color: #666; }
         .seed-ed-font-row {
           display: flex;
           align-items: center;
@@ -2296,8 +2676,7 @@ class SEEDCardEditor extends HTMLElement {
     // Editor header - icon + name + build, matching the Color card's layout.
     html += `
       <div class="seed-ed-header">
-        <ha-icon icon="mdi:surround-sound"></ha-icon>
-        <span class="seed-ed-header-title">SEED Card</span>
+        <span class="seed-ed-header-title">Easy Entity Styler Card</span>
         <span class="seed-ed-header-build">${BUILD_NUMBER}</span>
       </div>
     `;
@@ -2386,6 +2765,11 @@ class SEEDCardEditor extends HTMLElement {
     const cardGlowBordersOnly = this._config.card_glow_borders_only !== false;
     const cardBorderColorVal = colors.card_border || '#2196F3';
     const cardGlowColorVal = colors.card_glow || '#2196F3';
+    const cardGlowSection = this._config.card_glow_section || '';
+    // Options for the section-targeted card-glow conditions.
+    const sectionGlowOptions = (this._config.sections || [])
+      .map(s => `<option value="${s.id}" ${cardGlowSection === s.id ? 'selected' : ''}>${(s.name || 'Section').replace(/"/g, '&quot;')}</option>`)
+      .join('');
 
     html += `
       <details class="seed-ed-row">
@@ -2538,11 +2922,21 @@ class SEEDCardEditor extends HTMLElement {
             <option value="never" ${cardGlowCondition === 'never' ? 'selected' : ''}>Never</option>
             <option value="always" ${cardGlowCondition === 'always' ? 'selected' : ''}>Always</option>
             <option value="when_entity_on" ${cardGlowCondition === 'when_entity_on' ? 'selected' : ''}>When Specific Entity is On</option>
+            <option value="when_section_has_entities" ${cardGlowCondition === 'when_section_has_entities' ? 'selected' : ''}>When entities are displayed in a Section</option>
+            <option value="when_section_empty" ${cardGlowCondition === 'when_section_empty' ? 'selected' : ''}>When no entities are displayed in a Section</option>
           </select>
         </div>
         ${cardGlowCondition === 'when_entity_on' ? `
         <div class="seed-ed-row" style="padding-left:0;">
           <input type="text" id="ed-card-glow-entity" value="${cardGlowEntity}" placeholder="e.g. switch.stormaudio_power" />
+        </div>` : ''}
+        ${(cardGlowCondition === 'when_section_has_entities' || cardGlowCondition === 'when_section_empty') ? `
+        <div class="seed-ed-checkbox-row">
+          <span style="font-size:12px; color:#ccc;">Section:</span>
+          <select id="ed-card-glow-section">
+            <option value="">-- Select a section --</option>
+            ${sectionGlowOptions}
+          </select>
         </div>` : ''}
         <div class="seed-ed-checkbox-row">
           <input type="checkbox" id="ed-card-glow-borders-only" ${cardGlowBordersOnly ? 'checked' : ''} />
@@ -2958,27 +3352,131 @@ class SEEDCardEditor extends HTMLElement {
     html += `<div class="seed-ed-row"><label>Sections (Order & Display)</label></div>`;
     html += `<div class="seed-ed-hint">Sections appear in this order.</div>`;
 
+    // Shared datalist of every entity id, for the Entity Display Rules
+    // "compare against another entity" inputs (autocomplete without forcing a
+    // giant <select> per rule).
+    const allEntityIds = this._hass ? Object.keys(this._hass.states).sort() : [];
+    html += `<datalist id="ees-all-entities">${allEntityIds.map(id => `<option value="${id}"></option>`).join('')}</datalist>`;
+
     const sections = this._config.sections || [];
     sections.forEach((section, idx) => {
       const assigned = new Set(section.entities || []);
-      const entityListHtml = entityOptions.length
-        ? entityOptions.map(opt => {
-            const checked = assigned.has(opt.value) ? 'checked' : '';
-            const st = this._hass.states[opt.value];
-            const rawName = st ? st.attributes.friendly_name || opt.value : opt.value;
-            const name = stripEntityName(rawName, this._config.strip_entity_strings);
-            return `
-              <label class="seed-ed-entity-item" data-search="${(name + ' ' + opt.value).toLowerCase()}">
-                <input type="checkbox" class="ed-entity-checkbox" data-section-id="${section.id}" data-entity-id="${opt.value}" ${checked} />
-                <span>${name}<br/><span class="eid">${opt.value}</span></span>
-              </label>
-            `;
-          }).join('')
-        : `<div class="seed-ed-empty-candidates">No entities match the filter</div>`;
+
+      // Friendly display name for any entity id (resolves through the state
+      // registry + name-stripping; falls back to the raw id).
+      const displayName = (id) => {
+        const st = this._hass ? this._hass.states[id] : null;
+        const raw = st ? st.attributes.friendly_name || id : id;
+        return stripEntityName(raw, this._config.strip_entity_strings);
+      };
+
+      // Assigned-entity chips: every entity currently in this section, shown
+      // regardless of whether it still matches the card's entity filter (so
+      // pre-existing / filtered-out entities remain visible and removable).
+      const assignedChipsHtml = (section.entities || []).length
+        ? (section.entities || []).map(id => `
+            <span class="seed-ed-strip-tag" title="${id}">
+              ${displayName(id)}
+              <span class="ed-section-entity-remove" data-section-id="${section.id}" data-entity-id="${id}">×</span>
+            </span>
+          `).join('')
+        : `<span class="seed-ed-hint">No entities added yet.</span>`;
+
+      // Candidate picker options: filter-matched entities not already added.
+      const pickerOptions = entityOptions.filter(opt => !assigned.has(opt.value));
+      const pickerHtml = `
+        <option value="">${entityOptions.length ? '-- Select an entity to add --' : 'No entities match the card filter'}</option>
+        ${pickerOptions.map(opt => `<option value="${opt.value}">${opt.label}</option>`).join('')}
+      `;
 
       const showEntityList = true;
 
       const headerIcon = section.icon || 'mdi:folder-outline';
+
+      // ---- Entity Display Rules editor markup ----
+      const rules = Array.isArray(section.entity_rules) ? section.entity_rules : [];
+      const rulesHtml = rules.map((rule, rIdx) => `
+        <div class="seed-ed-rule" data-section-id="${section.id}" data-rule-index="${rIdx}">
+          ${rIdx > 0 ? `
+          <select class="ed-rule-join" data-section-id="${section.id}" data-rule-index="${rIdx}" title="How this rule combines with the ones above">
+            <option value="and" ${rule.join !== 'or' ? 'selected' : ''}>AND</option>
+            <option value="or" ${rule.join === 'or' ? 'selected' : ''}>OR</option>
+          </select>` : `<span class="seed-ed-rule-when">When</span>`}
+          <span class="seed-ed-rule-line">
+            <span class="seed-ed-rule-label">value</span>
+            <select class="ed-rule-operator" data-section-id="${section.id}" data-rule-index="${rIdx}">
+              <option value="eq" ${rule.operator !== 'ne' ? 'selected' : ''}>is equal to</option>
+              <option value="ne" ${rule.operator === 'ne' ? 'selected' : ''}>is not equal to</option>
+            </select>
+            <select class="ed-rule-compare-type" data-section-id="${section.id}" data-rule-index="${rIdx}">
+              <option value="value" ${rule.compare_type !== 'entity' ? 'selected' : ''}>a value</option>
+              <option value="entity" ${rule.compare_type === 'entity' ? 'selected' : ''}>an entity's value</option>
+            </select>
+            ${rule.compare_type === 'entity'
+              ? `<input type="text" class="ed-rule-compare-entity" data-section-id="${section.id}" data-rule-index="${rIdx}" list="ees-all-entities" value="${rule.compare_entity || ''}" placeholder="entity_id" />`
+              : `<input type="text" class="ed-rule-value" data-section-id="${section.id}" data-rule-index="${rIdx}" value="${(rule.value || '').replace(/"/g, '&quot;')}" placeholder="e.g. on" />`}
+            <ha-icon class="seed-ed-icon-btn ed-rule-remove" icon="mdi:close" data-section-id="${section.id}" data-rule-index="${rIdx}" title="Remove rule"></ha-icon>
+          </span>
+        </div>
+      `).join('');
+
+      // ---- Chip tap/hold action editor markup ----
+      // `kind` is 'tap' or 'hold'; drives the data-action-kind attribute so
+      // one set of handlers serves both.
+      const chipActionHtml = (kind, cfg, label) => {
+        cfg = normalizeAction(cfg, kind === 'tap' ? 'more-info' : 'none');
+        const sid = section.id;
+        const opt = (v, t) => `<option value="${v}" ${cfg.action === v ? 'selected' : ''}>${t}</option>`;
+        let extra = '';
+        if (cfg.action === 'more-info' || cfg.action === 'toggle') {
+          extra = `
+            <div class="seed-ed-slider-row">
+              <label><span>Entity:</span></label>
+              <input type="text" class="ed-chip-action-entity" data-section-id="${sid}" data-action-kind="${kind}" list="ees-all-entities" value="${cfg.action_entity || ''}" placeholder="(chip's own entity)" style="flex:1;" />
+            </div>`;
+        } else if (cfg.action === 'navigate') {
+          extra = `
+            <div class="seed-ed-slider-row">
+              <label><span>Path:</span></label>
+              <input type="text" class="ed-chip-action-navpath" data-section-id="${sid}" data-action-kind="${kind}" value="${(cfg.navigation_path || '').replace(/"/g, '&quot;')}" placeholder="/lovelace/1" style="flex:1;" />
+            </div>`;
+        } else if (cfg.action === 'url') {
+          extra = `
+            <div class="seed-ed-slider-row">
+              <label><span>URL:</span></label>
+              <input type="text" class="ed-chip-action-url" data-section-id="${sid}" data-action-kind="${kind}" value="${(cfg.url_path || '').replace(/"/g, '&quot;')}" placeholder="https://..." style="flex:1;" />
+            </div>`;
+        } else if (cfg.action === 'call-service') {
+          const sd = cfg.service_data && Object.keys(cfg.service_data).length ? JSON.stringify(cfg.service_data) : '';
+          extra = `
+            <div class="seed-ed-slider-row">
+              <label><span>Service:</span></label>
+              <input type="text" class="ed-chip-action-service" data-section-id="${sid}" data-action-kind="${kind}" value="${(cfg.service || '').replace(/"/g, '&quot;')}" placeholder="light.turn_on" style="flex:1;" />
+            </div>
+            <div class="seed-ed-slider-row">
+              <label><span>Data (JSON):</span></label>
+              <input type="text" class="ed-chip-action-servicedata" data-section-id="${sid}" data-action-kind="${kind}" value="${sd.replace(/"/g, '&quot;')}" placeholder='{"entity_id":"light.x"}' style="flex:1;" />
+            </div>`;
+        }
+        return `
+          <div class="seed-ed-checkbox-row">
+            <span style="font-size:12px; color:#ccc;">${label}:</span>
+            <select class="ed-chip-action" data-section-id="${sid}" data-action-kind="${kind}">
+              ${opt('none','No action')}
+              ${opt('more-info','More Info dialog')}
+              ${opt('toggle','Toggle entity')}
+              ${opt('navigate','Navigate')}
+              ${opt('url','Open URL')}
+              ${opt('call-service','Call Service')}
+            </select>
+          </div>
+          ${extra}`;
+      };
+
+      // Small "Reset" pill for a style group's title bar. `group` matches a key
+      // in SEED_STYLE_GROUPS; clicking reverts just that group to defaults.
+      const resetBtn = (group) =>
+        `<span class="seed-ed-reset-btn" data-section-id="${section.id}" data-reset-group="${group}" title="Reset this group to defaults"><ha-icon icon="mdi:backup-restore"></ha-icon>Reset</span>`;
 
       html += `
         <details class="seed-ed-section" data-section-id="${section.id}">
@@ -3002,13 +3500,19 @@ class SEEDCardEditor extends HTMLElement {
               <label>Collapsible Section</label>
             </div>
             ${section.show_title === false ? '<span class="seed-ed-hint">With the title row hidden, this section always renders expanded.</span>' : ''}
+            ${(section.show_title !== false && section.collapsible !== false) ? `
+            <div class="seed-ed-checkbox-row">
+              <input type="checkbox" class="ed-section-keep-expanded" data-section-id="${section.id}" ${section.keep_expanded_when_entities ? 'checked' : ''} />
+              <label>Keep expanded while entities are displayed in this section</label>
+            </div>
+            ` : ''}
             <div class="seed-ed-checkbox-row">
               <input type="checkbox" class="ed-section-chips-only" data-section-id="${section.id}" ${section.chips_only ? 'checked' : ''} />
               <label>Chips Only (every entity in this section renders as just its chip - no row icon or name)</label>
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Background</div>
+              <div class="seed-ed-style-title">Background${resetBtn('background')}</div>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Mode:</span>
                 <select class="ed-section-bg-mode" data-section-id="${section.id}">
@@ -3028,7 +3532,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Border</div>
+              <div class="seed-ed-style-title">Border${resetBtn('border')}</div>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Mode:</span>
                 <select class="ed-section-border-mode" data-section-id="${section.id}">
@@ -3064,7 +3568,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Glow</div>
+              <div class="seed-ed-style-title">Glow${resetBtn('glow')}</div>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Mode:</span>
                 <select class="ed-section-glow-mode" data-section-id="${section.id}">
@@ -3100,7 +3604,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Shadow</div>
+              <div class="seed-ed-style-title">Shadow${resetBtn('shadow')}</div>
               <span class="seed-ed-hint" style="margin-bottom:4px;">A plain elevation drop-shadow, separate from the colored Glow effect above.</span>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Mode:</span>
@@ -3146,7 +3650,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Divider</div>
+              <div class="seed-ed-style-title">Divider${resetBtn('divider')}</div>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Mode:</span>
                 <select class="ed-section-divider-mode" data-section-id="${section.id}">
@@ -3193,7 +3697,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Row Visuals</div>
+              <div class="seed-ed-style-title">Row Visuals${resetBtn('row_visuals')}</div>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Mode:</span>
                 <select class="ed-section-row-visuals-mode" data-section-id="${section.id}">
@@ -3237,7 +3741,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Section header style</div>
+              <div class="seed-ed-style-title">Section header style${resetBtn('header')}</div>
               <div class="seed-ed-style-grid">
                 <div class="seed-ed-style-field">
                   <label>Icon</label>
@@ -3274,10 +3778,15 @@ class SEEDCardEditor extends HTMLElement {
                 </label>
                 <label><input type="checkbox" class="ed-section-title-italic" data-section-id="${section.id}" ${section.title_font_style === 'italic' ? 'checked' : ''} /> Italic</label>
               </div>
+              <div class="seed-ed-slider-row">
+                <label><span>Header Indent:</span></label>
+                <input type="range" class="ed-section-title-indent" data-section-id="${section.id}" min="0" max="48" step="2" value="${section.title_indent ?? 0}" />
+                <span class="seed-ed-slider-value ed-section-title-indent-value" data-section-id="${section.id}">${section.title_indent ?? 0}px</span>
+              </div>
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Entity row style (applies to every entity in this section)</div>
+              <div class="seed-ed-style-title">Entity row style (applies to every entity in this section)${resetBtn('entity_row')}</div>
               <div class="seed-ed-style-grid">
                 <div class="seed-ed-style-field">
                   <label>Icon color</label>
@@ -3310,19 +3819,23 @@ class SEEDCardEditor extends HTMLElement {
             </div>
 
             <div class="seed-ed-style-block">
-              <div class="seed-ed-style-title">Chip style (audio/video format chips in this section)</div>
+              <div class="seed-ed-style-title">Chip style (audio/video format chips in this section)${resetBtn('chip')}</div>
+              <span class="seed-ed-hint">Each color inherits the card's global chip color until you enable "Custom". (A blank/inherited value can be a translucent global default, which a color box can't show — hence the toggle.)</span>
               <div class="seed-ed-style-grid">
                 <div class="seed-ed-style-field">
                   <label>Background</label>
-                  <input type="color" class="ed-chip-bg" data-section-id="${section.id}" value="${section.chip_bg || colors.chip_bg || '#2196F3'}" />
+                  <label class="seed-ed-custom-toggle"><input type="checkbox" class="ed-chip-bg-custom" data-section-id="${section.id}" ${section.chip_bg ? 'checked' : ''} /> Custom</label>
+                  ${section.chip_bg ? `<input type="color" class="ed-chip-bg" data-section-id="${section.id}" value="${/^#[0-9a-fA-F]{6}$/.test(section.chip_bg) ? section.chip_bg : '#2196F3'}" />` : ''}
                 </div>
                 <div class="seed-ed-style-field">
                   <label>Border</label>
-                  <input type="color" class="ed-chip-border-color" data-section-id="${section.id}" value="${section.chip_border_color || colors.chip_border || '#2196F3'}" />
+                  <label class="seed-ed-custom-toggle"><input type="checkbox" class="ed-chip-border-custom" data-section-id="${section.id}" ${section.chip_border_color ? 'checked' : ''} /> Custom</label>
+                  ${section.chip_border_color ? `<input type="color" class="ed-chip-border-color" data-section-id="${section.id}" value="${/^#[0-9a-fA-F]{6}$/.test(section.chip_border_color) ? section.chip_border_color : '#2196F3'}" />` : ''}
                 </div>
                 <div class="seed-ed-style-field">
                   <label>Text</label>
-                  <input type="color" class="ed-chip-text-color" data-section-id="${section.id}" value="${section.chip_text_color || colors.chip_text || '#64b5f6'}" />
+                  <label class="seed-ed-custom-toggle"><input type="checkbox" class="ed-chip-text-custom" data-section-id="${section.id}" ${section.chip_text_color ? 'checked' : ''} /> Custom</label>
+                  ${section.chip_text_color ? `<input type="color" class="ed-chip-text-color" data-section-id="${section.id}" value="${/^#[0-9a-fA-F]{6}$/.test(section.chip_text_color) ? section.chip_text_color : '#64b5f6'}" />` : ''}
                 </div>
               </div>
               <div class="seed-ed-slider-row">
@@ -3348,8 +3861,21 @@ class SEEDCardEditor extends HTMLElement {
                 <label>Show the entity's (stripped) name in the chip</label>
               </div>
               <div class="seed-ed-checkbox-row">
-                <input type="checkbox" class="ed-chip-hide-when-off" data-section-id="${section.id}" ${section.chip_hide_when_off ? 'checked' : ''} />
-                <label>Hide chip if entity is off, unknown, or unavailable</label>
+                <input type="checkbox" class="ed-chip-hide-state" data-section-id="${section.id}" ${section.chip_hide_state ? 'checked' : ''} />
+                <label>Hide the entity state/value on the chip</label>
+              </div>
+              <span class="seed-ed-hint">Hide the chip entirely when the entity is:</span>
+              <div class="seed-ed-checkbox-row">
+                <input type="checkbox" class="ed-chip-hide-off" data-section-id="${section.id}" ${section.chip_hide_off ? 'checked' : ''} />
+                <label>Off</label>
+              </div>
+              <div class="seed-ed-checkbox-row">
+                <input type="checkbox" class="ed-chip-hide-unknown" data-section-id="${section.id}" ${section.chip_hide_unknown ? 'checked' : ''} />
+                <label>Unknown</label>
+              </div>
+              <div class="seed-ed-checkbox-row">
+                <input type="checkbox" class="ed-chip-hide-unavailable" data-section-id="${section.id}" ${section.chip_hide_unavailable ? 'checked' : ''} />
+                <label>Unavailable</label>
               </div>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Layout (Chips Only sections):</span>
@@ -3376,10 +3902,88 @@ class SEEDCardEditor extends HTMLElement {
               ` : ''}
             </div>
 
-            ${showEntityList ? `
-              <input type="text" class="seed-ed-search" placeholder="Search entities..." data-section-id="${section.id}" />
-              <div class="seed-ed-entity-list" data-section-id="${section.id}">${entityListHtml}</div>
-            ` : entityListHtml}
+            <div class="seed-ed-style-block">
+              <div class="seed-ed-style-title">Chip Actions${resetBtn('chip_actions')}</div>
+              <span class="seed-ed-hint">Tap and hold (press &amp; hold ~0.5s) actions for chips in this section.</span>
+              ${chipActionHtml('tap', section.chip_tap_action, 'Tap')}
+              ${chipActionHtml('hold', section.chip_hold_action, 'Hold')}
+            </div>
+
+            <div class="seed-ed-style-block">
+              <div class="seed-ed-style-title">Entity Display Rules</div>
+              <span class="seed-ed-hint">Each entity in this section is shown only if it passes these rules. Rules are checked per entity, top to bottom; each rule joins the running result with AND / OR. No rules = show all.</span>
+              <div class="seed-ed-rules" data-section-id="${section.id}">${rulesHtml || '<span class="seed-ed-hint">No rules — every entity is shown.</span>'}</div>
+              <div class="seed-ed-mini-btn ed-rule-add" data-section-id="${section.id}"><ha-icon icon="mdi:plus"></ha-icon>Add Rule</div>
+            </div>
+
+            <div class="seed-ed-style-block">
+              <div class="seed-ed-style-title">Section Display</div>
+              <div class="seed-ed-checkbox-row">
+                <span style="font-size:12px; color:#ccc;">When rules leave no entities:</span>
+                <select class="ed-section-display" data-section-id="${section.id}">
+                  <option value="always" ${(section.section_display || 'always') === 'always' ? 'selected' : ''}>Always show the section</option>
+                  <option value="hide_when_empty" ${section.section_display === 'hide_when_empty' ? 'selected' : ''}>Hide the whole section (header included)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="seed-ed-style-block">
+              <div class="seed-ed-style-title">Entity Count in Header${resetBtn('count')}</div>
+              <div class="seed-ed-checkbox-row">
+                <span style="font-size:12px; color:#ccc;">Display:</span>
+                <select class="ed-count-mode" data-section-id="${section.id}">
+                  <option value="off" ${(section.count_mode || 'off') === 'off' ? 'selected' : ''}>Off</option>
+                  <option value="title" ${section.count_mode === 'title' ? 'selected' : ''}>Next to title (e.g. "Name - 2")</option>
+                  <option value="right" ${section.count_mode === 'right' ? 'selected' : ''}>Far right (in place of the time value)</option>
+                </select>
+              </div>
+              ${section.count_mode === 'title' ? `
+              <div class="seed-ed-slider-row">
+                <label><span>Prefix:</span></label>
+                <input type="text" class="ed-count-prefix" data-section-id="${section.id}" value="${(section.count_prefix ?? ' - ').replace(/"/g, '&quot;')}" placeholder=" - " style="flex:1;" />
+              </div>
+              ` : ''}
+              ${section.count_mode && section.count_mode !== 'off' ? `
+              <div class="seed-ed-style-grid">
+                <div class="seed-ed-style-field">
+                  <label>Color</label>
+                  <input type="color" class="ed-count-color" data-section-id="${section.id}" value="${section.count_color || colors.secondary_text || '#808080'}" />
+                </div>
+                <div class="seed-ed-style-field">
+                  <label>Font size (px)</label>
+                  <input type="number" class="ed-count-font-size" data-section-id="${section.id}" min="8" max="36" value="${section.count_font_size ?? 13}" />
+                </div>
+              </div>
+              <div class="seed-ed-font-row">
+                <label>Weight:
+                  <select class="ed-count-font-weight" data-section-id="${section.id}">
+                    <option value="400" ${(section.count_font_weight || 400) == 400 ? 'selected' : ''}>Normal</option>
+                    <option value="600" ${section.count_font_weight == 600 ? 'selected' : ''}>Semibold</option>
+                    <option value="700" ${section.count_font_weight == 700 ? 'selected' : ''}>Bold</option>
+                    <option value="900" ${section.count_font_weight == 900 ? 'selected' : ''}>Black</option>
+                  </select>
+                </label>
+                <label><input type="checkbox" class="ed-count-font-italic" data-section-id="${section.id}" ${section.count_font_style === 'italic' ? 'checked' : ''} /> Italic</label>
+              </div>
+              ` : ''}
+            </div>
+
+            <div class="seed-ed-style-block">
+              <div class="seed-ed-style-title">Entities in this Section</div>
+              <div style="display:flex; gap:6px;">
+                <select class="ed-section-entity-picker" data-section-id="${section.id}" style="flex:1;">
+                  ${pickerHtml}
+                </select>
+              </div>
+              <div class="seed-ed-select-allnone">
+                <span class="ed-section-select-all" data-section-id="${section.id}">Select all (filtered)</span>
+                <span class="seed-ed-allnone-sep">·</span>
+                <span class="ed-section-select-none" data-section-id="${section.id}">Remove All</span>
+              </div>
+              <div class="seed-ed-strip-tags ed-section-entity-chips" data-section-id="${section.id}">
+                ${assignedChipsHtml}
+              </div>
+            </div>
           </div>
         </details>
       `;
@@ -3425,6 +4029,23 @@ class SEEDCardEditor extends HTMLElement {
         this._editorAutoClose = editorAutoCloseEl.checked;
       });
     }
+
+    // Per-group Reset: revert just the clicked group's keys to the section
+    // defaults (from a fresh normalizeSection), then re-render the editor.
+    this.querySelectorAll('.seed-ed-reset-btn[data-reset-group]').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        const keys = SEED_STYLE_GROUPS[el.dataset.resetGroup];
+        if (!section || !keys) return;
+        const defaults = normalizeSection({}); // all-default section
+        keys.forEach(k => { section[k] = defaults[k]; });
+        // Chip color reset also clears any legacy custom flag echoes.
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    });
 
     // Accordion behavior: when auto-close is on, opening one collapsible
     // area closes the others in its own group (top-level settings boxes
@@ -4073,6 +4694,14 @@ class SEEDCardEditor extends HTMLElement {
       });
     }
 
+    const cardGlowSectionEl = this.querySelector('#ed-card-glow-section');
+    if (cardGlowSectionEl) {
+      cardGlowSectionEl.addEventListener('change', () => {
+        this._config.card_glow_section = cardGlowSectionEl.value;
+        this._fireConfigChanged();
+      });
+    }
+
     const cardGlowBordersOnlyEl = this.querySelector('#ed-card-glow-borders-only');
     if (cardGlowBordersOnlyEl) {
       cardGlowBordersOnlyEl.addEventListener('change', () => {
@@ -4281,6 +4910,17 @@ class SEEDCardEditor extends HTMLElement {
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (section) {
           section.collapsible = el.checked;
+          this._fireConfigChanged();
+          this.renderEditor(); // shows/hides the keep-expanded option
+        }
+      });
+    });
+
+    this.querySelectorAll('.ed-section-keep-expanded').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) {
+          section.keep_expanded_when_entities = el.checked;
           this._fireConfigChanged();
         }
       });
@@ -4726,6 +5366,19 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
+    this.querySelectorAll('.ed-section-title-indent').forEach(el => {
+      el.addEventListener('input', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) {
+          const val = parseInt(el.value, 10);
+          section.title_indent = val;
+          const label = this.querySelector(`.ed-section-title-indent-value[data-section-id="${el.dataset.sectionId}"]`);
+          if (label) label.textContent = `${val}px`;
+          this._fireConfigChanged();
+        }
+      });
+    });
+
     // Entity row style (per section)
     this.querySelectorAll('.ed-entity-icon-color').forEach(el => {
       el.addEventListener('input', () => {
@@ -4798,6 +5451,33 @@ class SEEDCardEditor extends HTMLElement {
           this._fireConfigChanged();
           this.renderEditor();
         }
+      });
+    });
+
+    // Chip color "Custom" toggles: checked = use a custom hex (seeded with the
+    // resolved global default so the picker starts sensibly); unchecked = blank
+    // to inherit the global chip color. Re-render to show/hide the picker.
+    const edColors = this._config.colors || SEEDCard.getStubConfig().colors;
+    const chipColorCustomMap = {
+      'ed-chip-bg-custom': { key: 'chip_bg', fallback: edColors.chip_bg },
+      'ed-chip-border-custom': { key: 'chip_border_color', fallback: edColors.chip_border },
+      'ed-chip-text-custom': { key: 'chip_text_color', fallback: edColors.chip_text }
+    };
+    Object.entries(chipColorCustomMap).forEach(([cls, { key, fallback }]) => {
+      this.querySelectorAll('.' + cls).forEach(el => {
+        el.addEventListener('change', () => {
+          const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+          if (!section) return;
+          if (el.checked) {
+            // Seed with a valid hex so the color picker has a starting value;
+            // rgba() globals can't seed a color input, so fall back to a hex.
+            section[key] = /^#[0-9a-fA-F]{6}$/.test(fallback || '') ? fallback : '#2196F3';
+          } else {
+            section[key] = '';
+          }
+          this._fireConfigChanged();
+          this.renderEditor();
+        });
       });
     });
 
@@ -4875,12 +5555,96 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-    this.querySelectorAll('.ed-chip-hide-when-off').forEach(el => {
+    this.querySelectorAll('.ed-chip-hide-state').forEach(el => {
       el.addEventListener('change', () => {
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          section.chip_hide_when_off = el.checked;
-          this._fireConfigChanged();
+        if (section) { section.chip_hide_state = el.checked; this._fireConfigChanged(); }
+      });
+    });
+
+    const chipHideStateMap = {
+      'ed-chip-hide-off': 'chip_hide_off',
+      'ed-chip-hide-unknown': 'chip_hide_unknown',
+      'ed-chip-hide-unavailable': 'chip_hide_unavailable'
+    };
+    Object.entries(chipHideStateMap).forEach(([cls, key]) => {
+      this.querySelectorAll('.' + cls).forEach(el => {
+        el.addEventListener('change', () => {
+          const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+          if (section) {
+            section[key] = el.checked;
+            // Drop the migrated-from legacy flag so it doesn't re-expand.
+            delete section.chip_hide_when_off;
+            this._fireConfigChanged();
+          }
+        });
+      });
+    });
+
+    // ---- Chip tap/hold actions ----
+    // Returns the action object for the given element's section + kind,
+    // creating it if missing.
+    const chipActionOf = (el) => {
+      const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+      if (!section) return null;
+      const key = el.dataset.actionKind === 'hold' ? 'chip_hold_action' : 'chip_tap_action';
+      section[key] = normalizeAction(section[key], el.dataset.actionKind === 'hold' ? 'none' : 'more-info');
+      return section[key];
+    };
+
+    this.querySelectorAll('.ed-chip-action').forEach(el => {
+      el.addEventListener('change', () => {
+        const a = chipActionOf(el);
+        if (a) { a.action = el.value; this._fireConfigChanged(); this.renderEditor(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-chip-action-entity').forEach(el => {
+      el.addEventListener('input', () => {
+        const a = chipActionOf(el);
+        if (a) { a.action_entity = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-chip-action-navpath').forEach(el => {
+      el.addEventListener('input', () => {
+        const a = chipActionOf(el);
+        if (a) { a.navigation_path = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-chip-action-url').forEach(el => {
+      el.addEventListener('input', () => {
+        const a = chipActionOf(el);
+        if (a) { a.url_path = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-chip-action-service').forEach(el => {
+      el.addEventListener('input', () => {
+        const a = chipActionOf(el);
+        if (a) { a.service = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-chip-action-servicedata').forEach(el => {
+      el.addEventListener('input', () => {
+        const a = chipActionOf(el);
+        if (!a) return;
+        const raw = el.value.trim();
+        if (!raw) { a.service_data = {}; el.style.borderColor = ''; this._fireConfigChanged(); return; }
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            a.service_data = parsed;
+            el.style.borderColor = '';
+            this._fireConfigChanged();
+          } else {
+            el.style.borderColor = '#f44336';
+          }
+        } catch (e) {
+          // Invalid JSON mid-typing: flag it, don't save.
+          el.style.borderColor = '#f44336';
         }
       });
     });
@@ -4919,33 +5683,180 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-    // Entity checkboxes
-    this.querySelectorAll('.ed-entity-checkbox').forEach(el => {
-      el.addEventListener('change', () => {
-        const sectionId = el.dataset.sectionId;
-        const entityId = el.dataset.entityId;
-        const section = this._config.sections.find(s => s.id === sectionId);
+    // ---- Entity Display Rules ----
+    const ruleOf = (el) => {
+      const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+      if (!section || !Array.isArray(section.entity_rules)) return null;
+      const rule = section.entity_rules[parseInt(el.dataset.ruleIndex, 10)];
+      return rule ? { section, rule } : null;
+    };
+
+    this.querySelectorAll('.ed-rule-add').forEach(el => {
+      el.addEventListener('click', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (!section) return;
-        const entities = new Set(section.entities || []);
-        if (el.checked) entities.add(entityId);
-        else entities.delete(entityId);
-        section.entities = Array.from(entities);
+        if (!Array.isArray(section.entity_rules)) section.entity_rules = [];
+        section.entity_rules.push(normalizeRule({}));
         this._fireConfigChanged();
+        this.renderEditor();
       });
     });
 
-    // Search
-    this.querySelectorAll('.seed-ed-search').forEach(el => {
+    this.querySelectorAll('.ed-rule-remove').forEach(el => {
+      el.addEventListener('click', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (!section || !Array.isArray(section.entity_rules)) return;
+        section.entity_rules.splice(parseInt(el.dataset.ruleIndex, 10), 1);
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    });
+
+    this.querySelectorAll('.ed-rule-join').forEach(el => {
+      el.addEventListener('change', () => {
+        const ctx = ruleOf(el);
+        if (ctx) { ctx.rule.join = el.value === 'or' ? 'or' : 'and'; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-rule-operator').forEach(el => {
+      el.addEventListener('change', () => {
+        const ctx = ruleOf(el);
+        if (ctx) { ctx.rule.operator = el.value === 'ne' ? 'ne' : 'eq'; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-rule-compare-type').forEach(el => {
+      el.addEventListener('change', () => {
+        const ctx = ruleOf(el);
+        if (ctx) {
+          ctx.rule.compare_type = el.value === 'entity' ? 'entity' : 'value';
+          this._fireConfigChanged();
+          this.renderEditor(); // swaps the value input <-> entity picker
+        }
+      });
+    });
+
+    this.querySelectorAll('.ed-rule-value').forEach(el => {
       el.addEventListener('input', () => {
-        const term = el.value.toLowerCase();
-        const list = this.querySelector(
-          `.seed-ed-entity-list[data-section-id="${el.dataset.sectionId}"]`
-        );
-        if (!list) return;
-        list.querySelectorAll('.seed-ed-entity-item').forEach(item => {
-          const hay = item.dataset.search || '';
-          item.style.display = hay.includes(term) ? '' : 'none';
-        });
+        const ctx = ruleOf(el);
+        if (ctx) { ctx.rule.value = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-rule-compare-entity').forEach(el => {
+      el.addEventListener('input', () => {
+        const ctx = ruleOf(el);
+        if (ctx) { ctx.rule.compare_entity = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    // ---- Section Display Condition ----
+    this.querySelectorAll('.ed-section-display').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) {
+          section.section_display = el.value === 'hide_when_empty' ? 'hide_when_empty' : 'always';
+          this._fireConfigChanged();
+        }
+      });
+    });
+
+    // ---- Per-section entity count in header ----
+    this.querySelectorAll('.ed-count-mode').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) {
+          section.count_mode = ['title', 'right'].includes(el.value) ? el.value : 'off';
+          this._fireConfigChanged();
+          this.renderEditor(); // shows/hides prefix + styling controls
+        }
+      });
+    });
+
+    this.querySelectorAll('.ed-count-prefix').forEach(el => {
+      el.addEventListener('input', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) { section.count_prefix = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-count-color').forEach(el => {
+      el.addEventListener('input', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) { section.count_color = el.value; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-count-font-size').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        const val = parseInt(el.value, 10);
+        if (section && !Number.isNaN(val)) { section.count_font_size = val; this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-count-font-weight').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) { section.count_font_weight = parseInt(el.value, 10); this._fireConfigChanged(); }
+      });
+    });
+
+    this.querySelectorAll('.ed-count-font-italic').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) { section.count_font_style = el.checked ? 'italic' : 'normal'; this._fireConfigChanged(); }
+      });
+    });
+
+    // ---- Section entity selector: picker, chips, select all / remove all ----
+    // Picker adds the chosen entity immediately on selection (no + button).
+    this.querySelectorAll('.ed-section-entity-picker').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (!section || !el.value) return;
+        const entities = new Set(section.entities || []);
+        if (!entities.has(el.value)) {
+          section.entities = [...(section.entities || []), el.value];
+          this._fireConfigChanged();
+          this.renderEditor();
+        }
+      });
+    });
+
+    // Remove an assigned-entity chip.
+    this.querySelectorAll('.ed-section-entity-remove').forEach(el => {
+      el.addEventListener('click', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (!section) return;
+        section.entities = (section.entities || []).filter(id => id !== el.dataset.entityId);
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    });
+
+    // Select all currently filter-matched candidate entities.
+    this.querySelectorAll('.ed-section-select-all').forEach(el => {
+      el.addEventListener('click', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (!section) return;
+        const candidates = this._getCandidateEntities();
+        const merged = new Set([...(section.entities || []), ...candidates]);
+        section.entities = Array.from(merged);
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    });
+
+    // Clear all entities from this section.
+    this.querySelectorAll('.ed-section-select-none').forEach(el => {
+      el.addEventListener('click', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (!section) return;
+        section.entities = [];
+        this._fireConfigChanged();
+        this.renderEditor();
       });
     });
 
