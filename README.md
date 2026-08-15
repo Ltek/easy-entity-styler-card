@@ -12,16 +12,19 @@ https://github.com/Ltek/easy-entity-styler-card
 
 ### ✨ Features
 
-* **Collapsible card and Group entities into collapsible sections** – Organize your entities with sections that can be individually expanded or collapsed. Collapse the entire card down to just the title bar if you choose, or have no title bare at all and it is still collapsible.
+* **Collapsible card and Group entities into collapsible sections** – Organize your entities with sections that can be individually expanded or collapsed. Collapse the entire card down to just the title bar if you choose, or have no title bar at all and it is still collapsible. Optionally **keep a section expanded** whenever it has entities to show.
+* **Conditional Entity Display Rules** – Per section, show each entity only when it passes your rules (its value *is* / *is not* equal to a static value or another entity's value), chained with AND / OR and evaluated live.
+* **Section display conditions** – Automatically hide an entire section (header included) when its rules leave it with no entities to show.
+* **Entity count in the header** – Show a live count next to the section title or on the far right, with full color / size / weight styling.
 * **Powerful filtering system** – populate section selectors using:
   * Text matching (entity ID, integration platform, or device name)
   * Entity Labels
   * Group helpers
-* **Full visual editor** – Everything is configurable through the visual editor – no YAML required unless you prefer it.
-* **Chips** – Fully customizable: colorful, compact chips for instant readability. Wrap, column, or grid layouts. Optional per Section.
-* **Native entity controls** – Toggle switches, adjust sliders, and interact with entities just like standard HA cards. Or use Chips for a 
+* **Full visual editor** – Everything is configurable through the visual editor – no YAML required unless you prefer it. Includes **per-group Reset buttons** to revert any style group to defaults, and clear inherit-vs-custom color toggles.
+* **Chips** – Fully customizable: colorful, compact chips for instant readability. Wrap, column, or grid layouts. Optional per Section. Configure separate **tap and hold actions** (more-info, toggle, navigate, URL, or call-service).
+* **Native entity controls** – Toggle switches, adjust sliders, and interact with entities just like standard HA cards. Or use Chips for a more compact display.
 * **Styling - Card level, Global defaults, and Custom per-Section** – Settings at Global Level (set all at once, the same) with each section having 'Custom' individual setting overrides: colors, borders, glow, shadows, and fonts, etc. Separate 'Card Wrapper' (the overall card) for all settings.
-* **Glow effect rules** – Global for card and/or Sections
+* **Glow effect rules** – Global for card and/or Sections, including glow **when a chosen section has (or has no) displayed entities**.
 * **Entity name stripping** – Remove redundant text (e.g., "Living Room") from all displayed names.
 
 ### 🚀 Installation
@@ -39,8 +42,6 @@ https://github.com/Ltek/easy-entity-styler-card
 
 Example showing just a fraction of the available options...
 
-<img width="2499" height="1350" alt="easy-entity-styler-card-examples" src="https://github.com/user-attachments/assets/e9a50f24-b7bf-4715-95a2-0837309a585f" />
+<img alt="Bypass Card with Chips" src="https://github.com/user-attachments/assets/ea8ebc15-1edd-4240-a0c7-6a6f605e6bd7" style="width: 25%; height: auto;" />
 
-
-
-
+<img alt="StormAudio remote 3 ways" src="https://github.com/user-attachments/assets/e9a50f24-b7bf-4715-95a2-0837309a585f" style="width: 50%; height: auto;" />
