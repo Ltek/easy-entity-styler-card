@@ -16,7 +16,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.08.15.47';
+const BUILD_NUMBER = 'v2026.08.15.49';
 
 const AUDIO_CHIP_KEYWORDS = [
   'audio_format', 'audio_codec', 'surround_mode', 'stormxt',
@@ -310,6 +310,9 @@ function normalizeSection(s) {
     // Force the section open whenever it has visible entities (only meaningful
     // for a collapsible section). Overrides auto-close while entities show.
     keep_expanded_when_entities: s.keep_expanded_when_entities === true,
+    // Initial expand/collapse state a collapsible section renders in.
+    // 'collapsed' (default) or 'expanded'.
+    default_state: s.default_state === 'expanded' ? 'expanded' : 'collapsed',
     // Entity row style, applied to every entity rendered in this section
     entity_icon_color: s.entity_icon_color || '',
     entity_icon_size: s.entity_icon_size || 20,
@@ -606,6 +609,9 @@ class SEEDCard extends HTMLElement {
       // Whole-card collapsible wrapper (title bar always visible; body toggles)
       card_collapsible: false,
       show_card_chevron: true,
+      // Initial state the collapsible card renders in: 'expanded' (default) or
+      // 'collapsed' (shows just the title bar until the user expands it).
+      card_default_state: 'expanded',
       card_border_enabled: false,
       card_border_width: 1,
       card_border_radius: 12,
@@ -1582,9 +1588,11 @@ class SEEDCard extends HTMLElement {
           </div>
         `;
       } else if (collapsible) {
-        // Keep-expanded: force the section open at render when it has visible
-        // entities (re-asserted live in updateStates).
-        const forceOpen = section.keep_expanded_when_entities && count > 0;
+        // Initial state: 'expanded' renders open; 'collapsed' (default) closed.
+        // Keep-expanded still forces open at render when it has visible entities
+        // (re-asserted live in updateStates).
+        const forceOpen = section.default_state === 'expanded' ||
+          (section.keep_expanded_when_entities && count > 0);
         sectionsHtml += `
           <details class="seed-section ${autoClose ? 'seed-autoclose' : ''}" data-section-id="${section.id}" style="${sectionStyle}${sectionHiddenStyle}"${sectionDisableGlowAttr}${forceOpen ? ' open' : ''}>
             <summary class="seed-summary">${headerHtml}</summary>
@@ -1612,12 +1620,15 @@ class SEEDCard extends HTMLElement {
     // title bar toggles the body - it does not gate the wrapper's visuals.
     if (cardCollapsible) {
       const showCardChevronFlag = this._config.show_card_chevron !== false;
+      // Initial state: 'collapsed' renders the card as just its title bar until
+      // the user expands it; anything else (default 'expanded') starts open.
+      const cardStartOpen = this._config.card_default_state !== 'collapsed';
       // When both the title text and icon are hidden there's no title bar, so
       // fall back to an empty spacer that keeps the summary clickable and
       // pushes the chevron to the right.
       const summaryTitleHtml = titleHtml || '<div class="seed-title"><span class="seed-title-text"></span></div>';
       html += `
-        <details class="easy-entity-styler-card-wrapper" open>
+        <details class="easy-entity-styler-card-wrapper"${cardStartOpen ? ' open' : ''}>
           <summary class="easy-entity-styler-card-summary">
             ${summaryTitleHtml}
             ${showCardChevronFlag ? '<ha-icon class="easy-entity-styler-card-chevron" icon="mdi:chevron-down"></ha-icon>' : ''}
@@ -2882,6 +2893,13 @@ class SEEDCardEditor extends HTMLElement {
           <input type="checkbox" id="ed-show-card-chevron" ${showCardChevron ? 'checked' : ''} />
           <label for="ed-show-card-chevron">Show expand/collapse chevron on the title row</label>
         </div>
+        <div class="seed-ed-checkbox-row">
+          <span style="font-size:12px; color:#ccc;">Default state:</span>
+          <select id="ed-card-default-state">
+            <option value="expanded" ${(this._config.card_default_state || 'expanded') !== 'collapsed' ? 'selected' : ''}>Expanded</option>
+            <option value="collapsed" ${this._config.card_default_state === 'collapsed' ? 'selected' : ''}>Collapsed (title bar only)</option>
+          </select>
+        </div>
         ` : ''}
         <div class="seed-ed-checkbox-row">
           <input type="checkbox" id="ed-card-border-enabled" ${cardBorderEnabled ? 'checked' : ''} />
@@ -3501,6 +3519,13 @@ class SEEDCardEditor extends HTMLElement {
             </div>
             ${section.show_title === false ? '<span class="seed-ed-hint">With the title row hidden, this section always renders expanded.</span>' : ''}
             ${(section.show_title !== false && section.collapsible !== false) ? `
+            <div class="seed-ed-checkbox-row">
+              <span style="font-size:12px; color:#ccc;">Default state:</span>
+              <select class="ed-section-default-state" data-section-id="${section.id}">
+                <option value="collapsed" ${(section.default_state || 'collapsed') === 'collapsed' ? 'selected' : ''}>Collapsed</option>
+                <option value="expanded" ${section.default_state === 'expanded' ? 'selected' : ''}>Expanded</option>
+              </select>
+            </div>
             <div class="seed-ed-checkbox-row">
               <input type="checkbox" class="ed-section-keep-expanded" data-section-id="${section.id}" ${section.keep_expanded_when_entities ? 'checked' : ''} />
               <label>Keep expanded while entities are displayed in this section</label>
@@ -4812,6 +4837,14 @@ class SEEDCardEditor extends HTMLElement {
       });
     }
 
+    const cardDefaultStateEl = this.querySelector('#ed-card-default-state');
+    if (cardDefaultStateEl) {
+      cardDefaultStateEl.addEventListener('change', () => {
+        this._config.card_default_state = cardDefaultStateEl.value === 'collapsed' ? 'collapsed' : 'expanded';
+        this._fireConfigChanged();
+      });
+    }
+
     const showTitleEl = this.querySelector('#ed-show-title');
     if (showTitleEl) {
       showTitleEl.addEventListener('change', () => {
@@ -4921,6 +4954,16 @@ class SEEDCardEditor extends HTMLElement {
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (section) {
           section.keep_expanded_when_entities = el.checked;
+          this._fireConfigChanged();
+        }
+      });
+    });
+
+    this.querySelectorAll('.ed-section-default-state').forEach(el => {
+      el.addEventListener('change', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (section) {
+          section.default_state = el.value === 'expanded' ? 'expanded' : 'collapsed';
           this._fireConfigChanged();
         }
       });
