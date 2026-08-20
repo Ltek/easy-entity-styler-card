@@ -85,6 +85,5 @@ https://github.com/Ltek/easy-entity-styler-card
 
 Example showing just a fraction of the available options...
 
-<img alt="Bypass Card with Chips" src="https://github.com/user-attachments/assets/ea8ebc15-1edd-4240-a0c7-6a6f605e6bd7" style="width: 25%; height: auto;" />
-
-<img alt="StormAudio remote 3 ways" src="https://github.com/user-attachments/assets/e9a50f24-b7bf-4715-95a2-0837309a585f" style="width: 50%; height: auto;" />
+<!-- SCREENSHOTS:START -->
+<!-- SCREENSHOTS:END -->
