@@ -86,4 +86,44 @@ https://github.com/Ltek/easy-entity-styler-card
 Example showing just a fraction of the available options...
 
 <!-- SCREENSHOTS:START -->
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="screenshots/easy-entity-styler-card-examples.jpg" width="100%" alt="easy entity styler card examples">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/editor-frame.jpg" width="100%" alt="editor frame">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/editor1.jpg" width="100%" alt="editor1">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-bypass.JPG" width="100%" alt="example bypass">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="screenshots/example-climate.JPG" width="100%" alt="example climate">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-lux.JPG" width="100%" alt="example lux">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-modes.JPG" width="100%" alt="example modes">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-stormaudio.jpg" width="100%" alt="example stormaudio">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="screenshots/example-styles.jpg" width="100%" alt="example styles">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/stormaudio.jpg" width="100%" alt="stormaudio">
+    </td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
 <!-- SCREENSHOTS:END -->
