@@ -2,11 +2,11 @@
 
 A highly customizable dashboard card that organizes and displays your entities in a clean way while giving you full control over the look and behavior of your entity cards. Bonus: 1000x easier and better performance than card-mod.
 
-* **Over 98 global card styling options**
-* **Over 115 styling options per entity**
-* **Over 162 options per card section**
+* **Hundreds of styling options** — card-wide, per section, and per entity
+* **Reusable Rule Sets, Frame Presets, and a shared Preset Library**
+* **Entity Tables** with rule-based color / icons / sorting
 
-... all in a super easy to use Visual Editor
+... all in a super easy to use Visual Editor — YAML optional, never required
 
 https://github.com/Ltek/easy-entity-styler-card
 
@@ -58,7 +58,17 @@ https://github.com/Ltek/easy-entity-styler-card
 
 * **Native entity controls** – Toggle switches, adjust sliders, and interact with entities just like standard HA cards.
 
-* **Layered styling (card / global / per-section)** – Set colors, borders, glow, shadows, and fonts as global defaults, then override per section; a separate "Card Wrapper" controls the overall card. Includes **glow rules** (glow when a section has / has no entities), a **secondary info line** under entity names, and **name stripping** (remove text like "Living Room") card-wide or per section.
+* **Frame Presets (borders / glow / shadow / background / edge lines)** – All frame styling lives in one place: named, reusable **Frame Presets** you layer onto a section or the whole card.
+  * Each preset is **sparse** — it stores only the properties you set (a "bottom glow" preset touches nothing else), so presets stack cleanly: apply an ordered list to any section or the Card Wrapper and the **last one wins per property**.
+  * Presets can be **conditional** — apply only when an entity is in a given state, or when a section currently **has / has no** visible entities (e.g. the card glows only while something is active).
+  * Border color / glow / shadow can **follow the section's icon color**, per-side borders + glow, per-side gradient **edge lines**, and background — all point-and-click with a live preview swatch.
+
+* **Preset Library (share styles across cards & systems)** – Save a Frame Preset to a **shared library** that lives in Home Assistant (no add-on or integration needed) and reference it from any card as `lib:<name>`.
+  * Edit a library preset once and **every card using it updates live**.
+  * **Local ↔ Library** badges show where each preset lives; **Save to Library** publishes and links a card to it; **Detach** forks a library preset back to a local copy.
+  * **Export / Import** presets as text to share a great style with someone on another system.
+
+* **Colors, fonts & scaling** – Global color palette (text, icons, chips, dividers…), independent **scale sliders** (overall, icons, title icon/text, entity text), per-section header/row/chip styling, a **secondary info line** under entity names, and an **Entity Name Cleaner** (strip text like "Living Room") card-wide or per section.
 
 ### 🚀 Installation
 
