@@ -4,10 +4,8 @@
 // entities in a clean way while giving you full control over the look and
 // behavior of your entity cards.
 //
-// Over 98 global card styling options
-// Over 115 styling options per entity
-// Over 162 options per card section
-// … all in a super easy to use Visual Editor
+// Author:  LTek
+// Card:    https://github.com/Ltek/easy-entity-styler-card
 // ============================================================================
 
 // Debug logging - disabled by default
