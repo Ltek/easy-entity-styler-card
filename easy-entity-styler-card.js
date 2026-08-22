@@ -1,11 +1,20 @@
 // ============================================================================
 // Easy Entity Styer Card for Home Assistant
-// A highly customizable dashboard card that organizes and displays your
-// entities in a clean way while giving you full control over the look and
-// behavior of your entity cards.
+//
+//   A highly customizable dashboard card that organizes and displays your entities in a clean way
+//   while giving you full control over the look and behavior of your entity cards.
+//   Bonus: 1000x easier and better performance than card-mod.
+//
+//   Hundreds of styling options — card-wide, per section, and per entity
+//   Reusable Rule Sets, Frame Presets, and a shared Preset Library
+//   Entity Tables with rule-based color / icons / sorting
+//    ... all in a super easy to use Visual Editor — YAML optional, never required
+//
+// Version: v2026.08.20.131
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
+//
 // ============================================================================
 
 // Debug logging - disabled by default
@@ -14,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.08.20.130';
+const BUILD_NUMBER = 'v2026.08.20.131';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1119,8 +1128,16 @@ function normalizeFramePreset(fx) {
     follow_icon: fx.border.follow_icon === true,
     sides: Array.isArray(fx.border.sides) ? fx.border.sides.filter(s => ['top', 'bottom', 'left', 'right'].includes(s)) : ['top', 'bottom', 'left', 'right']
   };
-  // Background: a solid color (blank/transparent supported).
-  if (fx.background != null) out.background = { color: String((fx.background && fx.background.color) != null ? fx.background.color : fx.background) };
+  // Background: 'custom' (a solid color), 'transparent', or 'theme' (inherit
+  // the HA card/theme background). Legacy values were a bare string or
+  // { color } object (custom only), which migrate to mode:'custom'.
+  if (fx.background != null) {
+    const bg = (typeof fx.background === 'object') ? fx.background : { color: String(fx.background) };
+    const mode = ['transparent', 'theme', 'custom'].includes(bg.mode) ? bg.mode : 'custom';
+    out.background = mode === 'custom'
+      ? { mode: 'custom', color: String(bg.color != null ? bg.color : '#1c1c1c') }
+      : { mode };
+  }
   if (fx.edges) out.edges = normalizeEdges(fx.edges);
   // Conditional application. Two kinds:
   //  - entity (default): `when` (condition) + `when_entity` (watched entity id)
@@ -2747,7 +2764,16 @@ class SEEDCard extends HTMLElement {
         radius: `${br}px`
       };
     }
-    if (acc.background) out.background = acc.background.color || 'transparent';
+    if (acc.background) {
+      const mode = acc.background.mode || 'custom';
+      // 'theme' => the sentinel 'theme' so consumers UNSET the background (the
+      // HA card / theme shows through). 'transparent' => explicit transparent.
+      // 'custom' => the chosen color. (out.background stays null when no
+      // background group is present at all — a different case from 'theme'.)
+      out.background = mode === 'theme' ? 'theme'
+        : mode === 'transparent' ? 'transparent'
+        : (acc.background.color || 'transparent');
+    }
     if (acc.edges) out.edge = buildEdgeBackground(acc.edges);
     return out;
   }
@@ -2815,7 +2841,7 @@ class SEEDCard extends HTMLElement {
         el.style.setProperty('--sec-border-left', bv ? bv.left : 'none');
         el.style.setProperty('--sec-border-right', bv ? bv.right : 'none');
         el.style.setProperty('--sec-border-radius', bv ? bv.radius : '0');
-        el.style.backgroundColor = fx.background != null ? fx.background : 'transparent';
+        el.style.backgroundColor = fx.background === 'theme' ? '' : (fx.background != null ? fx.background : 'transparent');
         if (fx.edge) {
           el.style.backgroundImage = fx.edge.image;
           el.style.backgroundSize = fx.edge.size;
@@ -2856,7 +2882,7 @@ class SEEDCard extends HTMLElement {
       wrapper.style.borderLeft = bv ? bv.left : 'none';
       wrapper.style.borderRight = bv ? bv.right : 'none';
       wrapper.style.borderRadius = bv ? bv.radius : '';
-      wrapper.style.backgroundColor = fx.background != null ? fx.background : '';
+      wrapper.style.backgroundColor = (fx.background != null && fx.background !== 'theme') ? fx.background : '';
       if (fx.edge) {
         wrapper.style.backgroundImage = fx.edge.image;
         wrapper.style.backgroundSize = fx.edge.size;
@@ -3559,7 +3585,7 @@ class SEEDCard extends HTMLElement {
         sectionBorderOverride += 'overflow:visible;';
         const bv = fx.borderVars;
         sectionBorderOverride += `--sec-border-top:${bv ? bv.top : 'none'};--sec-border-bottom:${bv ? bv.bottom : 'none'};--sec-border-left:${bv ? bv.left : 'none'};--sec-border-right:${bv ? bv.right : 'none'};--sec-border-radius:${bv ? bv.radius : '0'};`;
-        sectionBorderOverride += `--sec-bg:${fx.background != null ? fx.background : 'transparent'};`;
+        sectionBorderOverride += `--sec-bg:${fx.background === 'theme' ? 'inherit' : (fx.background != null ? fx.background : 'transparent')};`;
         if (fx.edge) {
           sectionBorderOverride += `background-image:${fx.edge.image};background-size:${fx.edge.size};background-position:${fx.edge.position};background-repeat:${fx.edge.repeat};`;
         }
@@ -4829,6 +4855,11 @@ class SEEDCardEditor extends HTMLElement {
     // Editor-only UI preference - not part of the saved card config, since
     // it doesn't affect how the live card renders.
     this._editorAutoClose = true;
+    // Debounced Frame-Library save state (in-place editing of lib: presets).
+    // _libEditTimer coalesces rapid edits; _libEchoJSON lets the subscription
+    // ignore its own just-saved value so it doesn't re-render mid-typing.
+    this._libEditTimer = null;
+    this._libEchoJSON = null;
   }
 
   _normalizeConfig(config) {
@@ -4886,7 +4917,14 @@ class SEEDCardEditor extends HTMLElement {
     // The editor always loads the shared library (so the picker + Save-to-
     // Library reflect it live), regardless of whether a lib: ref exists yet.
     ensureFrameLibrary(hass, (this._config && this._config.frame_library_scope) || 'system', () => {
-      if (this._config) { this._rendered = false; this.renderEditor(); }
+      if (!this._config) return;
+      // Ignore the echo of our own just-saved edit (the subscription fires with
+      // the value we wrote) so it doesn't rebuild the DOM mid-typing.
+      const scope = this._config.frame_library_scope || 'system';
+      const cur = JSON.stringify(frameLibraryMap(scope));
+      if (this._libEchoJSON !== null && cur === this._libEchoJSON) { this._libEchoJSON = null; return; }
+      this._libEchoJSON = null;
+      this._rendered = false; this.renderEditor();
     });
     // Only render if we haven't rendered yet or if config changed
     if (this._config && !this._rendered) {
@@ -5003,6 +5041,14 @@ class SEEDCardEditor extends HTMLElement {
     if (idx !== -1) return { list: this._config.rule_sets, idx, kind: 'rule_set' };
     idx = (this._config.frame_presets || []).findIndex(f => f.id === sid);
     if (idx !== -1) return { list: this._config.frame_presets, idx, kind: 'frame_preset' };
+    // Library preset (lib:<slug>): edit the shared-library entry in place. The
+    // module cache object is mutated by reference; _atApply* debounce-saves it
+    // back to the store. Wrapped in a single-element list to match the shape.
+    if (typeof sid === 'string' && sid.startsWith('lib:')) {
+      const slug = sid.slice(4);
+      const map = frameLibraryMap(this._config.frame_library_scope);
+      if (map && map[slug]) return { list: [map[slug]], idx: 0, kind: 'frame_lib', slug };
+    }
     return null;
   }
 
@@ -5015,15 +5061,41 @@ class SEEDCardEditor extends HTMLElement {
     mutate(t.list[t.idx]);
     if (t.kind === 'table_defaults') {
       this._config.table_defaults = normalizeTableDefaults(t.list[t.idx]);
+      this._fireConfigChanged();
+    } else if (t.kind === 'frame_lib') {
+      // Library preset: normalize in place (preserve the lib: id) and persist
+      // to the shared store; card config is untouched.
+      const norm = normalizeFramePreset(t.list[t.idx]);
+      norm.id = 'lib:' + t.slug;
+      const map = frameLibraryMap(this._config.frame_library_scope);
+      map[t.slug] = norm;
+      this._saveLibraryDebounced();
+      this.renderEditor();
+      return;
     } else if (t.kind === 'frame_preset') {
       t.list[t.idx] = normalizeFramePreset(t.list[t.idx]);
+      this._fireConfigChanged();
     } else {
       t.list[t.idx] = t.kind === 'rule_set'
         ? normalizeRuleSetDef(t.list[t.idx])
         : normalizeSection(t.list[t.idx]);
+      this._fireConfigChanged();
     }
-    this._fireConfigChanged();
     this.renderEditor();
+  }
+
+  // Debounced persist of the in-memory Frame Library to the shared store, with
+  // an echo guard so the subscription's own callback doesn't re-render (and
+  // clobber focus) when it receives the value we just wrote.
+  _saveLibraryDebounced() {
+    const scope = this._config.frame_library_scope || 'system';
+    const map = { ...frameLibraryMap(scope) };
+    this._libEchoJSON = JSON.stringify(map);
+    if (this._libEditTimer) clearTimeout(this._libEditTimer);
+    this._libEditTimer = setTimeout(() => {
+      this._libEditTimer = null;
+      saveFrameLibrary(this._hass, scope, map).catch(() => {});
+    }, 400);
   }
 
   // Apply a LIVE VALUE edit (typing in a text/number field, dragging a slider)
@@ -5036,6 +5108,12 @@ class SEEDCardEditor extends HTMLElement {
     const t = this._atTarget(sid);
     if (!t) return;
     mutate(t.list[t.idx]);
+    if (t.kind === 'frame_lib') {
+      // Live value edit on a library preset: mutate the cache object in place
+      // (already done) and debounce-save; no card config change, no re-render.
+      this._saveLibraryDebounced();
+      return;
+    }
     this._fireConfigChanged();
   }
 
@@ -5360,18 +5438,20 @@ class SEEDCardEditor extends HTMLElement {
   // A small storage-location badge for a preset. A local preset lives in THIS
   // card's config; if an identical (by content) preset also exists in the
   // Preset Library, we mark it "In Library" so the user knows it's published.
+  // Location badge distinguishing where a preset lives:
+  //  - a lib: preset is System-wide (shared library, every card can use it)
+  //  - otherwise it's Local (this card only)
   _fxLocationBadge(fx) {
-    const lib = frameLibraryMap(this._config.frame_library_scope);
-    const key = framePresetContentKey(fx);
-    const inLib = Object.keys(lib).some(slug => framePresetContentKey(lib[slug]) === key);
-    if (inLib) {
-      return `<span class="seed-ed-loc-badge seed-ed-loc-lib" title="Also saved in the Preset Library — available to every card"><ha-icon icon="mdi:cloud-check-outline"></ha-icon>Library</span>`;
+    const isLib = typeof fx.id === 'string' && fx.id.startsWith('lib:');
+    if (isLib) {
+      return `<span class="seed-ed-loc-badge seed-ed-loc-lib" title="Shared library preset — available to every card. Edits here update every card that uses it."><ha-icon icon="mdi:earth"></ha-icon>System</span>`;
     }
-    return `<span class="seed-ed-loc-badge seed-ed-loc-card" title="Lives in this card only. Use Save to Library to publish it."><ha-icon icon="mdi:card-outline"></ha-icon>Local</span>`;
+    return `<span class="seed-ed-loc-badge seed-ed-loc-card" title="Lives in this card only. Use Save to Library to make it available to every card."><ha-icon icon="mdi:card-outline"></ha-icon>Local</span>`;
   }
 
   _atFramePresetEditor(fx) {
     const fid = fx.id;
+    const isLib = typeof fid === 'string' && fid.startsWith('lib:');
     const usesFid = fr => fr && Array.isArray(fr.presets) && fr.presets.includes(fid);
     const usedBy = (this._config.sections || []).filter(s => usesFid(s.frame)).length
       + (usesFid(this._config.card_frame) ? 1 : 0);
@@ -5380,6 +5460,7 @@ class SEEDCardEditor extends HTMLElement {
     const condActive = !!fx.when || isSectionCond;
     const condKind = isSectionCond ? fx.when_kind : 'entity';
     const g = fx.glow || {}, sh = fx.shadow || {}, bd = fx.border || {}, wh = fx.when || {};
+    const bgMode = fx.background ? (fx.background.mode || 'custom') : 'custom';
     const sideOn = s => bd.sides ? bd.sides.includes(s) : true;
     const badge = this._fxLocationBadge(fx);
     return `
@@ -5394,9 +5475,13 @@ class SEEDCardEditor extends HTMLElement {
           <div class="seed-ed-fx-actions">
             <input type="text" class="at-input" data-at-sid="${fid}" data-at-path="name" value="${escapeHtml(fx.name || '')}" placeholder="Preset name" style="flex:1;" />
             <ha-icon class="seed-ed-icon-btn fx-export" icon="mdi:export-variant" data-fx-id="${fid}" title="Export preset to text"></ha-icon>
-            <ha-icon class="seed-ed-icon-btn fx-save-lib" icon="mdi:cloud-upload-outline" data-fx-id="${fid}" title="Save to Preset Library (publishes it and links this card to it)"></ha-icon>
-            <ha-icon class="seed-ed-icon-btn fx-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate preset"></ha-icon>
-            <ha-icon class="seed-ed-icon-btn fx-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete preset"></ha-icon>
+            ${isLib
+              ? `<ha-icon class="seed-ed-icon-btn fx-lib-tolocal" icon="mdi:card-plus-outline" data-fx-id="${fid}" title="Copy to this card as a Local preset"></ha-icon>
+                 <ha-icon class="seed-ed-icon-btn fx-lib-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate in the shared library"></ha-icon>
+                 <ha-icon class="seed-ed-icon-btn fx-lib-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete from the shared library"></ha-icon>`
+              : `<ha-icon class="seed-ed-icon-btn fx-save-lib" icon="mdi:cloud-upload-outline" data-fx-id="${fid}" title="Make System-wide: publish to the shared library and link this card to it"></ha-icon>
+                 <ha-icon class="seed-ed-icon-btn fx-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate preset"></ha-icon>
+                 <ha-icon class="seed-ed-icon-btn fx-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete preset"></ha-icon>`}
           </div>
           <div class="seed-ed-preview-swatch" data-fx-preview="${fid}"><span>Preview</span></div>
 
@@ -5439,10 +5524,17 @@ class SEEDCardEditor extends HTMLElement {
 
           <div class="seed-ed-group-title">Background</div>
           <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="background" ${fx.background ? 'checked' : ''}/> Set background color</label>
+            <label><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="background" ${fx.background ? 'checked' : ''}/> Set background</label>
           </div>
           ${fx.background ? `<div class="seed-ed-font-row">
-            <label>Color<input type="color" class="at-input" data-at-sid="${fid}" data-at-path="background.color" value="${/^#/.test((fx.background && fx.background.color) || '') ? fx.background.color : '#1c1c1c'}" /></label>
+            <label>Mode
+              <select class="fx-bg-mode at-structural" data-fx-id="${fid}">
+                <option value="custom" ${bgMode === 'custom' ? 'selected' : ''}>Custom color</option>
+                <option value="transparent" ${bgMode === 'transparent' ? 'selected' : ''}>Transparent</option>
+                <option value="theme" ${bgMode === 'theme' ? 'selected' : ''}>Theme (inherit)</option>
+              </select>
+            </label>
+            ${bgMode === 'custom' ? `<label>Color<input type="color" class="at-input" data-at-sid="${fid}" data-at-path="background.color" value="${/^#/.test((fx.background && fx.background.color) || '') ? fx.background.color : '#1c1c1c'}" /></label>` : ''}
           </div>` : ''}
 
           <div class="seed-ed-group-title">Edge Lines</div>
@@ -5486,7 +5578,11 @@ class SEEDCardEditor extends HTMLElement {
   // whole editor whenever a config had an effect preset.
   _paintFramePreviews() {
     const iconColor = (this._config.colors && this._config.colors.icon) || '#2196F3';
-    (this._config.frame_presets || []).forEach(fx => {
+    // Local presets + shared-library presets both render editor blocks now, so
+    // paint swatches for both.
+    const lib = frameLibraryMap(this._config.frame_library_scope);
+    const allPresets = (this._config.frame_presets || []).concat(Object.keys(lib).map(s => lib[s]));
+    allPresets.forEach(fx => {
       const el = this.querySelector(`[data-fx-preview="${fx.id}"]`);
       if (!el) return;
       const parts = [];
@@ -5508,7 +5604,16 @@ class SEEDCardEditor extends HTMLElement {
         el.style.borderRight = on('right') ? `${fx.border.width}px solid ${bc}` : 'none';
         el.style.borderRadius = `${fx.border.radius}px`;
       } else { el.style.border = 'none'; }
-      el.style.backgroundColor = (fx.background && fx.background.color) || '#1a1a1a';
+      // Background preview: custom color, explicit transparent, or theme
+      // (fall back to the editor's own surface so the swatch stays legible).
+      if (fx.background) {
+        const bm = fx.background.mode || 'custom';
+        el.style.backgroundColor = bm === 'transparent' ? 'transparent'
+          : bm === 'theme' ? 'var(--secondary-background-color, #1c1c1c)'
+          : (fx.background.color || '#1a1a1a');
+      } else {
+        el.style.backgroundColor = '#1a1a1a';
+      }
       const edge = fx.edges ? buildEdgeBackground(fx.edges) : null;
       if (edge) {
         el.style.backgroundImage = edge.image; el.style.backgroundSize = edge.size;
@@ -5518,45 +5623,26 @@ class SEEDCardEditor extends HTMLElement {
   }
 
   _atFramePresetsPanel() {
+    // One unified list: this card's Local presets first, then the System-wide
+    // (shared library) presets. Both render full editor blocks; the Local vs
+    // System badge + icon show where each lives.
     const fxs = this._config.frame_presets || [];
-    const blocks = fxs.map(fx => this._atFramePresetEditor(fx)).join('');
     const lib = frameLibraryMap(this._config.frame_library_scope);
     const libSlugs = Object.keys(lib).sort();
-    // Which library slugs this card currently references (lib:slug) — so we can
-    // show a "used here" hint and know a delete would orphan card refs.
-    const usedLibSlugs = new Set();
-    const scanRef = fr => {
-      if (!fr) return;
-      (fr.presets || []).forEach(id => { if (typeof id === 'string' && id.startsWith('lib:')) usedLibSlugs.add(id.slice(4)); });
-    };
-    scanRef(this._config.card_frame);
-    (this._config.sections || []).forEach(s => scanRef(s.frame));
-    const libRows = libSlugs.map(slug => {
-      const used = usedLibSlugs.has(slug);
-      return `
-      <div class="seed-ed-rule">
-        <ha-icon icon="mdi:cloud-outline" class="seed-ed-rs-sum-icon"></ha-icon>
-        <span style="flex:1;">${escapeHtml(lib[slug].name || slug)}${used ? ' <span class="seed-ed-hint">· used here</span>' : ''}</span>
-        <ha-icon class="seed-ed-icon-btn lib-detach" icon="mdi:link-variant-off" data-lib-slug="${escapeHtml(slug)}" title="Detach: copy into this card as a local, editable preset (forks from the library)"></ha-icon>
-        <ha-icon class="seed-ed-icon-btn lib-export-one" icon="mdi:export-variant" data-lib-slug="${escapeHtml(slug)}" title="Export to text"></ha-icon>
-        <ha-icon class="seed-ed-icon-btn lib-delete" icon="mdi:trash-can-outline" data-lib-slug="${escapeHtml(slug)}" title="Delete from the library"></ha-icon>
-      </div>`;
-    }).join('');
+    const localBlocks = fxs.map(fx => this._atFramePresetEditor(fx)).join('');
+    const libBlocks = libSlugs.map(slug => this._atFramePresetEditor(lib[slug])).join('');
+    const blocks = localBlocks + libBlocks;
     return `
       <details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>
         <summary class="seed-ed-panel-summary">
           <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:auto-fix" class="seed-ed-panel-title-icon"></ha-icon>Frame Presets</div>
-          <div class="seed-ed-hint">Named, reusable frame styles (border + glow + shadow + background + edge lines), optionally conditional. Each preset stores only what you set; presets layer onto a section or the card in order (last wins). This is the single place all frame styling is defined.</div>
+          <div class="seed-ed-hint">Named, reusable frame styles (border + glow + shadow + background + edge lines), optionally conditional. Each preset stores only what you set; presets layer onto a section or the card in order (last wins). <b>Local</b> presets live in this card; <b>System</b> presets live in a shared library and are editable from any card. This is the single place all frame styling is defined.</div>
         </summary>
         <div class="seed-ed-add-row">
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-add"><ha-icon icon="mdi:plus"></ha-icon>Add Frame Preset</div>
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-import"><ha-icon icon="mdi:import"></ha-icon>Import from text</div>
         </div>
         ${blocks || '<span class="seed-ed-hint">No frame presets yet. Add one, then apply it to a section or the card.</span>'}
-
-        <div class="seed-ed-group-title" style="margin-top:14px;">Preset Library</div>
-        <div class="seed-ed-hint">Presets saved here live in Home Assistant, available to every card. A card that references one (<code>lib:&lt;name&gt;</code>) follows the library live — edit the library entry and every card using it updates. Use <ha-icon icon="mdi:cloud-upload-outline" style="--mdc-icon-size:14px;width:14px;height:14px;"></ha-icon> Save to Library on a preset above to publish it; the card then references it.</div>
-        <div class="seed-ed-rules">${libRows || '<span class="seed-ed-hint">Library is empty. Open a preset above and use its ☁ Save to Library action to publish it.</span>'}</div>
 
         <div id="fx-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
           <div class="seed-ed-hint" id="fx-portal-label"></div>
@@ -8223,6 +8309,16 @@ class SEEDCardEditor extends HTMLElement {
       bind(el);
     });
 
+    // Frame preset name: reflect edits in the collapsible summary title live, so
+    // the panel doesn't look "unsaved" until another control forces a re-render.
+    // (The value itself already persists via the generic live-apply above.)
+    this.querySelectorAll('.at-input[data-at-path="name"][data-at-sid]').forEach(el => {
+      el.addEventListener('input', () => {
+        const panel = this.querySelector(`[data-panel="effect-${el.dataset.atSid}"] .seed-ed-substyle-name`);
+        if (panel) panel.textContent = el.value || 'Frame Preset';
+      });
+    });
+
     // Column width mode picker (Auto / px / % / fr): sets a sensible default
     // width for the chosen unit, then re-renders so the matching value control
     // appears. Structural.
@@ -8274,7 +8370,7 @@ class SEEDCardEditor extends HTMLElement {
           glow: { color: '#2196F3', intensity: 1.0, borders_only: false },
           shadow: { color: '#000000', x: 0, y: 4, blur: 12, spread: 0, opacity: 0.35 },
           border: { color: '#2196F3', width: 1, radius: 12, follow_icon: false, sides: ['top', 'bottom', 'left', 'right'] },
-          background: { color: '#1c1c1c' }
+          background: { mode: 'custom', color: '#1c1c1c' }
         };
         this._atApply(sid, fx => {
           if (el.checked) { fx[key] = defaults[key]; }
@@ -8310,6 +8406,22 @@ class SEEDCardEditor extends HTMLElement {
             delete fx.when; delete fx.when_entity;
             fx.when_kind = kind;
             fx.when_section = fx.when_section || '';
+          }
+        });
+      });
+    });
+
+    // Frame preset background mode: custom color / transparent / theme.
+    // 'custom' carries a color; the other modes are mode-only. Structural
+    // (shows/hides the color picker).
+    this.querySelectorAll('.fx-bg-mode').forEach(el => {
+      el.addEventListener('change', () => {
+        const fid = el.dataset.fxId, mode = el.value;
+        this._atApply(fid, fx => {
+          if (mode === 'custom') {
+            fx.background = { mode: 'custom', color: (fx.background && fx.background.color) || '#1c1c1c' };
+          } else {
+            fx.background = { mode };
           }
         });
       });
@@ -8391,26 +8503,82 @@ class SEEDCardEditor extends HTMLElement {
     const portalStatus = (msg) => { const s = this.querySelector('#fx-portal-status'); if (s) s.textContent = msg || ''; };
     const nowISO = () => { try { return new Date().toISOString().slice(0, 10); } catch (e) { return ''; } };
 
-    // Export a single local preset to text.
+    // Resolve any preset id (local fx_* or lib:<slug>) to its object.
+    const presetById = (id) => {
+      if (typeof id === 'string' && id.startsWith('lib:')) {
+        return frameLibraryMap(this._config.frame_library_scope)[id.slice(4)] || null;
+      }
+      return (this._config.frame_presets || []).find(f => f.id === id) || null;
+    };
+
+    // Export a single preset (local or library) to text.
     this.querySelectorAll('.fx-export').forEach(el => {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        const src = (this._config.frame_presets || []).find(f => f.id === el.dataset.fxId);
+        const src = presetById(el.dataset.fxId);
         if (!src) return;
         this._fxPortal('export', serializeFramePresets([src], { exported: nowISO() }),
           `Exported "${src.name || 'preset'}". Copy this text and paste it into another card's Import.`);
       });
     });
 
-    // Export a single library preset to text.
-    this.querySelectorAll('.lib-export-one').forEach(el => {
+    // Library preset → copy into THIS card as a Local, editable preset (a fork;
+    // the library entry is untouched, and this card doesn't start referencing it).
+    this.querySelectorAll('.fx-lib-tolocal').forEach(el => {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        const lib = frameLibraryMap(this._config.frame_library_scope);
-        const p = lib[el.dataset.libSlug];
-        if (!p) return;
-        this._fxPortal('export', serializeFramePresets([p], { exported: nowISO() }),
-          `Exported library preset "${p.name || el.dataset.libSlug}".`);
+        const src = presetById(el.dataset.fxId);
+        if (!src) return;
+        const copy = normalizeFramePreset(JSON.parse(JSON.stringify(src)));
+        copy.id = _fxId();
+        copy.name = `${src.name || 'Preset'} (local copy)`;
+        this._config.frame_presets = this._config.frame_presets || [];
+        this._config.frame_presets.push(copy);
+        this._fireConfigChanged();
+        this._fxPendingStatus = `Copied "${src.name}" into this card as a Local preset.`;
+        this.renderEditor();
+      });
+    });
+
+    // Duplicate a library preset within the shared library (fresh slug + name).
+    this.querySelectorAll('.fx-lib-duplicate').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const src = presetById(el.dataset.fxId);
+        if (!src) return;
+        const scope = this._config.frame_library_scope || 'system';
+        const map = { ...frameLibraryMap(scope) };
+        const baseName = `${src.name || 'Preset'} (copy)`;
+        let slug = frameLibSlug(baseName), n = 2;
+        while (map[slug]) { slug = frameLibSlug(baseName + ' ' + n); n++; }
+        const copy = portableFramePreset(src, true);
+        copy.name = baseName;
+        map[slug] = copy;
+        this._libEchoJSON = null;
+        saveFrameLibrary(this._hass, scope, map)
+          .then(() => this.renderEditor())
+          .catch(() => {});
+      });
+    });
+
+    // Delete a library preset from the shared store. Warn if this card uses it.
+    this.querySelectorAll('.fx-lib-delete').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const slug = el.dataset.fxId.slice(4);
+        const scope = this._config.frame_library_scope || 'system';
+        const usesLib = fr => fr && (fr.presets || []).some(id => id === 'lib:' + slug);
+        const usedHere = usesLib(this._config.card_frame) || (this._config.sections || []).some(s => usesLib(s.frame));
+        if (usedHere) {
+          const ok = (() => { try { return window.confirm(`This card references this System preset. Deleting it from the shared library will leave those spots with no frame.\n\nDelete it anyway?`); } catch (e) { return true; } })();
+          if (!ok) return;
+        }
+        const map = { ...frameLibraryMap(scope) };
+        delete map[slug];
+        this._libEchoJSON = null;
+        saveFrameLibrary(this._hass, scope, map)
+          .then(() => this.renderEditor())
+          .catch(() => {});
       });
     });
 
@@ -8455,51 +8623,6 @@ class SEEDCardEditor extends HTMLElement {
           .catch(() => { portalStatus('Could not save — the Preset Library store is unavailable on this connection.'); });
       });
     });
-
-    // Delete a preset from the library. If this card currently references it,
-    // warn — deleting orphans those refs (they'll render as no-frame). Offer to
-    // detach-to-local instead by cancelling and using the Detach action.
-    this.querySelectorAll('.lib-delete').forEach(el => {
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const slug = el.dataset.libSlug;
-        const scope = this._config.frame_library_scope || 'system';
-        const usesLib = fr => fr && (fr.presets || []).some(id => id === 'lib:' + slug);
-        const usedHere = usesLib(this._config.card_frame) || (this._config.sections || []).some(s => usesLib(s.frame));
-        if (usedHere) {
-          const ok = (() => { try { return window.confirm(`This card references lib:${slug}. Deleting it from the library will leave those spots with no frame.\n\n(To keep it here, cancel and use Detach instead.)\n\nDelete from the library anyway?`); } catch (e) { return true; } })();
-          if (!ok) return;
-        }
-        const map = { ...frameLibraryMap(scope) };
-        delete map[slug];
-        saveFrameLibrary(this._hass, scope, map)
-          .then(() => this.renderEditor())
-          .catch(() => {});
-      });
-    });
-
-    // Detach from Library: fork a library preset into a local, editable copy in
-    // THIS card, and repoint any of this card's refs from lib:<slug> to the new
-    // local preset. The card stops following the library for these refs — the
-    // reverse of Save to Library. The library entry itself is untouched.
-    this.querySelectorAll('.lib-detach').forEach(el => {
-      el.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const slug = el.dataset.libSlug;
-        const lib = frameLibraryMap(this._config.frame_library_scope);
-        const p = lib[slug];
-        if (!p) return;
-        const copy = normalizeFramePreset(JSON.parse(JSON.stringify(p)));
-        copy.id = _fxId();
-        this._config.frame_presets = this._config.frame_presets || [];
-        this._config.frame_presets.push(copy);
-        repointRefs('lib:' + slug, copy.id);
-        this._fireConfigChanged();
-        this._fxPendingStatus = `Detached "${copy.name}" into this card as a local, editable preset. This card no longer follows the library for it.`;
-        this.renderEditor();
-      });
-    });
-
 
     // Open the import portal.
     const fxImport = this.querySelector('#fx-import');
@@ -10388,8 +10511,8 @@ console.log('[easy-entity-styler-card] Loaded successfully -', BUILD_NUMBER);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'easy-entity-styler-card',
-  name: 'Easy Entity Styler Card',
-  description: 'Easy Entity Styler Card',
+  name: 'Smart & Easy Entity Display Card',
+  description: 'Smart & Easy Entity Display Card',
 });
 
 console.log(`✅ easy-entity-styler-card registered successfully! [${BUILD_NUMBER}]`);
