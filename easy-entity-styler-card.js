@@ -1,5 +1,5 @@
 // ============================================================================
-// Easy Entity Styer Card for Home Assistant
+// Easy Entity Stlyer Card for Home Assistant
 //
 //   A highly customizable dashboard card that organizes and displays your entities in a clean way
 //   while giving you full control over the look and behavior of your entity cards.
@@ -10,20 +10,17 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.08.20.131
+// Version: v2026.08.29.186
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
 //
 // ============================================================================
-
 // Debug logging - disabled by default
 let DEBUG = false;
 function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
-
-const BUILD_NUMBER = 'v2026.08.20.131';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -228,9 +225,8 @@ function normalizeAction(a, defaultAction) {
 // listed here are exactly the ones each style block's controls edit.
 const SEED_STYLE_GROUPS = {
   // NOTE: frame groups (background/border/glow/shadow) were removed — a section's
-  // frame is defined solely by Frame Presets now. Only layout/content groups
+  // frame is defined solely by Frame Styles now. Only layout/content groups
   // still have inline controls + a per-group Reset.
-  divider: ['divider_mode', 'divider_above', 'divider_above_width', 'divider_above_length', 'divider_below', 'divider_below_width', 'divider_below_length', 'divider_color'],
   row_visuals: ['row_visuals_mode', 'row_indent', 'row_border_enabled', 'row_border_width', 'row_border_radius', 'row_border_top', 'row_border_bottom', 'row_border_left', 'row_border_right', 'row_border_corners', 'row_border_color'],
   header: ['icon', 'icon_color', 'icon_size', 'title_color', 'title_font_size', 'title_font_weight', 'title_font_style', 'title_indent'],
   entity_row: ['entity_icon_color', 'entity_icon_size', 'entity_text_color', 'entity_font_size', 'entity_font_weight', 'entity_font_style'],
@@ -1074,30 +1070,96 @@ let _fxSeq = 0;
 function _fxId() { _fxSeq += 1; return 'fx_gen_' + _fxSeq.toString(36) + Math.random().toString(36).slice(2, 6); }
 
 // One edge side: enabled + thickness + gradient stops ({pos 0-100, color}).
+// A per-side gradient edge ("Gradient Border"). Each side is independent:
+// its own enabled / thickness / stops. A stop color may be the literal string
+// 'match', which resolves at render time to the frame's border/icon color
+// (ported from the Color card's gradient-border) — so a gradient can follow
+// the accent without hardcoding a hex. `pattern` records which quick-preset
+// seeded the stops (purely informational; the stops are the source of truth).
+// Edge gradient pattern presets. `match` = follow the border/icon color; literal
+// hex / `transparent` are used verbatim. MUST stay byte-identical to the Color
+// card's copy so a frame round-trips between cards (normalizeEdgeSide only keeps
+// a `pattern` field whose key exists here). Mirrors DIVIDER_GRADIENT_PATTERNS.
+const EDGE_GRADIENT_PATTERNS = {
+  center_fade: [{ pos: 0, color: 'transparent' }, { pos: 50, color: 'match' }, { pos: 100, color: 'transparent' }],
+  solid: [{ pos: 0, color: 'match' }, { pos: 100, color: 'match' }],
+  fade_in: [{ pos: 0, color: 'transparent' }, { pos: 100, color: 'match' }],
+  fade_out: [{ pos: 0, color: 'match' }, { pos: 100, color: 'transparent' }],
+  center_gap: [{ pos: 0, color: 'match' }, { pos: 50, color: 'transparent' }, { pos: 100, color: 'match' }],
+  mirror_fade: [{ pos: 0, color: 'transparent' }, { pos: 35, color: 'match' }, { pos: 65, color: 'match' }, { pos: 100, color: 'transparent' }],
+  mirror_gap: [{ pos: 0, color: 'match' }, { pos: 35, color: 'transparent' }, { pos: 65, color: 'transparent' }, { pos: 100, color: 'match' }],
+  two_color: [{ pos: 0, color: '#2196F3' }, { pos: 100, color: '#e91e63' }],
+  two_color_mirror: [{ pos: 0, color: '#2196F3' }, { pos: 50, color: '#e91e63' }, { pos: 100, color: '#2196F3' }],
+  rainbow: [{ pos: 0, color: '#ff0000' }, { pos: 25, color: '#ffff00' }, { pos: 50, color: '#00ff00' }, { pos: 75, color: '#00ffff' }, { pos: 100, color: '#ff00ff' }],
+  rainbow_mirror: [{ pos: 0, color: '#ff0000' }, { pos: 17, color: '#ffff00' }, { pos: 34, color: '#00ff00' }, { pos: 50, color: '#00ffff' }, { pos: 66, color: '#00ff00' }, { pos: 83, color: '#ffff00' }, { pos: 100, color: '#ff0000' }]
+};
+// Ordered [key,label] list for the edge pattern dropdown (shared by both cards).
+const EDGE_GRADIENT_PATTERN_LIST = [
+  ['', 'Custom (edit stops below)'],
+  ['center_fade', 'Center fade (transparent → color → transparent)'],
+  ['solid', 'Solid'],
+  ['fade_in', 'Fade in'],
+  ['fade_out', 'Fade out'],
+  ['center_gap', 'Center gap (color → transparent → color)'],
+  ['mirror_fade', 'Mirror fade (transparent → color → color → transparent)'],
+  ['mirror_gap', 'Mirror gap (color → transparent → transparent → color)'],
+  ['two_color', 'Two-color (left → right)'],
+  ['two_color_mirror', 'Two-color (mirror center)'],
+  ['rainbow', 'Rainbow'],
+  ['rainbow_mirror', 'Rainbow (mirror center)']
+];
+// One edge side. Two sub-modes via `gradient`:
+//   gradient:false → a SOLID line of `color` (like a plain border edge).
+//   gradient:true  → a multi-stop linear gradient from `stops` (with optional
+//                    `pattern` seed + 'match' stops that follow the frame color).
+// Back-compat: an older edge (stops present, no explicit `gradient` flag)
+// normalizes to gradient:true so it renders exactly as before.
 function normalizeEdgeSide(e) {
   e = e || {};
   const stops = (Array.isArray(e.stops) ? e.stops : [])
     .map(s => ({ pos: Math.max(0, Math.min(100, Number(s.pos) || 0)), color: String(s.color || 'transparent') }))
     .sort((a, b) => a.pos - b.pos);
-  return {
+  // Default: gradient when stops exist and gradient wasn't explicitly false.
+  const gradient = e.gradient === false ? false : (e.gradient === true ? true : stops.length > 0);
+  const out = {
     enabled: e.enabled === true,
     thickness: Number(e.thickness) > 0 ? Math.floor(Number(e.thickness)) : 1,
+    gradient,
+    color: e.color || 'match',   // used when gradient:false
     stops
   };
+  // Preserve the chosen pattern name only when it's a known preset (byte-stable
+  // otherwise-absent so plain custom-stop edges don't gain a spurious key).
+  if (e.pattern && EDGE_GRADIENT_PATTERNS[e.pattern]) out.pattern = e.pattern;
+  return out;
 }
 function normalizeEdges(edges) {
   edges = edges || {};
-  return {
+  const out = {
     top: normalizeEdgeSide(edges.top),
     bottom: normalizeEdgeSide(edges.bottom),
     left: normalizeEdgeSide(edges.left),
     right: normalizeEdgeSide(edges.right)
   };
+  // Editor convenience: when true, one shared editor (the `top` side) drives
+  // all four — the STYLE (gradient/color/thickness/stops/pattern) is mirrored
+  // to every side, but each side keeps its own `enabled` so you can still show
+  // e.g. only top+bottom. Render treats sides independently.
+  if (edges.all_same === true) {
+    out.all_same = true;
+    const src = out.top;
+    ['bottom', 'left', 'right'].forEach(side => {
+      const en = out[side].enabled;   // preserve per-side enable
+      out[side] = JSON.parse(JSON.stringify(src));
+      out[side].enabled = en;
+    });
+  }
+  return out;
 }
 
 // Full normalizer for one effect preset. All visual sub-objects are optional
 // and emitted only when present, so a preset carries only what it uses.
-// A Frame Preset (formerly "effect preset"): a SPARSE bundle of frame styling.
+// A Frame Style (formerly "effect preset"): a SPARSE bundle of frame styling.
 // Only the groups the user set are present; an absent group means "don't touch"
 // (critical for layering — see _resolveFrame). Groups: glow / shadow / border /
 // background / edges, plus an optional `when`/`when_entity` condition.
@@ -1105,8 +1167,11 @@ function normalizeFramePreset(fx) {
   fx = fx || {};
   const out = {
     id: fx.id || _fxId(),
-    name: fx.name != null && String(fx.name).trim() ? String(fx.name) : 'Frame Preset'
+    name: fx.name != null && String(fx.name).trim() ? String(fx.name) : 'Frame Style'
   };
+  // Optional freeform note (shown in the library UI). Emitted only when set so
+  // note-less styles stay byte-stable.
+  if (fx.note != null && String(fx.note).trim()) out.note = String(fx.note).trim();
   if (fx.glow) out.glow = {
     color: fx.glow.color || '#2196F3',
     intensity: Number(fx.glow.intensity) || 1.0,
@@ -1125,6 +1190,11 @@ function normalizeFramePreset(fx) {
     color: fx.border.color || '#2196F3',
     width: fx.border.width != null ? Number(fx.border.width) : 1,
     radius: fx.border.radius != null ? Number(fx.border.radius) : 12,
+    // Per-corner radius toggles [TL, TR, BR, BL]: a corner with false is square
+    // (0), true uses `radius`. Defaults to all-rounded. (Ported from the Color
+    // card's card_border_corners so the frame model is a superset.)
+    corners: Array.isArray(fx.border.corners) && fx.border.corners.length === 4
+      ? fx.border.corners.map(c => c !== false) : [true, true, true, true],
     follow_icon: fx.border.follow_icon === true,
     sides: Array.isArray(fx.border.sides) ? fx.border.sides.filter(s => ['top', 'bottom', 'left', 'right'].includes(s)) : ['top', 'bottom', 'left', 'right']
   };
@@ -1159,7 +1229,33 @@ function normalizeFramePresets(list) {
 }
 
 // ---------------------------------------------------------------------------
-// Frame Preset portability (share/export/import + library store).
+// Built-In frame — the card's internal read-only fallback, so a fresh card
+// always has a sensible starting frame with nothing configured. It is NEVER
+// stored (mirrors the Color card's Built-In Button Style): always rendered
+// from this constant, so it can't drift or be deleted. Its id is a reserved
+// library id so section/card frame refs can point at it like any other.
+// The Frame Library is otherwise System-only (shared HA store) — there is no
+// "Local" (card-only) frame concept.
+const BUILTIN_FRAME_SLUG = '__builtin__';
+const BUILTIN_FRAME_ID = 'lib:' + BUILTIN_FRAME_SLUG;
+// A clean, neutral starting frame: a thin border that follows the icon color,
+// gently rounded, with a soft matching glow. Sparse — touches only border+glow
+// so it layers cleanly under anything the user adds on top.
+const BUILTIN_FRAME_GROUPS = {
+  border: { follow_icon: true, width: 1, radius: 12, sides: ['top', 'bottom', 'left', 'right'] },
+  glow: { follow_icon: true, intensity: 1.0, borders_only: true }
+};
+// The Built-In as a normalized preset object (fresh each call so callers can't
+// mutate the shared constant).
+function builtinFramePreset() {
+  const p = normalizeFramePreset({ name: 'Built-In', ...JSON.parse(JSON.stringify(BUILTIN_FRAME_GROUPS)) });
+  p.id = BUILTIN_FRAME_ID;
+  p._builtin = true;   // read-only marker for the editor
+  return p;
+}
+
+// ---------------------------------------------------------------------------
+// Frame Style portability (share/export/import + library store).
 //
 // One serializer feeds two destinations: (1) a plain-text envelope the user
 // copies between systems, and (2) the frontend key-value store used as a live
@@ -1229,7 +1325,7 @@ function parseFramePresetBlob(text) {
   } else if (raw && typeof raw === 'object' && (raw.glow || raw.shadow || raw.border || raw.background || raw.edges)) {
     list = [raw];                    // a single bare preset object
   } else {
-    return { ok: false, error: 'Unrecognized format — expected exported Frame Preset text.' };
+    return { ok: false, error: 'Unrecognized format — expected exported Frame Style text.' };
   }
 
   const presets = [];
@@ -1267,7 +1363,7 @@ function frameLibSlug(name) {
 }
 
 // ---------------------------------------------------------------------------
-// Frame Preset LIBRARY (live, shared, install-free store).
+// Frame Style LIBRARY (live, shared, install-free store).
 //
 // Backed by Home Assistant's built-in frontend key-value store — the same WS
 // API HA's own frontend uses (frontend/{get,set,subscribe}_{user,system}_data).
@@ -1280,11 +1376,15 @@ function frameLibSlug(name) {
 // Mirrors ensureLabelRegistry: fetch once over WS into a module cache, then
 // subscribe for live cross-card updates.
 // ---------------------------------------------------------------------------
-const SEED_FRAME_LIB_KEY = 'seed_frame_library';
-// scope -> { map: {slug:preset}|null, loaded, loading, subscribed }
+// Shared, brand-neutral 'ltek' family key so every ltek card reads/writes the
+// SAME frame library. `seed_frame_library` is the legacy key (pre-rename); it's
+// read once for one-time forward-migration so existing frames aren't orphaned.
+const SEED_FRAME_LIB_KEY = 'ltek_frame_library';
+const SEED_FRAME_LIB_KEY_LEGACY = 'seed_frame_library';
+// scope -> { map: {slug:preset}|null, loaded, loading, subscribed, migrated }
 const SEED_FRAME_LIBRARY = {
-  user: { map: null, loaded: false, loading: false, subscribed: false },
-  system: { map: null, loaded: false, loading: false, subscribed: false }
+  user: { map: null, loaded: false, loading: false, subscribed: false, migrated: false },
+  system: { map: null, loaded: false, loading: false, subscribed: false, migrated: false }
 };
 
 function _frameLibWs(scope, verb) {
@@ -1310,6 +1410,30 @@ function _frameLibParseValue(value) {
   return map;
 }
 
+// One-time forward-migration: if the new `ltek_frame_library` key is empty,
+// pull any frames from the legacy `seed_frame_library` key and write them into
+// the new key. Runs at most once per scope per session (st.migrated). Existing
+// `lib:<slug>` refs keep working because slugs are unchanged. Best-effort — a
+// failure just leaves the new key empty (no data lost; legacy key untouched).
+function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
+  if (st.migrated) return;
+  st.migrated = true;
+  const conn = hass && hass.connection;
+  if (!conn || typeof conn.sendMessagePromise !== 'function') return;
+  conn.sendMessagePromise({ type: _frameLibWs(scope, 'get'), key: SEED_FRAME_LIB_KEY_LEGACY })
+    .then(res => {
+      const legacy = _frameLibParseValue(res && res.value);
+      if (!legacy || !Object.keys(legacy).length) return;   // nothing to migrate
+      // Only adopt if the new key is still empty (don't clobber newer data).
+      if (st.map && Object.keys(st.map).length) return;
+      st.map = legacy;
+      if (typeof onChange === 'function') { try { onChange(); } catch (e) {} }
+      // Persist forward into the new key (best-effort).
+      saveFrameLibrary(hass, scope, legacy).catch(() => {});
+    })
+    .catch(() => {});
+}
+
 // Fetch (once) + subscribe to a library scope. onChange fires on initial load
 // AND on every live update, so callers re-render. Safe to call repeatedly.
 function ensureFrameLibrary(hass, scope, onChange) {
@@ -1326,6 +1450,8 @@ function ensureFrameLibrary(hass, scope, onChange) {
           st.map = _frameLibParseValue(ev && ev.value);
           st.loaded = true; st.loading = false;
           if (typeof onChange === 'function') { try { onChange(); } catch (e) {} }
+          // If the new key came back empty, try adopting legacy frames once.
+          if (!Object.keys(st.map).length) _migrateLegacyFrameLibrary(hass, scope, st, onChange);
         },
         { type: _frameLibWs(scope, 'subscribe'), key: SEED_FRAME_LIB_KEY }
       );
@@ -1341,6 +1467,7 @@ function ensureFrameLibrary(hass, scope, onChange) {
       st.map = _frameLibParseValue(res && res.value);
       st.loaded = true; st.loading = false;
       if (typeof onChange === 'function') { try { onChange(); } catch (e) {} }
+      if (!Object.keys(st.map).length) _migrateLegacyFrameLibrary(hass, scope, st, onChange);
     })
     .catch(() => { st.loading = false; st.loaded = true; st.map = {}; });
 }
@@ -1372,7 +1499,7 @@ function saveFrameLibrary(hass, scope, map) {
 }
 
 // A section/card frame reference: which presets apply and how they layer.
-//   presets - ordered list of Frame Preset ids (last writer wins per group)
+//   presets - ordered list of Frame Style ids (last writer wins per group)
 // Legacy migration: older configs had a `default` preset + `apply_defaults_prior`
 // toggle (the Default was a bottom base layer). That's redundant with the
 // ordered list, so we fold an active Default into the FRONT of `presets` and
@@ -1393,17 +1520,237 @@ function normalizeFrameRef(f) {
     const dis = f.disabled.map(String).filter(id => presets.includes(id));
     if (dis.length) out.disabled = dis;
   }
+  // Optional: ids whose OWN condition (when/when_entity) is ignored on THIS
+  // application — the layer always applies here regardless of its condition.
+  // Emitted only when non-empty, pruned to ids in the list.
+  if (Array.isArray(f.ignore_conditions)) {
+    const ign = f.ignore_conditions.map(String).filter(id => presets.includes(id));
+    if (ign.length) out.ignore_conditions = ign;
+  }
   return out;
 }
 
+// ===========================================================================
+// HEADER RULE SETS — a named, ENTITY-FREE set of state-driven header style
+// rules. Each rule is a condition (reusing the value/condition engine) that,
+// when it matches, sets any/all of: icon color, MDI glyph, text color, icon
+// size, text size, and a secondary-info line. Rules carry NO entity — a section
+// binds the entity at apply-time (blank = the section's own primary entity).
+// Modeled 1:1 on Frame Styles: read-only Built-In + shared System library.
 // ---------------------------------------------------------------------------
-// Legacy frame → Frame Preset auto-migration.
+const HEADER_RULE_OUTPUT_KEYS = [
+  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary'
+];
+// Normalize one rule: a condition (`when`) + a sparse set of outputs. Outputs
+// are kept ONLY when set, so byte-stable. set_secondary is a value-ref object.
+function normalizeHeaderRule(r) {
+  r = r || {};
+  const out = { when: normalizeCondition(r.when) };
+  // Optional per-rule entity to test (blank = the section's bound/primary entity).
+  if (r.when_entity) out.when_entity = String(r.when_entity);
+  if (r.set_icon_color !== undefined && r.set_icon_color !== '') out.set_icon_color = r.set_icon_color;
+  if (r.set_icon !== undefined && r.set_icon !== '') out.set_icon = r.set_icon;
+  if (r.set_text_color !== undefined && r.set_text_color !== '') out.set_text_color = r.set_text_color;
+  // Size sliders use 0 as their "Default (don't set)" position — treat 0/blank
+  // as unset so nothing is emitted (byte-stable; a real size is always > 0).
+  if (Number.isFinite(Number(r.set_icon_size)) && Number(r.set_icon_size) > 0) out.set_icon_size = Number(r.set_icon_size);
+  if (Number.isFinite(Number(r.set_text_size)) && Number(r.set_text_size) > 0) out.set_text_size = Number(r.set_text_size);
+  if (r.set_secondary && typeof r.set_secondary === 'object' && r.set_secondary.enabled) {
+    out.set_secondary = normalizeSecondaryInfo(r.set_secondary);
+  }
+  return out;
+}
+// Normalize a whole set: id/name + ordered rules + optional default outputs.
+function normalizeHeaderRuleSet(hs) {
+  hs = hs || {};
+  const set = {
+    name: hs.name || 'Header Rules',
+    rules: Array.isArray(hs.rules) ? hs.rules.map(normalizeHeaderRule) : [],
+  };
+  if (hs.id) set.id = String(hs.id);
+  // Optional set-level default entity: the entity a card/section binding falls
+  // back to when it doesn't pick its own. Emitted ONLY when set (byte-stable).
+  if (hs.default_entity) set.default_entity = String(hs.default_entity);
+  if (hs.default && typeof hs.default === 'object') {
+    // default = same sparse output shape (no `when`); normalize via a wrapper.
+    const d = normalizeHeaderRule({ ...hs.default, when: { op: 'eq' } });
+    delete d.when;
+    if (Object.keys(d).length) set.default = d;
+  }
+  return set;
+}
+// A stable content key for dedupe (everything but id + name).
+function headerRuleSetContentKey(hs) {
+  const norm = normalizeHeaderRuleSet(hs);
+  const copy = {}; Object.keys(norm).sort().forEach(k => { if (k === 'id' || k === 'name') return; copy[k] = norm[k]; });
+  return JSON.stringify(copy);
+}
+function headerLibSlug(name) {
+  const s = String(name || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return s || 'header_rules';
+}
+// Read-only Built-In: light on → accent icon+text; off → muted. Never stored.
+const BUILTIN_HEADER_SLUG = 'builtin_header';
+const BUILTIN_HEADER_ID = 'lib:' + BUILTIN_HEADER_SLUG;
+function builtinHeaderRuleSet() {
+  const s = normalizeHeaderRuleSet({
+    name: 'Built-In',
+    rules: [
+      { when: { op: 'is_on' }, set_icon_color: 'var(--primary-color)', set_text_color: 'var(--primary-text-color)' },
+      { when: { op: 'is_off' }, set_icon_color: 'var(--secondary-text-color)', set_text_color: 'var(--secondary-text-color)' },
+    ],
+  });
+  s.id = BUILTIN_HEADER_ID;
+  s._builtin = true;
+  return s;
+}
+// A section's applied Header Rule Sets: ordered refs, each binding an entity.
+// { ref:'lib:<slug>'|'builtin_header', entity:'' } — blank entity = section's
+// own primary entity. Emitted only when non-empty (byte-stable/back-compat).
+function normalizeHeaderRuleRefs(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map(r => (typeof r === 'string' ? { ref: r, entity: '' } : r))
+    .filter(r => r && r.ref)
+    .map(r => ({ ref: String(r.ref), entity: r.entity ? String(r.entity) : '' }));
+}
+
+// ---- Header Rule Set LIBRARY (shared ltek store; mirrors the Frame library) ----
+const SEED_HEADER_LIB_KEY = 'ltek_header_library';
+const SEED_HEADER_EXPORT_VERSION = 1;
+const SEED_HEADER_LIBRARY = {
+  user: { map: null, loaded: false, loading: false, subscribed: false },
+  system: { map: null, loaded: false, loading: false, subscribed: false }
+};
+function _headerLibWs(scope, verb) { return `frontend/${verb}_${scope === 'system' ? 'system' : 'user'}_data`; }
+function _headerLibParseValue(value) {
+  const map = {};
+  if (!value || typeof value !== 'object') return map;
+  const sets = ('seed_header_rules' in value && value.sets && typeof value.sets === 'object') ? value.sets : value;
+  Object.keys(sets).forEach(slug => {
+    const s = sets[slug];
+    if (s && typeof s === 'object' && Array.isArray(s.rules)) {
+      const norm = normalizeHeaderRuleSet(s);
+      norm.id = 'lib:' + slug;
+      map[slug] = norm;
+    }
+  });
+  return map;
+}
+function ensureHeaderLibrary(hass, scope, onChange) {
+  scope = scope === 'system' ? 'system' : 'user';
+  const st = SEED_HEADER_LIBRARY[scope];
+  if (!hass || !hass.connection) return;
+  const conn = hass.connection;
+  if (st.subscribed) return;
+  if (typeof conn.subscribeMessage === 'function') {
+    st.subscribed = true; st.loading = true;
+    try {
+      conn.subscribeMessage(
+        (ev) => { st.map = _headerLibParseValue(ev && ev.value); st.loaded = true; st.loading = false; if (typeof onChange === 'function') { try { onChange(); } catch (e) {} } },
+        { type: _headerLibWs(scope, 'subscribe'), key: SEED_HEADER_LIB_KEY }
+      );
+    } catch (e) { st.subscribed = false; st.loading = false; }
+    return;
+  }
+  if (st.loaded || st.loading) return;
+  if (typeof conn.sendMessagePromise !== 'function') return;
+  st.loading = true;
+  conn.sendMessagePromise({ type: _headerLibWs(scope, 'get'), key: SEED_HEADER_LIB_KEY })
+    .then(res => { st.map = _headerLibParseValue(res && res.value); st.loaded = true; st.loading = false; if (typeof onChange === 'function') { try { onChange(); } catch (e) {} } })
+    .catch(() => { st.loading = false; st.loaded = true; st.map = {}; });
+}
+function headerLibraryMap(scope) {
+  const st = SEED_HEADER_LIBRARY[scope === 'system' ? 'system' : 'user'];
+  return st.map || {};
+}
+function saveHeaderLibrary(hass, scope, map) {
+  scope = scope === 'system' ? 'system' : 'user';
+  if (!hass || !hass.connection || typeof hass.connection.sendMessagePromise !== 'function') return Promise.reject(new Error('No connection'));
+  const sets = {};
+  Object.keys(map || {}).forEach(slug => { const clean = normalizeHeaderRuleSet(map[slug]); delete clean.id; sets[slug] = clean; });
+  const value = { seed_header_rules: SEED_HEADER_EXPORT_VERSION, sets };
+  return hass.connection.sendMessagePromise({ type: _headerLibWs(scope, 'set'), key: SEED_HEADER_LIB_KEY, value });
+}
+
+// ---- Header Rule Set portability (export / import), mirrors the Frame portal ----
+//
+// Rules are the shared, hard-to-debug part of a card, so export produces a
+// human-readable versioned envelope the user can hand back (with their card
+// YAML) to diagnose why a rule isn't applying. `keepBindings` decides whether
+// the entity bindings travel — `default_entity` and per-rule `when_entity`
+// reference system-local entities, so by DEFAULT they're stripped (portable
+// logic + look only). The `when` conditions and all `set_*` outputs always
+// travel — they're what defines the rule.
+function portableHeaderRuleSet(hs, keepBindings) {
+  const norm = normalizeHeaderRuleSet(hs);
+  delete norm.id;
+  delete norm._builtin;
+  if (!keepBindings) {
+    delete norm.default_entity;
+    if (Array.isArray(norm.rules)) norm.rules.forEach(r => { if (r) delete r.when_entity; });
+  }
+  return norm;
+}
+
+// Serialize one or more Header Rule Sets into the versioned text envelope.
+// `exported` is an ISO date string supplied by the caller (Date.now() is
+// unavailable in some contexts). Bindings are dropped unless asked for.
+function serializeHeaderRuleSets(sets, opts) {
+  opts = opts || {};
+  const list = (Array.isArray(sets) ? sets : [sets])
+    .filter(Boolean)
+    .map(hs => portableHeaderRuleSet(hs, opts.keepBindings === true));
+  const env = { seed_header_rules: SEED_HEADER_EXPORT_VERSION, sets: list };
+  if (opts.exported) env.exported = String(opts.exported);
+  return JSON.stringify(env, null, 2);
+}
+
+// Parse + validate a pasted envelope. Returns { ok, sets, error }. Accepts the
+// full envelope (sets as a LIST for export, or the {slug:set} MAP shape the
+// library store uses), a bare array, or a single bare set object. Every
+// returned set is normalized; ids are dropped (re-slugged on import).
+function parseHeaderRuleSetBlob(text) {
+  let raw;
+  try { raw = JSON.parse(text); }
+  catch (e) { return { ok: false, error: 'Not valid JSON.' }; }
+
+  let list;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw) && 'seed_header_rules' in raw) {
+    if (Number(raw.seed_header_rules) > SEED_HEADER_EXPORT_VERSION) {
+      return { ok: false, error: 'Made by a newer version of the card. Update the card first.' };
+    }
+    if (Array.isArray(raw.sets)) list = raw.sets;                 // export envelope
+    else if (raw.sets && typeof raw.sets === 'object') list = Object.values(raw.sets); // library map shape
+    else return { ok: false, error: 'Envelope has no sets.' };
+  } else if (Array.isArray(raw)) {
+    list = raw;                       // bare array of sets
+  } else if (raw && typeof raw === 'object' && Array.isArray(raw.rules)) {
+    list = [raw];                     // a single bare set object
+  } else {
+    return { ok: false, error: 'Unrecognized format — expected exported Header Rule text.' };
+  }
+
+  const sets = [];
+  list.forEach(s => {
+    if (!s || typeof s !== 'object' || !Array.isArray(s.rules)) return;
+    const norm = normalizeHeaderRuleSet(s);
+    delete norm.id;
+    delete norm._builtin;
+    sets.push(norm);
+  });
+  if (!sets.length) return { ok: false, error: 'No usable Header Rule Sets found in the text.' };
+  return { ok: true, sets };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy frame → Frame Style auto-migration.
 //
 // Pre-v107 configs styled frames with inline keys (border_mode/glow_mode/
 // shadow_mode/bg_mode per section + show_section_border / card_border_enabled /
 // card_glow_* / card_shadow_* globals) and had NO frame_presets/card_frame.
 // The inline render path for those was removed in v124, so such a config would
-// render with no frame at all. This rebuilds the equivalent Frame Preset model
+// render with no frame at all. This rebuilds the equivalent Frame Style model
 // on load (same recipe used to hand-convert the example cards), so old configs
 // keep their look on the single (preset) render path. Runs ONLY when a config
 // has no frame model yet; converted configs are left untouched.
@@ -1525,16 +1872,31 @@ function migrateLegacyFrames(config) {
 // Build the CSS background layers for edge gradient lines. Each enabled side
 // with >= 1 stop becomes a linear-gradient painted as a thin strip on that
 // edge. Returns { image, size, position, repeat } CSS strings (or null).
-function buildEdgeBackground(edges) {
+// `matchColor` resolves any stop whose color is the literal 'match' to the
+// frame's border/icon color (ported from the Color card). Falls back to the
+// accent when not supplied, so a 'match' stop is never left invalid.
+function buildEdgeBackground(edges, matchColor) {
   if (!edges) return null;
+  const accent = matchColor || '#2196F3';
+  // 'match' → the border/icon accent; 'theme' → the HA theme divider color; else literal.
+  const col = c => (c === 'match' ? accent : (c === 'theme' ? 'var(--divider-color, #333)' : c));
   const imgs = [], sizes = [], positions = [];
   const sideDir = { top: 'to right', bottom: 'to right', left: 'to bottom', right: 'to bottom' };
   ['top', 'bottom', 'left', 'right'].forEach(side => {
     const e = edges[side];
-    if (!e || !e.enabled || !Array.isArray(e.stops) || !e.stops.length) return;
-    const stopStr = (e.stops.length === 1)
-      ? `${e.stops[0].color} 0%, ${e.stops[0].color} 100%`
-      : e.stops.map(s => `${s.color} ${s.pos}%`).join(', ');
+    if (!e || !e.enabled) return;
+    let stopStr;
+    if (e.gradient === false) {
+      // Solid line: a single color painted edge-to-edge (implemented as a flat
+      // two-stop gradient so all edges use the same background-layer mechanism).
+      const c = col(e.color || 'match');
+      stopStr = `${c} 0%, ${c} 100%`;
+    } else {
+      if (!Array.isArray(e.stops) || !e.stops.length) return;   // gradient with no stops → nothing
+      stopStr = (e.stops.length === 1)
+        ? `${col(e.stops[0].color)} 0%, ${col(e.stops[0].color)} 100%`
+        : e.stops.map(s => `${col(s.color)} ${s.pos}%`).join(', ');
+    }
     imgs.push(`linear-gradient(${sideDir[side]}, ${stopStr})`);
     const th = e.thickness || 1;
     sizes.push(side === 'top' || side === 'bottom' ? `100% ${th}px` : `${th}px 100%`);
@@ -1904,7 +2266,57 @@ function applyTableDefaults(sectionCfg, config) {
 
 // Shared by EasyEntityStylerCard.setConfig and the editor's _normalizeConfig
 // so the two never drift apart on defaults.
+// A standalone Divider section (ported from the Color card). Sparse — carries
+// only divider styling. Rendered by dividerLineHtml. Replaces EESC's old
+// inline per-section dividers and the global section-divider feature.
+function normalizeDividerSection(s) {
+  s = s || {};
+  const out = {
+    id: s.id || uid(),
+    type: 'divider',
+    // 'label'/'icon' optional content shown on/above/below the line.
+    label: s.label != null ? String(s.label) : '',
+    icon: s.icon ? String(s.icon) : '',
+    // Line: color/thickness/length(%)/style/justify.
+    color: s.color || '',
+    thickness: Number(s.thickness) > 0 ? Number(s.thickness) : 1,
+    length: Math.max(5, Math.min(100, Number(s.length) || 100)),
+    line_style: ['solid', 'dashed', 'dotted'].includes(s.line_style) ? s.line_style : 'solid',
+    justify: ['left', 'center', 'right'].includes(s.justify) ? s.justify : 'center',
+    // Content placement + styling.
+    text_position: ['above', 'on', 'below'].includes(s.text_position) ? s.text_position : 'on',
+    content_justify: ['left', 'center', 'right'].includes(s.content_justify) ? s.content_justify : (s.justify || 'center'),
+    indent: Math.max(0, Math.min(200, Number(s.indent) || 0)),
+    text_size: Number(s.text_size) > 0 ? Number(s.text_size) : 13,
+    text_weight: s.text_weight || '600',
+    text_color_mode: ['line', 'theme', 'fixed'].includes(s.text_color_mode) ? s.text_color_mode : (s.text_color ? 'fixed' : 'line'),
+    text_color: s.text_color || '',
+    icon_size: Number(s.icon_size) > 0 ? Number(s.icon_size) : 0,
+    icon_color_mode: ['text', 'theme', 'fixed'].includes(s.icon_color_mode) ? s.icon_color_mode : (s.icon_color ? 'fixed' : 'text'),
+    icon_color: s.icon_color || '',
+    // Visibility toggles + gradient.
+    hide_line: s.hide_line === true,
+    hide_text: s.hide_text === true,
+    hide_icon: s.hide_icon === true,
+    mirror_center: s.mirror_center === true,
+    gradient: s.gradient === true
+  };
+  if (Array.isArray(s.stops)) {
+    out.stops = s.stops.map(st => ({ pos: Math.max(0, Math.min(100, Number(st.pos) || 0)), color: String(st.color || 'transparent') }));
+  }
+  // Which gradient pattern preset produced the current stops (so the editor's
+  // Pattern dropdown reflects the saved choice). Emitted only when a valid index.
+  if (s.gradient_pattern != null && Number.isInteger(Number(s.gradient_pattern)) &&
+      Number(s.gradient_pattern) >= 0 && Number(s.gradient_pattern) < DIVIDER_GRADIENT_PATTERNS.length) {
+    out.gradient_pattern = Number(s.gradient_pattern);
+  }
+  // Hidden dividers stay in config + the editor list but don't render (byte-stable: only when true).
+  if (s.hidden === true) out.hidden = true;
+  return out;
+}
+
 function normalizeSection(s) {
+  if (s && s.type === 'divider') return normalizeDividerSection(s);
   return {
     id: s.id || uid(),
     name: s.name || 'Section',
@@ -1942,6 +2354,11 @@ function normalizeSection(s) {
     // legacy sections stay byte-stable.
     ...(s.secondary_info && s.secondary_info.enabled
       ? { secondary_info: normalizeSecondaryInfo(s.secondary_info) } : {}),
+    // Applied Header Rule Sets (ordered, layered last-wins). Each ref binds an
+    // entity (blank = section's primary entity). Emitted only when non-empty so
+    // legacy sections stay byte-stable.
+    ...((Array.isArray(s.header_rule_refs) && s.header_rule_refs.length)
+      ? { header_rule_refs: normalizeHeaderRuleRefs(s.header_rule_refs) } : {}),
     // Format-chip style, per section (blank color = inherit the card's global chip colors)
     chip_bg: s.chip_bg || '',
     chip_border_color: s.chip_border_color || '',
@@ -1981,17 +2398,12 @@ function normalizeSection(s) {
     // Shape: { presets: [] } (ordered, last writer wins). See STYLES_DESIGN.
     frame: normalizeFrameRef(s.frame),
 
-    // Section divider override. 'global' inherits the top-level Section
-    // Dividers settings; 'custom' draws this section's own above/below
-    // lines instead (full width, no the global "% length" centering).
-    divider_mode: s.divider_mode || 'global',
-    divider_above: s.divider_above === true,
-    divider_above_width: s.divider_above_width ?? 1,
-    divider_above_length: s.divider_above_length ?? 100,
-    divider_below: s.divider_below === true,
-    divider_below_width: s.divider_below_width ?? 1,
-    divider_below_length: s.divider_below_length ?? 100,
-    divider_color: s.divider_color || '',
+    // Hidden sections stay in config + the editor list but don't render on the
+    // card. Emitted only when true so existing configs stay byte-stable.
+    ...(s.hidden === true ? { hidden: true } : {}),
+
+    // (Inline per-section dividers removed — dividers are now standalone
+    // Divider sections; see normalizeDividerSection.)
 
     // Child Row Visuals override (row border + row indent), same pattern.
     row_visuals_mode: s.row_visuals_mode || 'global',
@@ -2393,6 +2805,168 @@ function getActivityPresets() {
   ];
 }
 
+// ===================================================================
+// DIVIDER ENGINE (ported from Color card v134 — divider-as-its-own-section)
+// ===================================================================
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+function normalizeIcon(icon) {
+  const s = String(icon || '').trim();
+  if (!s) return '';
+  return s.includes(':') ? s : `mdi:${s}`;
+}
+
+const DIVIDER_GRADIENT_PATTERNS = [
+  { name: 'Solid → Transparent (fade out right)', stops: [{ pos: 0, color: null }, { pos: 100, color: 'transparent' }] },
+  { name: 'Transparent → Solid (fade in right)', stops: [{ pos: 0, color: 'transparent' }, { pos: 100, color: null }] },
+  { name: 'Transparent → Solid → Transparent (center glow)', stops: [{ pos: 0, color: 'transparent' }, { pos: 50, color: null }, { pos: 100, color: 'transparent' }] },
+  { name: 'Solid → Transparent → Solid (center gap)', stops: [{ pos: 0, color: null }, { pos: 50, color: 'transparent' }, { pos: 100, color: null }] },
+  { name: 'Solid → Transparent → Solid (mirror center)', stops: [{ pos: 0, color: null }, { pos: 35, color: 'transparent' }, { pos: 65, color: 'transparent' }, { pos: 100, color: null }] },
+  { name: 'Transparent → Solid → Transparent (mirror center)', stops: [{ pos: 0, color: 'transparent' }, { pos: 35, color: null }, { pos: 65, color: null }, { pos: 100, color: 'transparent' }] },
+  { name: 'Two-color (left → right)', stops: [{ pos: 0, color: '#2196F3' }, { pos: 100, color: '#e91e63' }] },
+  { name: 'Two-color (mirror center)', stops: [{ pos: 0, color: '#2196F3' }, { pos: 50, color: '#e91e63' }, { pos: 100, color: '#2196F3' }] },
+  { name: 'Rainbow', stops: [{ pos: 0, color: '#ff0000' }, { pos: 25, color: '#ffff00' }, { pos: 50, color: '#00ff00' }, { pos: 75, color: '#00ffff' }, { pos: 100, color: '#ff00ff' }] },
+  { name: 'Rainbow (mirror center)', stops: [{ pos: 0, color: '#ff0000' }, { pos: 17, color: '#ffff00' }, { pos: 34, color: '#00ff00' }, { pos: 50, color: '#00ffff' }, { pos: 66, color: '#00ff00' }, { pos: 83, color: '#ffff00' }, { pos: 100, color: '#ff0000' }] },
+];
+
+// Builds a gradient-border as background-image LAYERS (the card_mod technique) so it respects
+// border-radius and composes with box-shadow glow + the element's own background. Given a
+// gradient-border spec { enabled, width, sides:{top,bottom,left,right}, stops:[{pos,color}] },
+// returns { image, size, position, repeat } CSS strings for one background shorthand, or null.
+// Top/bottom lines run left→right; left/right lines run top→bottom.
+function gradientBorderBackground(g, matchColor) {
+  if (!g || !g.enabled) return null;
+  // A stop color of 'match' resolves to the border's own color (matchColor) — usually what you
+  // want, so it's the default for new stops. Falls back to the accent if no matchColor given.
+  const resolveMatch = matchColor || '#2196F3';
+  const stops = (Array.isArray(g.stops) ? g.stops : [])
+    .map(s => ({ pos: clamp(Number(s.pos) || 0, 0, 100), color: s.color === 'match' ? resolveMatch : String(s.color || 'transparent') }))
+    .sort((a, b) => a.pos - b.pos);
+  if (stops.length < 2) return null;
+  const w = Number(g.width) || 2;
+  const sides = g.sides || {};
+  const horiz = `linear-gradient(to right, ${stops.map(s => `${s.color} ${s.pos}%`).join(', ')})`;
+  const vert = `linear-gradient(to bottom, ${stops.map(s => `${s.color} ${s.pos}%`).join(', ')})`;
+  const imgs = [], sizes = [], positions = [];
+  const add = (on, img, size, pos) => { if (on) { imgs.push(img); sizes.push(size); positions.push(pos); } };
+  add(sides.top, horiz, `100% ${w}px`, 'top');
+  add(sides.bottom, horiz, `100% ${w}px`, 'bottom');
+  add(sides.left, vert, `${w}px 100%`, 'left');
+  add(sides.right, vert, `${w}px 100%`, 'right');
+  if (!imgs.length) return null;
+  return { image: imgs.join(', '), size: sizes.join(', '), position: positions.join(', '), repeat: imgs.map(() => 'no-repeat').join(', ') };
+}
+
+// A divider's gradient stops → a `linear-gradient(to right, …)` CSS string. Stops are
+// {pos 0-100, color}; sorted by position. Falls back to the single divider color when there
+// are fewer than 2 stops (a gradient needs at least two). Returns null if not gradient-usable.
+function dividerGradientCss(section, fallbackColor, reverse) {
+  // A stop color of 'theme' resolves to the theme divider color; 'transparent' stays transparent;
+  // anything else is used verbatim (hex).
+  const stops = (Array.isArray(section && section.stops) ? section.stops : [])
+    .map(s => ({ pos: clamp(Number(s.pos) || 0, 0, 100), color: s.color === 'theme' ? 'var(--divider-color)' : String(s.color || 'transparent') }))
+    .sort((a, b) => a.pos - b.pos);
+  if (stops.length < 2) return null;
+  // `reverse` mirrors the gradient horizontally (used for the right segment of a centered divider
+  // so the two halves are symmetric around the text/icon instead of both fading the same way).
+  const dir = reverse ? 'to left' : 'to right';
+  return `linear-gradient(${dir}, ${stops.map(s => `${s.color} ${s.pos}%`).join(', ')})`;
+}
+// Shared divider renderer (used by both the card and the editor preview). Draws the line and,
+// when a label and/or icon is set, places that content over the line at the chosen position:
+//   - center: content centered with line segments on both sides
+//   - left / right: content at that end, line filling the rest
+// Text/icon size, color, and weight are configurable per-divider (fall back to sensible defaults).
+function dividerLineHtml(section, cfg) {
+  cfg = cfg || {};
+  const color = section.color || cfg.divider_color || 'var(--divider-color)';
+  const thickness = Number(section.thickness) || Number(cfg.divider_thickness) || 1;
+  const length = clamp(Number(section.length) || Number(cfg.divider_length) || 100, 5, 100);
+  const style = section.line_style || 'solid';
+  const justify = section.justify || 'center';            // where the LINE sits
+  const scale = Number(cfg.scale) || 1.0;
+  const flexJustify = justify === 'left' ? 'flex-start' : justify === 'right' ? 'flex-end' : 'center';
+  const grad = section.gradient ? dividerGradientCss(section, color) : null;
+  let lineStyle;
+  if (grad) {
+    lineStyle = `height:${thickness}px;background:${grad};border-radius:${thickness}px;`;
+  } else if (style === 'dashed' || style === 'dotted') {
+    lineStyle = `height:0;border-top:${thickness}px ${style} ${color};`;
+  } else {
+    lineStyle = `height:${thickness}px;background:${color};border-radius:${thickness}px;`;
+  }
+  // Visibility toggles.
+  const hideLine = section.hide_line === true;
+  const hideText = section.hide_text === true;
+  const hideIcon = section.hide_icon === true;
+  const label = (!hideText && section.label != null) ? String(section.label) : '';
+  const icon = (!hideIcon && section.icon) ? normalizeIcon(section.icon) : '';
+  const pad = `padding:calc(8px * ${scale}) 0;`;
+  const position = section.text_position || 'on';         // above | on | below
+  const contentJustify = section.content_justify || justify;   // where text/icon sits
+  const cFlex = contentJustify === 'left' ? 'flex-start' : contentJustify === 'right' ? 'flex-end' : 'center';
+  const indent = clamp(Number(section.indent) || 0, 0, 200);
+  const lineRow = hideLine ? '' : `<div style="display:flex;justify-content:${flexJustify};"><div style="width:${length}%;${lineStyle}"></div></div>`;
+  // No content → just the (maybe hidden) line, original behavior.
+  if (!label && !icon) {
+    return `<div style="${pad}">${lineRow || '<div style="height:0;"></div>'}</div>`;
+  }
+  // Content styling. Color modes:
+  //   text_color_mode: 'line' (the divider's line color) | 'theme' (theme text color) | 'fixed'
+  //   icon_color_mode: 'text' (match resolved text color) | 'theme' | 'fixed'
+  // Back-compat: no mode + a stored *_color hex → 'fixed'; else the sensible default.
+  const tSize = Number(section.text_size) || 13;
+  const tWeight = section.text_weight || '600';
+  const tMode = section.text_color_mode || (section.text_color ? 'fixed' : 'line');
+  // 'line' = match the line color. For a GRADIENT line there's no single color, so
+  // pick the first real gradient stop (skip transparent/theme); if none, fall back
+  // to the base line color. (Fixes "match line color" doing nothing on gradients.)
+  let lineColor = color;
+  if (tMode === 'line' && section.gradient && Array.isArray(section.stops)) {
+    const realStop = section.stops.find(s => s && s.color && s.color !== 'transparent' && s.color !== 'theme');
+    if (realStop) lineColor = realStop.color;
+    else { const themeStop = section.stops.find(s => s && s.color === 'theme'); if (themeStop) lineColor = 'var(--divider-color)'; }
+  }
+  const tColor = tMode === 'fixed' ? (section.text_color || '#ffffff')
+    : tMode === 'theme' ? 'var(--primary-text-color)'
+    : lineColor;   // 'line'
+  const iSize = Number(section.icon_size) || (tSize + 4);
+  const iMode = section.icon_color_mode || (section.icon_color ? 'fixed' : 'text');
+  const iColor = iMode === 'fixed' ? (section.icon_color || '#ffffff')
+    : iMode === 'theme' ? 'var(--primary-text-color)'
+    : tColor;   // 'text'
+  const gap = 8;
+  const contentHtml = `<span style="display:inline-flex;align-items:center;gap:calc(${gap}px * ${scale});flex-shrink:0;white-space:nowrap;">
+    ${icon ? `<ha-icon icon="${escapeHtml(icon)}" style="--mdc-icon-size:calc(${iSize}px * ${scale});color:${iColor};"></ha-icon>` : ''}
+    ${label ? `<span style="font-size:calc(${tSize}px * ${scale});font-weight:${tWeight};color:${tColor};">${escapeHtml(label)}</span>` : ''}
+  </span>`;
+  // Indent shifts the content away from its justified edge.
+  const indentStyle = indent ? (contentJustify === 'right' ? `padding-right:${indent}px;` : contentJustify === 'center' ? '' : `padding-left:${indent}px;`) : '';
+  const contentRow = `<div style="display:flex;justify-content:${cFlex};${indentStyle}">${contentHtml}</div>`;
+  // "On the line": overlay content into the line (center = segments both sides; else at an end).
+  if (position === 'on' && !hideLine) {
+    const seg = `<div style="flex:1;${lineStyle}"></div>`;
+    // For a centered gradient line, the RIGHT segment uses a horizontally-mirrored gradient so the
+    // two halves fade symmetrically around the content (e.g. both ends solid, both inner ends
+    // faded) instead of both running the same direction.
+    let segRight = seg;
+    if (grad && contentJustify === 'center' && section.mirror_center) {
+      const gradR = dividerGradientCss(section, color, true);
+      segRight = `<div style="flex:1;height:${thickness}px;background:${gradR};border-radius:${thickness}px;"></div>`;
+    }
+    const inner = contentJustify === 'left' ? `${contentHtml}${seg}`
+      : contentJustify === 'right' ? `${seg}${contentHtml}`
+      : `${seg}${contentHtml}${segRight}`;
+    return `<div style="display:flex;justify-content:${flexJustify};${pad}">
+      <div style="width:${length}%;display:flex;align-items:center;gap:calc(${gap}px * ${scale});${indent ? `padding:0 ${indent}px;` : ''}">${inner}</div>
+    </div>`;
+  }
+  // Above / below (or "on" with the line hidden) → stack the content and the line.
+  const stack = (position === 'above') ? `${contentRow}${lineRow}` : `${lineRow}${contentRow}`;
+  return `<div style="display:flex;flex-direction:column;gap:calc(4px * ${scale});${pad}">${stack}</div>`;
+}
+
+
 // ============================================================================
 // Main Card
 // ============================================================================
@@ -2450,13 +3024,7 @@ class SEEDCard extends HTMLElement {
       // Indent of the entity rows relative to the section title row
       row_indent: 16,
       slider_max_width: 240,
-      // Divider line drawn between consecutive sections
-      show_section_divider: false,
-      section_divider_width: 1,
-      section_divider_length: 100,
-      show_section_divider_bottom: false,
-      section_divider_bottom_width: 1,
-      section_divider_bottom_length: 100,
+      // (Global section dividers removed — use standalone Divider sections.)
       // Child row border visuals
       show_row_border: false,
       row_border_width: 1,
@@ -2485,7 +3053,7 @@ class SEEDCard extends HTMLElement {
       // lux value updating every second, resetting "last changed") can't force
       // the card to rebuild constantly. 0 = the default 250ms debounce.
       min_refresh_seconds: 0,
-      // Named Frame Presets (sparse border+glow+shadow+background+edge bundles),
+      // Named Frame Styles (sparse border+glow+shadow+background+edge bundles),
       // layered onto sections or the card. Empty by default. See STYLES_DESIGN.
       frame_presets: [],
       // Card wrapper frame: { presets: [] } | null.
@@ -2530,7 +3098,7 @@ class SEEDCard extends HTMLElement {
 
   setConfig(config) {
     if (!config) throw new Error('Invalid configuration');
-    // Auto-migrate pre-v107 inline frame styling to the Frame Preset model
+    // Auto-migrate pre-v107 inline frame styling to the Frame Style model
     // (mutates a shallow copy so we don't touch the caller's object).
     config = migrateLegacyFrames({ ...config, sections: (config.sections || []).map(s => ({ ...s })) });
     const stub = SEEDCard.getStubConfig();
@@ -2548,6 +3116,11 @@ class SEEDCard extends HTMLElement {
       frame_presets: normalizeFramePresets(config.frame_presets),
       card_frame: config.card_frame ? normalizeFrameRef(config.card_frame) : null,
       frame_library_scope: 'system',
+      header_library_scope: 'system',
+      // Header Rule Sets applied to the CARD TITLE (blank entity = card's own
+      // entity). Emitted only when non-empty (byte-stable).
+      ...((Array.isArray(config.header_rule_refs) && config.header_rule_refs.length)
+        ? { header_rule_refs: normalizeHeaderRuleRefs(config.header_rule_refs) } : {}),
       rule_sets,
       sections
     };
@@ -2571,11 +3144,24 @@ class SEEDCard extends HTMLElement {
       if (this._rendered) { try { this.renderCard(); } catch (e) {} }
     });
 
-    // Load + live-subscribe the shared Frame Preset library (see
+    // Load + live-subscribe the shared Frame Style library (see
     // SEED_FRAME_LIBRARY). Only needed when this card actually references a
     // library preset (lib:… ref); otherwise we skip the WS traffic entirely.
     if (this._usesLibraryRef && this._usesLibraryRef()) {
       ensureFrameLibrary(hass, this._config.frame_library_scope, () => {
+        if (this._rendered) { try { this.renderCard(); } catch (e) {} }
+      });
+    }
+    // Header Rule Sets: load the shared library when a lib: ref is applied
+    // anywhere — the CARD TITLE (config.header_rule_refs) or any section
+    // (section.header_rule_refs). Built-In needs no fetch (it's a constant).
+    // Missing the card-title case here left title header rules unresolved (the
+    // library was never fetched), so the title's on/off colors never applied.
+    const _usesHdrLibRef = (refs) => Array.isArray(refs)
+      && refs.some(r => r && typeof r.ref === 'string' && r.ref.startsWith('lib:'));
+    if (_usesHdrLibRef(this._config.header_rule_refs)
+        || (this._config.sections || []).some(s => _usesHdrLibRef(s.header_rule_refs))) {
+      ensureHeaderLibrary(hass, this._config.header_library_scope, () => {
         if (this._rendered) { try { this.renderCard(); } catch (e) {} }
       });
     }
@@ -2661,12 +3247,14 @@ class SEEDCard extends HTMLElement {
 
   _framePresetsById() {
     const map = {};
+    // Legacy local presets (pre-System-only configs) still resolve so old
+    // cards keep rendering; authoring is library-only going forward.
     (this._config.frame_presets || []).forEach(fx => { if (fx && fx.id) map[fx.id] = fx; });
-    // Overlay the shared library so `lib:<slug>` refs resolve. Local presets
-    // win on an id clash (they're explicit config); library ids are 'lib:slug'
-    // and never collide with generated 'fx_gen_*' ids anyway.
+    // Overlay the shared System library so `lib:<slug>` refs resolve.
     const lib = frameLibraryMap(this._config.frame_library_scope);
     Object.keys(lib).forEach(slug => { const id = 'lib:' + slug; if (!map[id]) map[id] = lib[slug]; });
+    // The read-only Built-In is always available as a fallback frame.
+    if (!map[BUILTIN_FRAME_ID]) map[BUILTIN_FRAME_ID] = builtinFramePreset();
     return map;
   }
 
@@ -2714,13 +3302,19 @@ class SEEDCard extends HTMLElement {
     frameRef = frameRef || {};
     const byId = this._framePresetsById();
     const disabled = new Set(frameRef.disabled || []);
+    // Layers whose own condition is ignored HERE — they always apply on this
+    // section/card regardless of their when/when_entity.
+    const ignoreCond = new Set(frameRef.ignore_conditions || []);
     const layerIds = (frameRef.presets || []).filter(id => !disabled.has(id));
     if (!layerIds.length) return null;
     const acc = {};
     let any = false;
     layerIds.forEach(id => {
       const fx = byId[id];
-      if (!fx || !this._framePresetActive(fx)) return;
+      if (!fx) return;
+      // Skip conditional presets that aren't active — UNLESS this application
+      // opted to ignore the condition (then the layer always applies).
+      if (!ignoreCond.has(id) && !this._framePresetActive(fx)) return;
       ['glow', 'shadow', 'border', 'background', 'edges'].forEach(g => {
         if (fx[g]) { acc[g] = JSON.parse(JSON.stringify(fx[g])); any = true; }
       });
@@ -2756,12 +3350,15 @@ class SEEDCard extends HTMLElement {
       const bc = acc.border.follow_icon ? this._sectionIconColor(section) : acc.border.color;
       const bw = acc.border.width, br = acc.border.radius;
       const on = side => acc.border.sides.includes(side);
+      // Per-corner radius [TL, TR, BR, BL]: a false corner is square (0).
+      const cn = Array.isArray(acc.border.corners) && acc.border.corners.length === 4 ? acc.border.corners : [true, true, true, true];
+      const rad = `${cn[0] ? br : 0}px ${cn[1] ? br : 0}px ${cn[2] ? br : 0}px ${cn[3] ? br : 0}px`;
       out.borderVars = {
         top: on('top') ? `${bw}px solid ${bc}` : 'none',
         bottom: on('bottom') ? `${bw}px solid ${bc}` : 'none',
         left: on('left') ? `${bw}px solid ${bc}` : 'none',
         right: on('right') ? `${bw}px solid ${bc}` : 'none',
-        radius: `${br}px`
+        radius: rad
       };
     }
     if (acc.background) {
@@ -2774,7 +3371,14 @@ class SEEDCard extends HTMLElement {
         : mode === 'transparent' ? 'transparent'
         : (acc.background.color || 'transparent');
     }
+<<<<<<< HEAD
+    // 'match' edge stops resolve to the frame's border color if it has one,
+    // else the section/icon color — so a gradient border follows the accent.
+    const edgeMatch = (acc.border && !acc.border.follow_icon && acc.border.color) ? acc.border.color : iconCol;
+    if (acc.edges) out.edge = buildEdgeBackground(acc.edges, edgeMatch);
+=======
     if (acc.edges) out.edge = buildEdgeBackground(acc.edges);
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     return out;
   }
 
@@ -2818,7 +3422,7 @@ class SEEDCard extends HTMLElement {
   }
 
   // Recompute each section's frame (glow / shadow / border / bg / edges) from
-  // its Frame Preset stack. Called after render, on section toggle, and on
+  // its Frame Style stack. Called after render, on section toggle, and on
   // state changes (so conditional presets update live).
   updateGlow() {
     if (!this._config) return;
@@ -2827,7 +3431,7 @@ class SEEDCard extends HTMLElement {
       const el = this.querySelector(`.seed-section[data-section-id="${section.id}"]`);
       if (!el) return;
 
-      // A section's frame is a layered stack of Frame Presets — the ONLY source
+      // A section's frame is a layered stack of Frame Styles — the ONLY source
       // of its glow/shadow/border/edges/background. When it resolves it drives
       // all of them (Replace). A stack that resolves to nothing (empty, or all
       // conditional presets inactive) leaves the section with no frame at all.
@@ -2974,41 +3578,8 @@ class SEEDCard extends HTMLElement {
     // section's own border box - this sits between two sections, not
     // around one). Top and bottom are independent so you can enable either,
     // both (giving a double-line gap), or neither.
-    const showSectionDividerTop = this._config.show_section_divider === true;
-    const sectionDividerTopWidth = this._config.section_divider_width ?? 1;
-    const sectionDividerTopLength = this._config.section_divider_length ?? 100;
-    const showSectionDividerBottom = this._config.show_section_divider_bottom === true;
-    const sectionDividerBottomWidth = this._config.section_divider_bottom_width ?? 1;
-    const sectionDividerBottomLength = this._config.section_divider_bottom_length ?? 100;
-    const sectionDividerColor = colors.section_divider && colors.section_divider !== 'transparent' ? colors.section_divider : '#333333';
-    const sectionDividerCss = [
-      showSectionDividerTop
-        ? `.seed-section + .seed-section { margin-top: calc(var(--seed-gap) / 2); padding-top: calc(var(--seed-gap) / 2); position: relative; }
-           .seed-section + .seed-section::before {
-             content: '';
-             display: block;
-             position: absolute;
-             top: 0;
-             left: 50%;
-             transform: translateX(-50%);
-             width: ${sectionDividerTopLength}%;
-             border-top: ${sectionDividerTopWidth}px solid ${sectionDividerColor};
-           }`
-        : '',
-      showSectionDividerBottom
-        ? `.seed-section:not(:last-child) { margin-bottom: calc(var(--seed-gap) / 2); padding-bottom: calc(var(--seed-gap) / 2); position: relative; }
-           .seed-section:not(:last-child)::after {
-             content: '';
-             display: block;
-             position: absolute;
-             bottom: 0;
-             left: 50%;
-             transform: translateX(-50%);
-             width: ${sectionDividerBottomLength}%;
-             border-bottom: ${sectionDividerBottomWidth}px solid ${sectionDividerColor};
-           }`
-        : ''
-    ].join('\n');
+    // (Global section-divider CSS removed — dividers are standalone sections.)
+    const sectionDividerCss = '';
 
     // Extra left indent so entity rows read as "children" of the section
     // title row rather than sitting flush with it.
@@ -3112,7 +3683,7 @@ class SEEDCard extends HTMLElement {
         .easy-entity-styler-card-wrapper.easy-entity-styler-card-static > .easy-entity-styler-card-body { padding-top: var(--seed-pad); }
         .easy-entity-styler-card-body > .seed-title { padding-left: calc(var(--seed-pad) * 0.5); padding-right: calc(var(--seed-pad) * 0.5); }
         .seed-section {
-          /* Border/bg come entirely from the section's Frame Presets, applied
+          /* Border/bg come entirely from the section's Frame Styles, applied
              inline per section in renderCard (var fallbacks are just 'off'). */
           border-top: var(--sec-border-top, none);
           border-bottom: var(--sec-border-bottom, none);
@@ -3124,6 +3695,8 @@ class SEEDCard extends HTMLElement {
           overflow: hidden;
         }
         details.seed-section { background-color: var(--sec-bg, transparent) !important; }
+        /* Divider sections carry no frame box — just the divider line. */
+        .seed-divider-section { border: none !important; box-shadow: none !important; background: transparent !important; overflow: visible; padding: 0; }
         .seed-summary {
           list-style: none;
           cursor: pointer;
@@ -3442,11 +4015,24 @@ class SEEDCard extends HTMLElement {
     const showTitleIcon = this._config.show_title_icon !== false && !!this._config.title_icon;
     let titleHtml = '';
     if (showTitleText || showTitleIcon) {
+      // Header Rule Sets applied to the card title override icon/glyph/text
+      // color+size and can add a secondary line.
+      const cts = this._resolveCardTitleStyle();
+      const titleIconGlyph = cts.glyph || this._config.title_icon || 'mdi:view-list';
+      const titleIconStyle = [
+        cts.iconColor ? `color:${cts.iconColor};` : '',
+        cts.iconSize ? `--mdc-icon-size:${Number(cts.iconSize)}px;` : '',
+      ].join('');
+      const titleTextStyle = [
+        cts.textColor ? `color:${cts.textColor};` : '',
+        cts.textSize ? `font-size:${Number(cts.textSize)}px;` : '',
+      ].join('');
       titleHtml = `
         <div class="seed-title">
-          ${showTitleIcon ? `<ha-icon icon="${this._config.title_icon || 'mdi:view-list'}"></ha-icon>` : ''}
-          ${showTitleText ? `<span class="seed-title-text">${this._config.title}</span>` : ''}
+          ${showTitleIcon ? `<ha-icon icon="${titleIconGlyph}"${titleIconStyle ? ` style="${titleIconStyle}"` : ''}></ha-icon>` : ''}
+          ${showTitleText ? `<span class="seed-title-text"${titleTextStyle ? ` style="${titleTextStyle}"` : ''}>${this._config.title}</span>` : ''}
           ${lastChangedText ? `<span class="seed-title-last-changed">${lastChangedText}</span>` : ''}
+          ${cts.secondaryText ? `<span class="seed-title-secondary">${escapeHtml(String(cts.secondaryText))}</span>` : ''}
         </div>
       `;
     }
@@ -3461,6 +4047,14 @@ class SEEDCard extends HTMLElement {
     }
 
     for (const section of sections) {
+      // Hidden sections are kept in config (and in the editor list) but not rendered.
+      if (section.hidden === true) continue;
+      // Standalone Divider section: just the divider line, no frame/title/body.
+      if (section.type === 'divider') {
+        sectionsHtml += `<div class="seed-section seed-divider-section" data-section-id="${section.id}">${dividerLineHtml(section, { scale: this._config.scale || 1.0, divider_color: (this.getColors().section_divider) })}</div>`;
+        continue;
+      }
+
       let contentHtml = '';
       let count = 0;
 
@@ -3520,59 +4114,7 @@ class SEEDCard extends HTMLElement {
         );
       }
 
-      // Section divider override: draws this section's own above/below
-      // line using the same centered-%-width pseudo-element technique as
-      // the global mechanism, and suppresses the global pseudo-elements
-      // for this specific section so the two don't double up.
-      const dividerMode = section.divider_mode || 'global';
-      if (dividerMode === 'custom') {
-        const dc = section.divider_color || colors.section_divider || '#333333';
-        const aboveWidth = section.divider_above_width ?? 1;
-        const aboveLength = section.divider_above_length ?? 100;
-        const belowWidth = section.divider_below_width ?? 1;
-        const belowLength = section.divider_below_length ?? 100;
-        const sel = `.seed-section[data-section-id="${section.id}"]`;
-
-        let rule = `
-          ${sel}::before { display: none !important; }
-          ${sel}::after { display: none !important; }
-          ${sel} { position: relative; }
-        `;
-
-        if (section.divider_above) {
-          rule += `
-            ${sel} { margin-top: calc(var(--seed-gap) / 2); padding-top: calc(var(--seed-gap) / 2); }
-            ${sel}::before {
-              content: '';
-              display: block !important;
-              position: absolute;
-              top: 0;
-              left: 50%;
-              transform: translateX(-50%);
-              width: ${aboveLength}%;
-              border-top: ${aboveWidth}px solid ${dc};
-            }
-          `;
-        }
-
-        if (section.divider_below) {
-          rule += `
-            ${sel} { margin-bottom: calc(var(--seed-gap) / 2); padding-bottom: calc(var(--seed-gap) / 2); }
-            ${sel}::after {
-              content: '';
-              display: block !important;
-              position: absolute;
-              bottom: 0;
-              left: 50%;
-              transform: translateX(-50%);
-              width: ${belowLength}%;
-              border-bottom: ${belowWidth}px solid ${dc};
-            }
-          `;
-        }
-
-        customDividerCss.push(rule);
-      }
+      // (Inline per-section divider overrides removed — use Divider sections.)
 
       let sectionBorderOverride = overrideVars.length ? overrideVars.join('; ') + ';' : '';
 
@@ -3665,12 +4207,30 @@ class SEEDCard extends HTMLElement {
           if (hi.glyph) tIcon = hi.glyph;
           if (hi.color) iconColor = hi.color;
         }
-        headerHtml = this._activityTitleHeaderHtml(section, count, tIcon, iconColor);
+        // Header Rule Sets (library) override glyph/icon-color last.
+        const hrs = this._resolveHeaderStyle(section);
+        if (hrs.glyph) tIcon = hrs.glyph;
+        if (hrs.iconColor) iconColor = hrs.iconColor;
+        headerHtml = this._activityTitleHeaderHtml(section, count, tIcon, iconColor, hrs);
       } else {
+        // Header Rule Sets can override the entities-section header's icon,
+        // icon color, title color/size, and add a secondary line.
+        const hrs = this._resolveHeaderStyle(section);
+        const nameStyle = [
+          hrs.textColor ? `color:${hrs.textColor};` : '',
+          hrs.textSize ? `font-size:calc(${Number(hrs.textSize)}px * var(--seed-scale,1));` : '',
+        ].join('');
+        const iconGlyph = hrs.glyph || sectionIcon;
+        const iconStyle = [
+          hrs.iconColor ? `color:${hrs.iconColor};` : '',
+          hrs.iconSize ? `--mdc-icon-size:calc(${Number(hrs.iconSize)}px * var(--seed-scale,1));` : '',
+        ].join('');
+        const secondaryHtml = hrs.secondaryText
+          ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
         headerHtml = `
-          <div class="seed-section-name">${section.name}${titleCountHtml}</div>
+          <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${section.name}${titleCountHtml}${secondaryHtml}</div>
           ${rightCountHtml}
-          <div class="seed-section-icon"><ha-icon icon="${sectionIcon}"></ha-icon></div>
+          <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
         `;
       }
 
@@ -4209,12 +4769,97 @@ class SEEDCard extends HTMLElement {
     return out;
   }
 
+  // Map a section id to its overlay of Header Rule Sets (Built-In + library).
+  _headerSetsById() {
+    const map = {};
+    const lib = headerLibraryMap((this._config && this._config.header_library_scope) || 'system');
+    Object.keys(lib).forEach(slug => { map['lib:' + slug] = lib[slug]; });
+    if (!map[BUILTIN_HEADER_ID]) map[BUILTIN_HEADER_ID] = builtinHeaderRuleSet();
+    return map;
+  }
+  // The entity a section's header rules evaluate against when a ref doesn't
+  // name its own: the section's first resolved entity (its "primary").
+  _sectionHeaderEntityId(section) {
+    if (!section || !section.id) return this._cardHeaderEntityId();
+    const ids = this._getActivityEntities(section);
+    return (Array.isArray(ids) && ids.length) ? ids[0] : '';
+  }
+  // The card-title's fallback entity: the first entity of the first section
+  // that has one (EES has no single card-level entity).
+  _cardHeaderEntityId() {
+    for (const s of (this._config.sections || [])) {
+      const ids = this._getActivityEntities(s);
+      if (Array.isArray(ids) && ids.length) return ids[0];
+    }
+    return '';
+  }
+  // Resolve the card TITLE's Header Rule Sets (config.header_rule_refs), reusing
+  // the section resolver with a synthetic section (no id → card entity fallback).
+  _resolveCardTitleStyle() {
+    const refs = this._config.header_rule_refs;
+    if (!Array.isArray(refs) || !refs.length) return {};
+    return this._resolveHeaderStyle({ header_rule_refs: refs });
+  }
+  // Resolve a section's applied Header Rule Sets into concrete style outputs.
+  // Layered last-match-wins per field across all refs' rules; each set's
+  // `default` seeds a field only if no rule set it. Returns a sparse object
+  // (only fields that were set) so the caller keeps its existing values for
+  // anything unset. `set_secondary` resolves to a display string.
+  _resolveHeaderStyle(section) {
+    const refs = (section && Array.isArray(section.header_rule_refs)) ? section.header_rule_refs : [];
+    if (!refs.length) return {};
+    const byId = this._headerSetsById();
+    const out = {};      // set_* field -> resolved value (last wins)
+    const applyOutputs = (src, entId) => {
+      HEADER_RULE_OUTPUT_KEYS.forEach(k => {
+        if (src[k] === undefined) return;
+        if (k === 'set_secondary') {
+          const si = src[k];
+          const txt = this._resolveSecondaryText(entId, si);
+          if (txt !== '' && txt != null) out.secondaryText = txt;
+        } else if (k === 'set_icon_color') { out.iconColor = src[k]; }
+        else if (k === 'set_icon') { out.glyph = src[k]; }
+        else if (k === 'set_text_color') { out.textColor = src[k]; }
+        else if (k === 'set_icon_size') { out.iconSize = src[k]; }
+        else if (k === 'set_text_size') { out.textSize = src[k]; }
+      });
+    };
+    refs.forEach(ref => {
+      const set = byId[ref.ref];
+      if (!set) return;
+      // Entity precedence (top wins): the card/section binding (ref.entity)
+      // OVERRIDES the set's Library default_entity, which overrides the section's
+      // primary entity. A per-rule when_entity (legacy, still honored) only wins
+      // when the card/section didn't bind one. Evaluated per-rule so a set can mix.
+      const bound = ref.entity || set.default_entity || this._sectionHeaderEntityId(section);
+      let matched = false;
+      (set.rules || []).forEach(rule => {
+        const entId = ref.entity || rule.when_entity || set.default_entity || this._sectionHeaderEntityId(section);
+        const hasEnt = entId && this._hass && this._hass.states[entId];
+        if (hasEnt && evalCondition(entId, rule.when, this._hass)) { applyOutputs(rule, entId); matched = true; }
+      });
+      // Fall back to the set's default outputs when no rule in it matched.
+      if (!matched && set.default) applyOutputs(set.default, bound);
+    });
+    return out;
+  }
+  // Resolve a secondary-info value-ref to a display string (prefix + value+unit).
+  _resolveSecondaryText(entId, si) {
+    if (!si || !entId || !this._hass) return '';
+    const res = resolveValueRef(entId, { source: si.source, attribute: si.attribute, transform: si.transform, unit: si.unit }, this._hass);
+    if (!res || res.badState) return '';
+    const val = res.display != null ? res.display : (res.raw != null ? String(res.raw) : '');
+    if (val === '' || val === '—') return '';
+    return (si.prefix || '') + val;
+  }
+
   // Build the activity-table title header: three independently-placed + styled
   // parts (icon, title, count), each rendering its own template and dropping
   // into the left / center / right zone by its `align`.
-  _activityTitleHeaderHtml(section, count, tIcon, iconColor) {
+  _activityTitleHeaderHtml(section, count, tIcon, iconColor, hrs) {
     const tr = section.title_row || {};
     const parts = tr.parts || {};
+    hrs = hrs || {};
 
     const ids = this._getActivityEntities(section);
     const titleP = parts.title || {};
@@ -4228,6 +4873,12 @@ class SEEDCard extends HTMLElement {
       p.weight ? `font-weight:${p.weight}` : '',
       p.italic ? 'font-style:italic' : ''
     ].filter(Boolean).join(';');
+    // Header Rule Sets override the TITLE part's color/size when set.
+    const titleStyle = [
+      partStyle(titleP),
+      hrs.textColor ? `color:${escapeHtml(String(hrs.textColor))}` : '',
+      hrs.textSize ? `font-size:${Number(hrs.textSize)}px` : '',
+    ].filter(Boolean).join(';');
 
     // Build the three zones; each part is appended to the zone matching its
     // align. Icon color still honors the count rule / section color override.
@@ -4237,7 +4888,7 @@ class SEEDCard extends HTMLElement {
     const iconP = parts.icon || {};
     const iconColorCss = iconP.color || iconColor;
     push(iconP, `<span class="seed-at-tp seed-at-tp-icon" style="${iconColorCss ? `color:${escapeHtml(iconColorCss)};` : ''}${iconP.size ? `--mdc-icon-size:${iconP.size}px;width:${iconP.size}px;height:${iconP.size}px;` : ''}"><ha-icon icon="${escapeHtml(tIcon)}"></ha-icon></span>`);
-    push(titleP, `<span class="seed-at-tp seed-at-tp-title" data-at-title="${section.id}" style="${partStyle(titleP)}">${escapeHtml(titleStr)}</span>`);
+    push(titleP, `<span class="seed-at-tp seed-at-tp-title" data-at-title="${section.id}" style="${titleStyle}">${escapeHtml(titleStr)}${hrs.secondaryText ? `<span class="seed-at-tp-secondary">${escapeHtml(String(hrs.secondaryText))}</span>` : ''}</span>`);
     push(countP, `<span class="seed-at-tp seed-at-tp-count" data-at-count="${section.id}" style="${partStyle(countP)}">${escapeHtml(countStr)}</span>`);
 
     // Custom user-added parts (text template or icon).
@@ -4292,6 +4943,87 @@ class SEEDCard extends HTMLElement {
       if (iconRule && iconWrapEl) {
         iconWrapEl.style.color = this._evalCountRuleSet(iconRule, count) || (parts.icon && parts.icon.color) || section.icon_color || '';
       }
+    }
+
+    // Header Rule Sets (library) override the table title's text color/size,
+    // icon glyph/color, and can add a secondary line — LAST, mirroring render's
+    // _activityTitleHeaderHtml. Re-applied live so on/off state changes take
+    // effect without a page reload. Sparse: an unset field reverts to the base
+    // (empty inline style falls back to the CSS/part value).
+    const hrs = this._resolveHeaderStyle(section);
+    const titleEl2 = sectionEl.querySelector(`[data-at-title="${section.id}"]`);
+    if (titleEl2) {
+      titleEl2.style.color = hrs.textColor ? String(hrs.textColor) : '';
+      titleEl2.style.fontSize = hrs.textSize ? (Number(hrs.textSize) + 'px') : '';
+      // The textContent set above wiped any secondary span — re-add / update it.
+      let secEl = titleEl2.querySelector('.seed-at-tp-secondary');
+      const secText = hrs.secondaryText ? String(hrs.secondaryText) : '';
+      if (secText) {
+        if (!secEl) { secEl = document.createElement('span'); secEl.className = 'seed-at-tp-secondary'; titleEl2.appendChild(secEl); }
+        secEl.textContent = secText;
+      } else if (secEl && secEl.remove) { secEl.remove(); }
+    }
+    if (iconWrapEl) {
+      if (hrs.iconColor) iconWrapEl.style.color = String(hrs.iconColor);
+      if (hrs.glyph) {
+        const iconEl = iconWrapEl.querySelector('ha-icon');
+        if (iconEl) iconEl.setAttribute('icon', hrs.glyph);
+      }
+    }
+  }
+
+  // Live re-apply the card TITLE's Header Rule Set style (icon glyph/color/size,
+  // text color/size, secondary line) in place, without a full render. Called
+  // from updateStates so on/off transitions recolor the title immediately.
+  // Sparse: a field the rules didn't set reverts to its base (clearing the
+  // inline style falls back to the render-time CSS built from the config).
+  _applyCardTitleStyleLive() {
+    const titleEl = this.querySelector('.seed-title');
+    if (!titleEl) return;
+    const cts = this._resolveCardTitleStyle();
+    const iconEl = titleEl.querySelector('ha-icon');
+    if (iconEl) {
+      iconEl.setAttribute('icon', cts.glyph || this._config.title_icon || 'mdi:view-list');
+      iconEl.style.color = cts.iconColor ? String(cts.iconColor) : '';
+      if (cts.iconSize) iconEl.style.setProperty('--mdc-icon-size', Number(cts.iconSize) + 'px');
+      else iconEl.style.removeProperty && iconEl.style.removeProperty('--mdc-icon-size');
+    }
+    const textEl = titleEl.querySelector('.seed-title-text');
+    if (textEl) {
+      textEl.style.color = cts.textColor ? String(cts.textColor) : '';
+      textEl.style.fontSize = cts.textSize ? (Number(cts.textSize) + 'px') : '';
+    }
+    let secEl = titleEl.querySelector('.seed-title-secondary');
+    const secText = cts.secondaryText ? String(cts.secondaryText) : '';
+    if (secText) {
+      if (!secEl) { secEl = document.createElement('span'); secEl.className = 'seed-title-secondary'; titleEl.appendChild(secEl); }
+      secEl.textContent = secText;
+    } else if (secEl && secEl.remove) { secEl.remove(); }
+  }
+
+  // Live re-apply an entities-section header's Header Rule Set style (name
+  // color/size, icon glyph/color/size, secondary line) in place. Mirrors the
+  // render-time block in renderCard. Sparse revert as above.
+  _applyHeaderStyleLive(sectionEl, section) {
+    const hrs = this._resolveHeaderStyle(section);
+    const nameEl = sectionEl.querySelector('.seed-section-name');
+    if (nameEl) {
+      nameEl.style.color = hrs.textColor ? String(hrs.textColor) : '';
+      nameEl.style.fontSize = hrs.textSize ? `calc(${Number(hrs.textSize)}px * var(--seed-scale,1))` : '';
+      let secEl = nameEl.querySelector('.seed-section-secondary');
+      const secText = hrs.secondaryText ? String(hrs.secondaryText) : '';
+      if (secText) {
+        if (!secEl) { secEl = document.createElement('div'); secEl.className = 'seed-section-secondary'; nameEl.appendChild(secEl); }
+        secEl.textContent = secText;
+      } else if (secEl && secEl.remove) { secEl.remove(); }
+    }
+    const iconWrap = sectionEl.querySelector('.seed-section-icon');
+    if (iconWrap) {
+      iconWrap.style.color = hrs.iconColor ? String(hrs.iconColor) : '';
+      if (hrs.iconSize) iconWrap.style.setProperty('--mdc-icon-size', `calc(${Number(hrs.iconSize)}px * var(--seed-scale,1))`);
+      else iconWrap.style.removeProperty && iconWrap.style.removeProperty('--mdc-icon-size');
+      const iconEl = iconWrap.querySelector('ha-icon');
+      if (iconEl) iconEl.setAttribute('icon', hrs.glyph || section.icon || 'mdi:folder-outline');
     }
   }
 
@@ -4670,6 +5402,13 @@ class SEEDCard extends HTMLElement {
     this.updateGlow();
     if (this._config.card_frame) this.updateCardGlow();
 
+    // Card-title Header Rule Sets are state-driven (icon/text color/size, glyph,
+    // secondary line) — re-apply live so on/off transitions recolor the title
+    // without a page reload. (Only when the card actually applies one.)
+    if (Array.isArray(this._config.header_rule_refs) && this._config.header_rule_refs.length) {
+      this._applyCardTitleStyleLive();
+    }
+
     this.querySelectorAll('.seed-row').forEach(row => {
       const entityId = row.dataset.entityId;
       const state = this._hass.states[entityId];
@@ -4744,6 +5483,15 @@ class SEEDCard extends HTMLElement {
     (this._config.sections || []).forEach(section => {
       const sectionEl = this.querySelector(`.seed-section[data-section-id="${section.id}"]`);
       if (!sectionEl) return;
+
+      // Section-header Header Rule Sets are state-driven — re-apply live so the
+      // header icon/name recolor without a reload. Tables apply theirs inside
+      // _refreshActivityTitle (their header markup differs), so only entities
+      // sections need it here.
+      if (section.type !== 'activity_table'
+          && Array.isArray(section.header_rule_refs) && section.header_rule_refs.length) {
+        this._applyHeaderStyleLive(sectionEl, section);
+      }
 
       // Activity tables: rows depend on live filters/sort/values, so re-render
       // the whole table body in place (cheap - a few grid divs) and refresh the
@@ -4860,6 +5608,33 @@ class SEEDCardEditor extends HTMLElement {
     // ignore its own just-saved value so it doesn't re-render mid-typing.
     this._libEditTimer = null;
     this._libEchoJSON = null;
+<<<<<<< HEAD
+    // Frame Style DIRTY DRAFTS — keyed by slug. Editing a lib: preset mutates
+    // its draft (a deep copy); nothing is written to the shared library until
+    // the user clicks Save. The panel shows all presets at once, so drafts are
+    // a map rather than a single object. { <slug>: { fx, dirty } }.
+    this._frameDrafts = {};
+    // Header Rule Set DIRTY DRAFTS — same pattern/shape as _frameDrafts. Header
+    // sets are shared system-wide, so edits stage in a draft and only write to
+    // the library on an explicit Save. { <slug>: { set, dirty } }.
+    this._headerDrafts = {};
+    // Transient per-rule Header-Rule preview toggles (Set of "<slug>||<idx>").
+    // Not persisted to config — just controls the in-editor preview box.
+    this._hdrRulePreview = new Set();
+    // Transient "entity picker is open" toggles for Header Rule bindings
+    // (Set of "<sid>||<path>"). The picker is hidden by default; a "Choose an
+    // Entity" / "Bind a Default Entity" checkbox reveals it. Not persisted.
+    this._hdrEntPickerOpen = new Set();
+  }
+
+  // Editor-side color resolver — mirrors SEEDCard.getColors() (stub defaults
+  // overlaid with the config's colors) without depending on the card class.
+  // Used by the divider preview so it matches the live card's divider color.
+  _edColors() {
+    const defaults = SEEDCard.getStubConfig().colors;
+    return { ...defaults, ...((this._config && this._config.colors) || {}) };
+=======
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
   }
 
   _normalizeConfig(config) {
@@ -4880,6 +5655,9 @@ class SEEDCardEditor extends HTMLElement {
       table_defaults: normalizeTableDefaults(cfg.table_defaults),
       frame_presets: normalizeFramePresets(cfg.frame_presets),
       card_frame: cfg.card_frame ? normalizeFrameRef(cfg.card_frame) : null,
+      header_library_scope: 'system',
+      ...((Array.isArray(cfg.header_rule_refs) && cfg.header_rule_refs.length)
+        ? { header_rule_refs: normalizeHeaderRuleRefs(cfg.header_rule_refs) } : {}),
       rule_sets,
       sections
     };
@@ -4925,6 +5703,14 @@ class SEEDCardEditor extends HTMLElement {
       if (this._libEchoJSON !== null && cur === this._libEchoJSON) { this._libEchoJSON = null; return; }
       this._libEchoJSON = null;
       this._rendered = false; this.renderEditor();
+<<<<<<< HEAD
+    });
+    // Header Rule Set library — load live so the panel + section pickers reflect it.
+    ensureHeaderLibrary(hass, (this._config && this._config.header_library_scope) || 'system', () => {
+      if (!this._config) return;
+      this._rendered = false; this.renderEditor();
+=======
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     });
     // Only render if we haven't rendered yet or if config changed
     if (this._config && !this._rendered) {
@@ -5035,12 +5821,31 @@ class SEEDCardEditor extends HTMLElement {
       // reference, matching the section/rule-set target shape.
       return { list: [this._config.table_defaults], idx: 0, kind: 'table_defaults' };
     }
+    // Card root — used by the card-title Header Rule Sets editor.
+    if (sid === '__card__') return { list: [this._config], idx: 0, kind: 'card' };
     let idx = (this._config.sections || []).findIndex(s => s.id === sid);
     if (idx !== -1) return { list: this._config.sections, idx, kind: 'section' };
     idx = (this._config.rule_sets || []).findIndex(r => r.id === sid);
     if (idx !== -1) return { list: this._config.rule_sets, idx, kind: 'rule_set' };
     idx = (this._config.frame_presets || []).findIndex(f => f.id === sid);
     if (idx !== -1) return { list: this._config.frame_presets, idx, kind: 'frame_preset' };
+<<<<<<< HEAD
+    // Header Rule Set library entry (hdr:<slug>): edits target a DRAFT (deep
+    // copy), seeded lazily from the shared-library entry. Nothing is written to
+    // the store until the user clicks Save (mirrors the Frame Style drafts).
+    if (typeof sid === 'string' && sid.startsWith('hdr:')) {
+      const slug = sid.slice(4);
+      const d = this._headerDraftFor(slug);
+      if (d) return { list: [d.set], idx: 0, kind: 'header_lib', slug };
+    }
+    // Library preset (lib:<slug>): edits target a DRAFT (deep copy), seeded
+    // lazily from the shared-library entry. Nothing is written to the store until
+    // the user clicks Save. Wrapped in a single-element list to match the shape.
+    if (typeof sid === 'string' && sid.startsWith('lib:')) {
+      const slug = sid.slice(4);
+      const d = this._frameDraftFor(slug);
+      if (d) return { list: [d.fx], idx: 0, kind: 'frame_lib', slug };
+=======
     // Library preset (lib:<slug>): edit the shared-library entry in place. The
     // module cache object is mutated by reference; _atApply* debounce-saves it
     // back to the store. Wrapped in a single-element list to match the shape.
@@ -5048,8 +5853,91 @@ class SEEDCardEditor extends HTMLElement {
       const slug = sid.slice(4);
       const map = frameLibraryMap(this._config.frame_library_scope);
       if (map && map[slug]) return { list: [map[slug]], idx: 0, kind: 'frame_lib', slug };
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     }
     return null;
+  }
+
+  // ---- Frame Style dirty-draft helpers (keyed by slug) ----
+  // Return the draft for a slug, seeding it from the stored preset on first use.
+  _frameDraftFor(slug) {
+    if (this._frameDrafts[slug]) return this._frameDrafts[slug];
+    const map = frameLibraryMap(this._config.frame_library_scope);
+    if (!map || !map[slug]) return null;
+    this._frameDrafts[slug] = { fx: JSON.parse(JSON.stringify(map[slug])), dirty: false };
+    return this._frameDrafts[slug];
+  }
+  // The preset to DISPLAY for a lib:<slug> id — the draft if one exists (so
+  // unsaved edits show), else the stored entry.
+  _frameDisplayPreset(slug) {
+    const d = this._frameDrafts[slug];
+    if (d) return d.fx;
+    const map = frameLibraryMap(this._config.frame_library_scope);
+    return (map && map[slug]) || null;
+  }
+  // Commit a draft → shared library (system-wide confirm). Clears dirty.
+  _saveFrameDraft(slug) {
+    const d = this._frameDrafts[slug]; if (!d || !d.dirty) return;
+    const scope = this._config.frame_library_scope || 'system';
+    const nm = d.fx.name || slug;
+    if (!window.confirm(`Save "${nm}"?\n\nThis is a shared Frame Style — the change applies to EVERY card using it across your Home Assistant, not just this one.`)) return;
+    const map = { ...frameLibraryMap(scope) };
+    const norm = normalizeFramePreset(d.fx); norm.id = 'lib:' + slug;
+    map[slug] = norm;
+    // Reflect immediately in the module cache so the UI shows the saved state.
+    SEED_FRAME_LIBRARY[scope === 'system' ? 'system' : 'user'].map = map;
+    this._libEchoJSON = JSON.stringify(map);
+    saveFrameLibrary(this._hass, scope, map)
+      .then(() => { d.dirty = false; this.renderEditor(); })
+      .catch(err => { console.error('[easy-entity-styler-card] save frame failed', err); window.alert('Could not save the Frame Style.'); });
+  }
+  // Discard a draft → reseed from the stored preset.
+  _discardFrameDraft(slug) {
+    const map = frameLibraryMap(this._config.frame_library_scope);
+    if (map && map[slug]) this._frameDrafts[slug] = { fx: JSON.parse(JSON.stringify(map[slug])), dirty: false };
+    else delete this._frameDrafts[slug];
+    this.renderEditor();
+  }
+
+  // ---- Header Rule Set dirty-draft helpers (keyed by slug; mirrors frame) ----
+  _headerScope() { return (this._config && this._config.header_library_scope) || 'system'; }
+  // Return the draft for a slug, seeding from the stored set on first use.
+  _headerDraftFor(slug) {
+    if (this._headerDrafts[slug]) return this._headerDrafts[slug];
+    const map = headerLibraryMap(this._headerScope());
+    if (!map || !map[slug]) return null;
+    this._headerDrafts[slug] = { set: JSON.parse(JSON.stringify(map[slug])), dirty: false };
+    return this._headerDrafts[slug];
+  }
+  // The set to DISPLAY for a slug — the draft if one exists (unsaved edits
+  // show), else the stored entry.
+  _headerDisplaySet(slug) {
+    const d = this._headerDrafts[slug];
+    if (d) return d.set;
+    const map = headerLibraryMap(this._headerScope());
+    return (map && map[slug]) || null;
+  }
+  // Commit a draft → shared library (system-wide confirm). Clears dirty.
+  _saveHeaderDraft(slug) {
+    const d = this._headerDrafts[slug]; if (!d || !d.dirty) return;
+    const scope = this._headerScope();
+    const nm = (d.set && d.set.name) || slug;
+    if (!window.confirm(`Save "${nm}"?\n\nThis is a shared Header Rule — the change applies to EVERY card using it across your Home Assistant, not just this one.`)) return;
+    const map = { ...headerLibraryMap(scope) };
+    const norm = normalizeHeaderRuleSet(d.set); norm.id = 'lib:' + slug;
+    map[slug] = norm;
+    // Reflect immediately in the module cache so the UI shows the saved state.
+    SEED_HEADER_LIBRARY[scope === 'system' ? 'system' : 'user'].map = map;
+    saveHeaderLibrary(this._hass, scope, map)
+      .then(() => { d.dirty = false; this.renderEditor(); })
+      .catch(err => { console.error('[easy-entity-styler-card] save header failed', err); window.alert('Could not save the Header Rule.'); });
+  }
+  // Discard a draft → reseed from the stored set.
+  _discardHeaderDraft(slug) {
+    const map = headerLibraryMap(this._headerScope());
+    if (map && map[slug]) this._headerDrafts[slug] = { set: JSON.parse(JSON.stringify(map[slug])), dirty: false };
+    else delete this._headerDrafts[slug];
+    this.renderEditor();
   }
 
   // Apply a STRUCTURAL edit (add/delete/move/kind-change) - re-normalize the
@@ -5063,6 +5951,33 @@ class SEEDCardEditor extends HTMLElement {
       this._config.table_defaults = normalizeTableDefaults(t.list[t.idx]);
       this._fireConfigChanged();
     } else if (t.kind === 'frame_lib') {
+<<<<<<< HEAD
+      // Library preset: normalize the DRAFT in place (preserve the lib: id) and
+      // mark it dirty. NOTHING is written to the shared store until Save.
+      const norm = normalizeFramePreset(t.list[t.idx]);
+      norm.id = 'lib:' + t.slug;
+      const d = this._frameDrafts[t.slug];
+      if (d) { d.fx = norm; d.dirty = true; }
+      this.renderEditor();
+      return;
+    } else if (t.kind === 'header_lib') {
+      // Header Rule Set: normalize the DRAFT in place (preserve the lib: id) and
+      // mark it dirty. NOTHING is written to the shared store until Save.
+      const norm = normalizeHeaderRuleSet(t.list[t.idx]);
+      norm.id = 'lib:' + t.slug;
+      const d = this._headerDrafts[t.slug];
+      if (d) { d.set = norm; d.dirty = true; }
+      this.renderEditor();
+      return;
+    } else if (t.kind === 'card') {
+      // Card-root edit (e.g. card-title header_rule_refs). Normalize just the
+      // refs list; don't re-run section normalize on the whole config.
+      if (Array.isArray(this._config.header_rule_refs)) {
+        this._config.header_rule_refs = normalizeHeaderRuleRefs(this._config.header_rule_refs);
+        if (!this._config.header_rule_refs.length) delete this._config.header_rule_refs;
+      }
+      this._fireConfigChanged();
+=======
       // Library preset: normalize in place (preserve the lib: id) and persist
       // to the shared store; card config is untouched.
       const norm = normalizeFramePreset(t.list[t.idx]);
@@ -5072,6 +5987,7 @@ class SEEDCardEditor extends HTMLElement {
       this._saveLibraryDebounced();
       this.renderEditor();
       return;
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     } else if (t.kind === 'frame_preset') {
       t.list[t.idx] = normalizeFramePreset(t.list[t.idx]);
       this._fireConfigChanged();
@@ -5098,6 +6014,20 @@ class SEEDCardEditor extends HTMLElement {
     }, 400);
   }
 
+<<<<<<< HEAD
+  // Debounced persist of the in-memory Header Rule Set library to the store.
+  _saveHeaderLib() {
+    const scope = (this._config && this._config.header_library_scope) || 'system';
+    const map = { ...headerLibraryMap(scope) };
+    if (this._hdrLibTimer) clearTimeout(this._hdrLibTimer);
+    this._hdrLibTimer = setTimeout(() => {
+      this._hdrLibTimer = null;
+      saveHeaderLibrary(this._hass, scope, map).catch(() => {});
+    }, 400);
+  }
+
+=======
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
   // Apply a LIVE VALUE edit (typing in a text/number field, dragging a slider)
   // - update config + push to the card, but do NOT rebuild the editor DOM, so
   // the input keeps focus and the caret doesn't jump. Re-normalization is
@@ -5109,9 +6039,38 @@ class SEEDCardEditor extends HTMLElement {
     if (!t) return;
     mutate(t.list[t.idx]);
     if (t.kind === 'frame_lib') {
+<<<<<<< HEAD
+      // Live value edit on a library preset: the draft object was mutated in
+      // place (already done). Mark dirty; no store write, no re-render (keeps
+      // focus). Enable the Save/Discard buttons without rebuilding the DOM.
+      const d = this._frameDrafts[t.slug];
+      if (d && !d.dirty) {
+        d.dirty = true;
+        // Flip the whole Save/Discard row to its dirty look via the container
+        // class — enables BOTH buttons + reveals the unsaved banner (see CSS).
+        const root = this.shadowRoot || this;
+        const row = root.querySelector(`.seed-ed-fx-saverow[data-fx-saverow="${t.slug}"]`);
+        if (row) row.classList.add('seed-ed-fx-saverow-dirty');
+      } else if (d) { d.dirty = true; }
+      return;
+    }
+    if (t.kind === 'header_lib') {
+      // Same as frame_lib: mutate the draft in place, mark dirty, enable the
+      // Save/Discard buttons without a re-render (keeps focus/caret).
+      const d = this._headerDrafts[t.slug];
+      if (d && !d.dirty) {
+        d.dirty = true;
+        // Flip the whole Save/Discard row to its dirty look via the container
+        // class — enables BOTH buttons + reveals the unsaved banner (see CSS).
+        const root = this.shadowRoot || this;
+        const row = root.querySelector(`.seed-ed-fx-saverow[data-hdr-saverow="${t.slug}"]`);
+        if (row) row.classList.add('seed-ed-fx-saverow-dirty');
+      } else if (d) { d.dirty = true; }
+=======
       // Live value edit on a library preset: mutate the cache object in place
       // (already done) and debounce-save; no card config change, no re-render.
       this._saveLibraryDebounced();
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       return;
     }
     this._fireConfigChanged();
@@ -5138,6 +6097,110 @@ class SEEDCardEditor extends HTMLElement {
                min="${min}" max="${max}" step="${step}" value="${v}" />
         <span class="at-slider-val">${escapeHtml(shown)}</span>
       </div>`;
+  }
+
+  // Theme CSS-variable colour options offered by the colour-mode dropdown. The
+  // stored value is the exact `var(--…)` string (what the renderer applies).
+  _AT_THEME_COLORS = [
+    ['var(--primary-color)', 'Primary'],
+    ['var(--accent-color)', 'Accent'],
+    ['var(--primary-text-color)', 'Primary text'],
+    ['var(--secondary-text-color)', 'Secondary text'],
+    ['var(--disabled-text-color)', 'Disabled text'],
+    ['var(--state-active-color)', 'State active'],
+    ['var(--error-color)', 'Error'],
+    ['var(--warning-color)', 'Warning'],
+    ['var(--success-color)', 'Success'],
+    ['var(--info-color)', 'Info'],
+  ];
+
+  // A colour picker with a mode dropdown: Custom (a real <input type=color>) /
+  // Theme (a var(--…) dropdown). Mirrors the divider text/icon-colour pattern
+  // and the frame edge-colour selector, so the whole card offers one colour UX.
+  // `cur` is the stored value (a #hex, a var(--…) string, or ''). Empty stays
+  // empty (byte-stable "don't set"). All controls carry at-input/at-path so the
+  // generic scalar-set bind persists them; the mode select is at-structural so
+  // switching Custom↔Theme re-renders to swap the value control.
+  _atColorField(sid, path, label, cur) {
+    cur = cur || '';
+    const isTheme = /^var\(/.test(cur);
+    const mode = isTheme ? 'theme' : (cur ? 'fixed' : 'unset');
+    const hex = /^#[0-9a-f]{6}$/i.test(cur) ? cur : '#2196F3';
+    const themeVal = isTheme ? cur : 'var(--primary-color)';
+    return `
+      <div class="seed-ed-color-field">
+        <label>${label}
+          <select class="at-input at-structural at-color-mode" data-at-sid="${sid}" data-at-path="${path}" data-at-color-hex="${hex}" data-at-color-theme="${escapeHtml(themeVal)}">
+            <option value="unset" ${mode === 'unset' ? 'selected' : ''}>Default</option>
+            <option value="fixed" ${mode === 'fixed' ? 'selected' : ''}>Custom</option>
+            <option value="theme" ${mode === 'theme' ? 'selected' : ''}>Theme</option>
+          </select>
+        </label>
+        ${mode === 'fixed' ? `<input type="color" class="at-input" data-at-sid="${sid}" data-at-path="${path}" value="${hex}" title="Pick a colour" />` : ''}
+        ${mode === 'theme' ? `<select class="at-input" data-at-sid="${sid}" data-at-path="${path}">${this._atOpts(this._AT_THEME_COLORS, themeVal)}</select>` : ''}
+      </div>`;
+  }
+
+  // A searchable single-entity picker (the image-1 style: search box + a
+  // scrollable candidate list of friendly names, client-filtered). Writes the
+  // chosen entity id to `path` on `sid` via the generic at-* value path. Shows
+  // the current binding as a chip with a clear button. `blankLabel` describes
+  // what an empty value means. Candidate rows carry .at-ent-pick so a delegated
+  // handler sets the value; the search box filters in place (no re-render).
+  _atEntityPicker(sid, path, label, cur, blankLabel) {
+    cur = cur || '';
+    const opts = this._getEntityOptions();
+    const nameOf = id => {
+      const st = this._hass && this._hass.states[id];
+      return st ? (st.attributes.friendly_name || id) : id;
+    };
+    const rows = opts.map(opt => {
+      const nm = (opt.label || opt.value).replace(/\s*\([^)]*\)\s*$/, '') || opt.value;
+      const sel = opt.value === cur;
+      return `<div class="seed-ed-ent-row at-ent-pick${sel ? ' at-ent-pick-sel' : ''}" data-at-sid="${sid}" data-at-path="${path}" data-entity-id="${opt.value}" data-search="${escapeHtml((opt.value + ' ' + nm).toLowerCase())}">
+        <span class="seed-ed-ent-name">${escapeHtml(nm)}</span>
+        <span class="seed-ed-ent-id">${escapeHtml(opt.value)}</span>
+        ${sel ? '<ha-icon class="seed-ed-ent-selicon" icon="mdi:check"></ha-icon>' : '<button class="seed-ed-ent-add" title="Choose">+</button>'}
+      </div>`;
+    }).join('') || '<span class="seed-ed-hint">No entities match the card filter.</span>';
+    const pid = (sid + '_' + path).replace(/[^a-z0-9]+/gi, '_');
+    const chip = cur
+      ? `<span class="seed-ed-strip-tag" title="${escapeHtml(cur)}">${escapeHtml(nameOf(cur))}<ha-icon class="strip-remove at-ent-clear" data-at-sid="${sid}" data-at-path="${path}" icon="mdi:close"></ha-icon></span>`
+      : `<span class="seed-ed-hint">${escapeHtml(blankLabel || 'None selected.')}</span>`;
+    return `
+      <div class="seed-ed-ent-picker" data-ent-pid="${pid}">
+        <div class="seed-ed-font-row" style="align-items:flex-start;"><label style="flex:0 0 auto;">${label}</label>
+          <div style="flex:1; min-width:0;">
+            <div class="seed-ed-strip-tags" style="padding:0 0 4px;">${chip}</div>
+            <input type="text" class="seed-ed-search at-ent-search" data-ent-pid="${pid}" placeholder="Search entities…" />
+            <div class="seed-ed-entity-list at-ent-list" data-ent-pid="${pid}">${rows}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Header-Rule entity binding: a collapsible wrapper around _atEntityPicker.
+  // The picker is HIDDEN by default; a checkbox ("Choose an Entity" for a
+  // card/section binding, "Bind a Default Entity (optional)" in the Library)
+  // reveals it. When an entity is already bound, the picker shows directly
+  // (with its clear chip) and the checkbox is dropped. `opts.warn` shows a
+  // yellow "must bind an entity" notice (used on card/section bindings that
+  // have neither their own entity nor a Library default). Open-state is the
+  // transient _hdrEntPickerOpen set, keyed by "<sid>||<path>".
+  _atHeaderEntBinding(sid, path, cur, opts) {
+    opts = opts || {};
+    cur = cur || '';
+    const key = sid + '||' + path;
+    if (cur) {
+      return `<div class="seed-ed-hdr-ent">${this._atEntityPicker(sid, path, opts.label || 'Entity', cur, opts.blankLabel)}</div>`;
+    }
+    const open = this._hdrEntPickerOpen && this._hdrEntPickerOpen.has(key);
+    const warn = opts.warn
+      ? `<div class="seed-ed-hdr-ent-warn"><ha-icon icon="mdi:alert-outline"></ha-icon><span>${escapeHtml(opts.warnText || '')}</span></div>`
+      : '';
+    const cb = `<label class="seed-ed-hdr-ent-cb"><input type="checkbox" class="hdr-ent-toggle" data-hdr-ent-key="${escapeHtml(key)}" ${open ? 'checked' : ''}/> ${escapeHtml(opts.checkboxLabel || 'Choose an Entity')}</label>`;
+    const picker = open ? this._atEntityPicker(sid, path, opts.label || 'Entity', '', opts.blankLabel) : '';
+    return `<div class="seed-ed-hdr-ent">${warn}${cb}${picker}</div>`;
   }
 
   // Field dropdown for filter rules (addressable entity metadata + state).
@@ -5378,6 +6441,7 @@ class SEEDCardEditor extends HTMLElement {
           </summary>
           <div class="seed-ed-substyle-body">
             ${this._atFilterGroups(rid, rs.filter)}
+            ${this._atRuleSetPreviewHtml(rs)}
             <div class="seed-ed-reset-row">
               <span class="seed-ed-reset-btn rs-update-sections" data-rs-id="${rid}" title="Repopulate every section that uses this set (Static refs)"><ha-icon icon="mdi:refresh"></ha-icon>Update Sections using this Rule Set</span>
             </div>
@@ -5388,9 +6452,9 @@ class SEEDCardEditor extends HTMLElement {
     return `
       <details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>
         <summary class="seed-ed-panel-summary">
-          <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:filter-variant" class="seed-ed-panel-title-icon"></ha-icon>Entity Rule Sets</div>
-          <div class="seed-ed-hint">Named, reusable entity filters. Sections assign one or more sets (Static or Dynamic) to choose which entities they show.</div>
+          <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:filter-variant" class="seed-ed-panel-title-icon"></ha-icon>Entity Filter Rules</div>
         </summary>
+        <span class="seed-ed-hint">Named, reusable entity filters. Sections assign one or more (Static or Dynamic) to choose which entities they show.</span>
         <details class="seed-ed-rs-info">
           <summary><ha-icon icon="mdi:information-outline"></ha-icon>Click Here For More Info</summary>
           <div class="seed-ed-rs-info-body">
@@ -5402,56 +6466,148 @@ class SEEDCardEditor extends HTMLElement {
           </div>
         </details>
         <div class="seed-ed-add-row">
-          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="rs-add"><ha-icon icon="mdi:plus"></ha-icon>Add Rule Set</div>
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="rs-add"><ha-icon icon="mdi:plus"></ha-icon>Add Filter Rule</div>
         </div>
         ${setBlocks || '<span class="seed-ed-hint">No rule sets yet. Add one, then assign it to a section.</span>'}
+      </details>`;
+  }
+
+  // Live preview of the entities a Filter Rule set currently matches — shown in
+  // the Builder so you're not guessing. Mirrors the per-section membership
+  // Preview (evalRuleSetMembers + ms-preview-list). Collapsed by default.
+  _atRuleSetPreviewHtml(rs) {
+    const ids = (rs && this._hass) ? evalRuleSetMembers(rs, this._hass) : [];
+    const rows = ids.slice(0, 60).map(id =>
+      `<div class="ms-prev-row">${escapeHtml(this._friendly(id))} <span class="seed-ed-hint">${escapeHtml(id)}</span></div>`
+    ).join('') || '<span class="seed-ed-hint">No entities match this rule set.</span>';
+    return `
+      <details class="seed-ed-substyle ms-preview" data-panel="rspreview-${rs.id}">
+        <summary class="seed-ed-substyle-sum">
+          <ha-icon icon="mdi:eye-outline" class="seed-ed-rs-sum-icon"></ha-icon>
+          <span class="seed-ed-substyle-name">Preview</span>
+          <span class="seed-ed-hint" style="flex:1;">${ids.length} entit${ids.length === 1 ? 'y' : 'ies'}${ids.length > 60 ? ' (first 60)' : ''}</span>
+        </summary>
+        <div class="seed-ed-substyle-body">
+          <div class="ms-preview-list">${rows}</div>
+        </div>
       </details>`;
   }
 
   // ------- Global "Effect Presets" panel (border+glow+shadow+edge bundles) ---
   _AT_EDGE_SIDES = [['top', 'Top'], ['bottom', 'Bottom'], ['left', 'Left'], ['right', 'Right']];
 
-  _atEdgeSideEditor(fid, fx, side) {
-    const e = (fx.edges && fx.edges[side]) || { enabled: false, thickness: 1, stops: [] };
+  // Per-edge editor. `labelSide` overrides the shown label (used by the
+  // "all edges the same" mode, where one editor edits the `top` side but is
+  // labelled "All edges").
+  _atEdgeSideEditor(fid, fx, side, labelSide) {
+    const e = (fx.edges && fx.edges[side]) || { enabled: false, thickness: 1, gradient: true, color: 'match', stops: [] };
     const b = `edges.${side}`;
     const on = e.enabled === true;
+    const isGrad = e.gradient !== false;
+    const label = labelSide || (side[0].toUpperCase() + side.slice(1) + ' edge');
     let body = `
       <div class="seed-ed-font-row">
-        <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="${b}.enabled" ${on ? 'checked' : ''}/> ${side[0].toUpperCase() + side.slice(1)} edge</label>
+        <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="${b}.enabled" ${on ? 'checked' : ''}/> ${label}</label>
       </div>`;
     if (on) {
-      const stops = (e.stops || []).map((s, i) => `
-        <div class="seed-ed-rule">
-          <span class="seed-ed-hint">@</span>
-          <input type="number" class="at-input" data-at-sid="${fid}" data-at-path="${b}.stops.${i}.pos" value="${escapeHtml(String(s.pos ?? 0))}" min="0" max="100" step="1" style="width:64px;" /><span class="seed-ed-hint">%</span>
-          <input type="text" class="at-input" data-at-sid="${fid}" data-at-path="${b}.stops.${i}.color" value="${escapeHtml(s.color || 'transparent')}" placeholder="#rrggbb / transparent" style="width:130px;" />
-          <ha-icon class="seed-ed-icon-btn at-del" icon="mdi:close" data-at-sid="${fid}" data-at-list="${b}.stops" data-at-idx="${i}" title="Remove stop"></ha-icon>
-        </div>`).join('');
+      // Solid ↔ Gradient sub-mode.
       body += `
-        ${this._atSlider(fid, `${b}.thickness`, 'Thickness (px)', e.thickness ?? 1, 1, 12, 1)}
-        <div class="seed-ed-rules">${stops || '<span class="seed-ed-hint">No stops. Add 3 for a transparent→color→transparent fade.</span>'}</div>
-        <div class="seed-ed-add-btn seed-ed-add-btn-sm at-add" data-at-sid="${fid}" data-at-list="${b}.stops" data-at-new="edgestop"><ha-icon icon="mdi:plus"></ha-icon>Add stop</div>`;
+        <div class="seed-ed-font-row">
+          <label>Type
+            <select class="fx-edge-mode at-structural" data-fx-id="${fid}" data-fx-side="${side}">
+              <option value="solid" ${!isGrad ? 'selected' : ''}>Solid line</option>
+              <option value="gradient" ${isGrad ? 'selected' : ''}>Gradient</option>
+            </select>
+          </label>
+        </div>
+        ${this._atSlider(fid, `${b}.thickness`, 'Thickness (px)', e.thickness ?? 1, 1, 12, 1)}`;
+      if (!isGrad) {
+        // Solid: color SOURCE dropdown — Match (border/icon color) / Theme
+        // (theme divider color) / Custom (a hex picker shown only for Custom).
+        const col = e.color || 'match';
+        const mode = col === 'match' ? 'match' : (col === 'theme' ? 'theme' : 'fixed');
+        body += `
+          <div class="seed-ed-font-row">
+            <label>Color<select class="fx-edge-solid-mode at-structural" data-fx-id="${fid}" data-fx-side="${side}">
+              <option value="match" ${mode === 'match' ? 'selected' : ''}>Match (border/icon color)</option>
+              <option value="theme" ${mode === 'theme' ? 'selected' : ''}>Theme</option>
+              <option value="fixed" ${mode === 'fixed' ? 'selected' : ''}>Custom color</option>
+            </select></label>
+            ${mode === 'fixed' ? `<label>&nbsp;<input type="color" class="at-input" data-at-sid="${fid}" data-at-path="${b}.color" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : '#2196F3'}" /></label>` : ''}
+          </div>
+          <span class="seed-ed-hint"><b>Match</b> follows the border/icon color; <b>Theme</b> uses the theme divider color.</span>`;
+      } else {
+        const curPattern = e.pattern || '';
+        const patternOpts = EDGE_GRADIENT_PATTERN_LIST
+          .map(([v, l]) => `<option value="${v}" ${curPattern === v ? 'selected' : ''}>${l}</option>`).join('');
+        // Per-stop editor mirrors the Divider stop editor: a position SLIDER (live %),
+        // a color picker, and a source-mode dropdown (Color / Match / Transparent).
+        const stops = (e.stops || []).map((s, i) => {
+          const isMatch = s.color === 'match', isT = s.color === 'transparent';
+          const posV = clamp(Number(s.pos) || 0, 0, 100);
+          return `
+          <div class="seed-ed-rule">
+            <input type="range" class="at-input at-slider" data-at-sid="${fid}" data-at-path="${b}.stops.${i}.pos" min="0" max="100" step="1" value="${posV}" style="flex:1;" /><span class="at-slider-val">${posV}</span>
+            <input type="color" class="at-input" data-at-sid="${fid}" data-at-path="${b}.stops.${i}.color" value="${/^#[0-9a-f]{6}$/i.test(s.color || '') ? s.color : '#2196F3'}" ${(isMatch || isT) ? 'disabled' : ''} style="width:44px;" />
+            <select class="fx-edge-stop-mode" data-fx-id="${fid}" data-fx-side="${side}" data-fx-idx="${i}" title="Stop color source">
+              <option value="color" ${(!isMatch && !isT) ? 'selected' : ''}>Color</option>
+              <option value="match" ${isMatch ? 'selected' : ''}>Match</option>
+              <option value="transparent" ${isT ? 'selected' : ''}>Transp.</option>
+            </select>
+            <ha-icon class="seed-ed-icon-btn at-del" icon="mdi:close" data-at-sid="${fid}" data-at-list="${b}.stops" data-at-idx="${i}" title="Remove stop"></ha-icon>
+          </div>`;
+        }).join('');
+        body += `
+          <div class="seed-ed-font-row">
+            <label>Pattern
+              <select class="fx-edge-pattern at-structural" data-fx-id="${fid}" data-fx-side="${side}">${patternOpts}</select>
+            </label>
+          </div>
+          <div class="seed-ed-rules">${stops || '<span class="seed-ed-hint">No stops. Pick a Pattern above, or Add stops. Use <code>match</code> as a color to follow the border/icon color.</span>'}</div>
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm at-add" data-at-sid="${fid}" data-at-list="${b}.stops" data-at-new="edgestop"><ha-icon icon="mdi:plus"></ha-icon>Add stop</div>`;
+      }
     }
     return `<div class="seed-ed-ruleblock">${body}</div>`;
   }
 
   // A small storage-location badge for a preset. A local preset lives in THIS
   // card's config; if an identical (by content) preset also exists in the
+<<<<<<< HEAD
+  // Style Library, we mark it "In Library" so the user knows it's published.
+=======
   // Preset Library, we mark it "In Library" so the user knows it's published.
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
   // Location badge distinguishing where a preset lives:
   //  - a lib: preset is System-wide (shared library, every card can use it)
   //  - otherwise it's Local (this card only)
   _fxLocationBadge(fx) {
+<<<<<<< HEAD
+    if (fx && fx._builtin) {
+      return `<span class="seed-ed-loc-badge seed-ed-loc-builtin" title="Built-in fallback frame — read-only. Duplicate it to make an editable System preset."><ha-icon icon="mdi:lock-outline"></ha-icon>Built-In</span>`;
+    }
+    const isLib = typeof fx.id === 'string' && fx.id.startsWith('lib:');
+    if (isLib) {
+      return `<span class="seed-ed-loc-badge seed-ed-loc-lib" title="Shared System preset — available to every card. Edits here update every card that uses it."><ha-icon icon="mdi:earth"></ha-icon>System</span>`;
+    }
+    // Legacy local preset from a pre-System-only config (read-compat only).
+    return `<span class="seed-ed-loc-badge seed-ed-loc-card" title="Legacy card-local preset. Use Move to System to publish it to the shared library."><ha-icon icon="mdi:card-outline"></ha-icon>Local (legacy)</span>`;
+=======
     const isLib = typeof fx.id === 'string' && fx.id.startsWith('lib:');
     if (isLib) {
       return `<span class="seed-ed-loc-badge seed-ed-loc-lib" title="Shared library preset — available to every card. Edits here update every card that uses it."><ha-icon icon="mdi:earth"></ha-icon>System</span>`;
     }
     return `<span class="seed-ed-loc-badge seed-ed-loc-card" title="Lives in this card only. Use Save to Library to make it available to every card."><ha-icon icon="mdi:card-outline"></ha-icon>Local</span>`;
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
   }
 
   _atFramePresetEditor(fx) {
     const fid = fx.id;
+<<<<<<< HEAD
+    const isBuiltin = !!fx._builtin;
+    const isLib = typeof fid === 'string' && fid.startsWith('lib:') && !isBuiltin;
+=======
     const isLib = typeof fid === 'string' && fid.startsWith('lib:');
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     const usesFid = fr => fr && Array.isArray(fr.presets) && fr.presets.includes(fid);
     const usedBy = (this._config.sections || []).filter(s => usesFid(s.frame)).length
       + (usesFid(this._config.card_frame) ? 1 : 0);
@@ -5468,23 +6624,36 @@ class SEEDCardEditor extends HTMLElement {
         <summary class="seed-ed-substyle-sum">
           <ha-icon icon="mdi:auto-fix" class="seed-ed-rs-sum-icon"></ha-icon>
           ${badge}
-          <span class="seed-ed-substyle-name" style="flex:1;">${escapeHtml(fx.name || 'Frame Preset')}</span>
+          <span class="seed-ed-substyle-name" style="flex:1;">${escapeHtml(fx.name || 'Frame Style')}${fx.note ? ` <span class="seed-ed-hint" title="${escapeHtml(fx.note)}">📝</span>` : ''}</span>
           <span class="seed-ed-hint">${usedBy} use${usedBy === 1 ? '' : 's'}</span>
         </summary>
         <div class="seed-ed-substyle-body">
           <div class="seed-ed-fx-actions">
-            <input type="text" class="at-input" data-at-sid="${fid}" data-at-path="name" value="${escapeHtml(fx.name || '')}" placeholder="Preset name" style="flex:1;" />
+            ${isBuiltin
+              ? `<span class="at-input" style="flex:1; opacity:0.7;">${escapeHtml(fx.name || 'Built-In')}</span>`
+              : `<input type="text" class="at-input" data-at-sid="${fid}" data-at-path="name" value="${escapeHtml(fx.name || '')}" placeholder="Style name" style="flex:1;" />`}
             <ha-icon class="seed-ed-icon-btn fx-export" icon="mdi:export-variant" data-fx-id="${fid}" title="Export preset to text"></ha-icon>
+<<<<<<< HEAD
+            ${isBuiltin
+              ? `<ha-icon class="seed-ed-icon-btn fx-lib-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate into an editable System preset"></ha-icon>`
+              : isLib
+              ? `<ha-icon class="seed-ed-icon-btn fx-lib-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate in the shared System library"></ha-icon>
+                 <ha-icon class="seed-ed-icon-btn fx-lib-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete from the shared System library"></ha-icon>`
+              : `<ha-icon class="seed-ed-icon-btn fx-save-lib" icon="mdi:cloud-upload-outline" data-fx-id="${fid}" title="Move to System: publish to the shared library and link this card to it"></ha-icon>
+=======
             ${isLib
               ? `<ha-icon class="seed-ed-icon-btn fx-lib-tolocal" icon="mdi:card-plus-outline" data-fx-id="${fid}" title="Copy to this card as a Local preset"></ha-icon>
                  <ha-icon class="seed-ed-icon-btn fx-lib-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate in the shared library"></ha-icon>
                  <ha-icon class="seed-ed-icon-btn fx-lib-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete from the shared library"></ha-icon>`
               : `<ha-icon class="seed-ed-icon-btn fx-save-lib" icon="mdi:cloud-upload-outline" data-fx-id="${fid}" title="Make System-wide: publish to the shared library and link this card to it"></ha-icon>
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
                  <ha-icon class="seed-ed-icon-btn fx-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate preset"></ha-icon>
                  <ha-icon class="seed-ed-icon-btn fx-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete preset"></ha-icon>`}
           </div>
+          ${isBuiltin ? '<span class="seed-ed-hint">Built-in fallback frame (read-only). Duplicate it to create an editable System preset.</span>'
+            : `<div class="seed-ed-font-row"><label style="flex:1;">Note<input type="text" class="at-input" data-at-sid="${fid}" data-at-path="note" value="${escapeHtml(fx.note || '')}" placeholder="optional note (e.g. where you use this)" style="width:100%;" /></label></div>`}
           <div class="seed-ed-preview-swatch" data-fx-preview="${fid}"><span>Preview</span></div>
-
+          ${isBuiltin ? '' : `
           <div class="seed-ed-group-title">Glow</div>
           <div class="seed-ed-font-row">
             <label><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="glow" ${hasGlow ? 'checked' : ''}/> Enable glow</label>
@@ -5504,8 +6673,10 @@ class SEEDCardEditor extends HTMLElement {
             <label>Color<input type="color" class="at-input" data-at-sid="${fid}" data-at-path="shadow.color" value="${/^#/.test(sh.color || '') ? sh.color : '#000000'}" ${sh.follow_icon ? 'disabled' : ''} /></label>
             <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="shadow.follow_icon" ${sh.follow_icon ? 'checked' : ''}/> Follow icon color</label>
           </div>
+          ${this._atSlider(fid, 'shadow.x', 'X offset (px)', sh.x ?? 0, -40, 40, 1)}
           ${this._atSlider(fid, 'shadow.y', 'Y offset (px)', sh.y ?? 4, -40, 40, 1)}
           ${this._atSlider(fid, 'shadow.blur', 'Blur (px)', sh.blur ?? 12, 0, 60, 1)}
+          ${this._atSlider(fid, 'shadow.spread', 'Spread (px)', sh.spread ?? 0, -20, 40, 1)}
           ${this._atSlider(fid, 'shadow.opacity', 'Opacity', sh.opacity ?? 0.35, 0, 1, 0.05)}` : ''}
 
           <div class="seed-ed-group-title">Border</div>
@@ -5520,6 +6691,13 @@ class SEEDCardEditor extends HTMLElement {
           ${this._atSlider(fid, 'border.radius', 'Radius (px)', bd.radius ?? 12, 0, 24, 1)}
           <div class="seed-ed-side-toggles">
             ${this._AT_EDGE_SIDES.map(([s, l]) => `<label><input type="checkbox" class="at-check fx-border-side" data-at-sid="${fid}" data-fx-side="${s}" ${sideOn(s) ? 'checked' : ''}/> ${l}</label>`).join('')}
+          </div>
+          <span class="seed-ed-hint">Rounded corners (TL, TR, BR, BL) — untick to square a corner:</span>
+          <div class="seed-ed-side-toggles">
+            ${[['0', 'TL'], ['1', 'TR'], ['2', 'BR'], ['3', 'BL']].map(([i, l]) => {
+              const cn = Array.isArray(bd.corners) ? bd.corners : [true, true, true, true];
+              return `<label><input type="checkbox" class="at-check" data-at-sid="${fid}" data-at-path="border.corners.${i}" ${cn[Number(i)] !== false ? 'checked' : ''}/> ${l}</label>`;
+            }).join('')}
           </div>` : ''}
 
           <div class="seed-ed-group-title">Background</div>
@@ -5537,9 +6715,14 @@ class SEEDCardEditor extends HTMLElement {
             ${bgMode === 'custom' ? `<label>Color<input type="color" class="at-input" data-at-sid="${fid}" data-at-path="background.color" value="${/^#/.test((fx.background && fx.background.color) || '') ? fx.background.color : '#1c1c1c'}" /></label>` : ''}
           </div>` : ''}
 
-          <div class="seed-ed-group-title">Edge Lines</div>
-          <span class="seed-ed-hint">Gradient lines on each edge (position % + color per stop). The reference blue glow uses top+bottom fades: transparent 0% → color 50% → transparent 100%.</span>
-          ${this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}
+          <div class="seed-ed-group-title">Edges (Border / Gradient)</div>
+          <span class="seed-ed-hint">Each edge is a <b>Solid line</b> or a <b>Gradient</b> (stops + patterns; a <code>match</code> color follows the border/icon color). Turn on "All edges the same" for one editor applied to every side, or leave off for independent per-side control.</span>
+          <div class="seed-ed-font-row">
+            <label><input type="checkbox" class="fx-edges-allsame at-structural" data-fx-id="${fid}" ${fx.edges && fx.edges.all_same ? 'checked' : ''}/> All edges the same</label>
+          </div>
+          ${(fx.edges && fx.edges.all_same)
+            ? this._atEdgeSideEditor(fid, fx, 'top', 'All edges')
+            : this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}
 
           <div class="seed-ed-group-title">Condition (optional)</div>
           <div class="seed-ed-font-row">
@@ -5566,8 +6749,26 @@ class SEEDCardEditor extends HTMLElement {
               </select>
             </label>
           </div>`}` : ''}
+          `}
+          ${isLib ? this._atFrameSaveRow(fid.slice(4)) : ''}
         </div>
       </details>`;
+  }
+
+  // Save/Discard row for a lib: Frame Style. Edits live in this._frameDrafts[slug]
+  // until Save commits them to the shared library. Dirty state is driven entirely
+  // by the `seed-ed-fx-saverow-dirty` container class (see _atHeaderSaveRow) so a
+  // live scalar edit can enable BOTH buttons by toggling one class.
+  _atFrameSaveRow(slug) {
+    const d = this._frameDrafts[slug];
+    const dirty = !!(d && d.dirty);
+    return `<div class="seed-ed-fx-saverow${dirty ? ' seed-ed-fx-saverow-dirty' : ''}" data-fx-saverow="${escapeHtml(slug)}">
+      <span class="seed-ed-hint seed-ed-fx-unsaved"><ha-icon icon="mdi:content-save-alert"></ha-icon> Unsaved — shared Frame Style; Save applies it to every card that uses it.</span>
+      <div class="seed-ed-font-row" style="gap:8px;">
+        <div class="seed-ed-add-btn seed-ed-add-btn-sm fx-save-draft" data-fx-slug="${escapeHtml(slug)}"><ha-icon icon="mdi:content-save"></ha-icon>Save</div>
+        <div class="seed-ed-add-btn seed-ed-add-btn-sm fx-discard-draft" data-fx-slug="${escapeHtml(slug)}"><ha-icon icon="mdi:undo"></ha-icon>Discard</div>
+      </div>
+    </div>`;
   }
 
   // Paint each effect's live preview swatch (always shows it as active, i.e.
@@ -5578,10 +6779,20 @@ class SEEDCardEditor extends HTMLElement {
   // whole editor whenever a config had an effect preset.
   _paintFramePreviews() {
     const iconColor = (this._config.colors && this._config.colors.icon) || '#2196F3';
+<<<<<<< HEAD
+    // Built-In + System library presets + any legacy local presets all render
+    // editor blocks, so paint swatches for all of them.
+    const lib = frameLibraryMap(this._config.frame_library_scope);
+    const allPresets = [builtinFramePreset()]
+      // Draft-aware: paint the unsaved draft look for any lib preset being edited.
+      .concat(Object.keys(lib).map(s => this._frameDisplayPreset(s) || lib[s]))
+      .concat(this._config.frame_presets || []);
+=======
     // Local presets + shared-library presets both render editor blocks now, so
     // paint swatches for both.
     const lib = frameLibraryMap(this._config.frame_library_scope);
     const allPresets = (this._config.frame_presets || []).concat(Object.keys(lib).map(s => lib[s]));
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     allPresets.forEach(fx => {
       const el = this.querySelector(`[data-fx-preview="${fx.id}"]`);
       if (!el) return;
@@ -5602,7 +6813,9 @@ class SEEDCardEditor extends HTMLElement {
         el.style.borderBottom = on('bottom') ? `${fx.border.width}px solid ${bc}` : 'none';
         el.style.borderLeft = on('left') ? `${fx.border.width}px solid ${bc}` : 'none';
         el.style.borderRight = on('right') ? `${fx.border.width}px solid ${bc}` : 'none';
-        el.style.borderRadius = `${fx.border.radius}px`;
+        const cn = Array.isArray(fx.border.corners) && fx.border.corners.length === 4 ? fx.border.corners : [true, true, true, true];
+        const r = fx.border.radius;
+        el.style.borderRadius = `${cn[0] ? r : 0}px ${cn[1] ? r : 0}px ${cn[2] ? r : 0}px ${cn[3] ? r : 0}px`;
       } else { el.style.border = 'none'; }
       // Background preview: custom color, explicit transparent, or theme
       // (fall back to the editor's own surface so the swatch stays legible).
@@ -5614,7 +6827,12 @@ class SEEDCardEditor extends HTMLElement {
       } else {
         el.style.backgroundColor = '#1a1a1a';
       }
+<<<<<<< HEAD
+      const edgeMatch = (fx.border && !fx.border.follow_icon && fx.border.color) ? fx.border.color : iconColor;
+      const edge = fx.edges ? buildEdgeBackground(fx.edges, edgeMatch) : null;
+=======
       const edge = fx.edges ? buildEdgeBackground(fx.edges) : null;
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       if (edge) {
         el.style.backgroundImage = edge.image; el.style.backgroundSize = edge.size;
         el.style.backgroundPosition = edge.position; el.style.backgroundRepeat = edge.repeat;
@@ -5622,7 +6840,171 @@ class SEEDCardEditor extends HTMLElement {
     });
   }
 
+  // Editor card for one standalone Divider section. Compact: line style, size,
+  // justify, gradient toggle, and optional label/icon with placement. Uses
+  // data-div-sid on inputs; wired by _wireDividerSections().
+  _edDividerSection(section, idx, total) {
+    const sid = section.id;
+    const g = section.gradient === true;
+    const sel = (v, opts) => opts.map(([val, lbl]) => `<option value="${val}" ${v === val ? 'selected' : ''}>${lbl}</option>`).join('');
+    return `
+      <details class="seed-ed-section seed-ed-divider-editor${section.hidden ? ' seed-ed-section-hidden' : ''}" data-section-id="${sid}">
+        <summary>
+          <span class="seed-ed-section-head">
+            <ha-icon icon="mdi:minus"></ha-icon>
+            <span style="flex:1;">${section.label ? escapeHtml(section.label) : 'Divider'}</span>
+            <span class="seed-ed-section-type-badge">Divider</span>
+            <ha-icon class="seed-ed-icon-btn ed-move-up ${idx === 0 ? 'disabled' : ''}" icon="mdi:arrow-up-bold" data-section-id="${sid}"></ha-icon>
+            <ha-icon class="seed-ed-icon-btn ed-move-down ${idx === total - 1 ? 'disabled' : ''}" icon="mdi:arrow-down-bold" data-section-id="${sid}"></ha-icon>
+            <ha-icon class="seed-ed-icon-btn ed-duplicate-section" icon="mdi:content-copy" data-section-id="${sid}" title="Duplicate this divider"></ha-icon>
+            <ha-icon class="seed-ed-icon-btn ed-hide-section" icon="${section.hidden ? 'mdi:eye-off' : 'mdi:eye'}" data-section-id="${sid}" title="${section.hidden ? 'Hidden — click to show on card' : 'Shown — click to hide from card'}"></ha-icon>
+            <ha-icon class="seed-ed-icon-btn ed-remove-section" icon="mdi:trash-can-outline" data-section-id="${sid}"></ha-icon>
+          </span>
+        </summary>
+        <div class="seed-ed-section-body">
+          <div class="seed-ed-hint">Live preview:</div>
+          <div class="ed-div-preview" data-div-sid="${sid}" style="border:1px dashed #444; border-radius:4px; margin-bottom:8px;">${dividerLineHtml(section, { scale: this._config.scale || 1.0, divider_color: this._edColors().section_divider })}</div>
+
+          <div class="seed-ed-font-row" style="gap:16px;flex-wrap:wrap;">
+            <label><input type="checkbox" class="ed-div-check" data-div-sid="${sid}" data-div-key="hide_line" ${section.hide_line ? '' : 'checked'} data-invert="1"/> Show Line</label>
+            <label><input type="checkbox" class="ed-div-check" data-div-sid="${sid}" data-div-key="hide_text" ${section.hide_text ? '' : 'checked'} data-invert="1"/> Show Text</label>
+            <label><input type="checkbox" class="ed-div-check" data-div-sid="${sid}" data-div-key="hide_icon" ${section.hide_icon ? '' : 'checked'} data-invert="1"/> Show Icon</label>
+          </div>
+
+          ${this._edDivSub(sid, 'Line', `
+            <div class="seed-ed-font-row">
+              <label>Line style<select class="ed-div-input" data-div-sid="${sid}" data-div-key="line_style" ${g ? 'disabled' : ''}>${sel(section.line_style || 'solid', [['solid','Solid'],['dashed','Dashed'],['dotted','Dotted']])}</select></label>
+              <label>Line position<select class="ed-div-input" data-div-sid="${sid}" data-div-key="justify">${sel(section.justify || 'center', [['left','Left'],['center','Center'],['right','Right']])}</select></label>
+            </div>
+            ${this._edDivSlider(sid, 'thickness', 'Thickness (px)', section.thickness ?? 1, 1, 12, 1)}
+            ${this._edDivSlider(sid, 'length', 'Length (%)', section.length ?? 100, 5, 100, 5)}
+            <div class="seed-ed-checkbox-row">
+              <input type="checkbox" class="ed-div-check" data-div-sid="${sid}" data-div-key="gradient" ${g ? 'checked' : ''} />
+              <label>Gradient line</label>
+            </div>
+            ${g ? `<span class="seed-ed-hint">Color stops left → right — position (0–100%) + color, <b>Transparent</b> (fade), or <b>Theme</b> (theme divider color). Gradient uses a solid line (dashed/dotted disabled). Needs ≥ 2 stops.</span>
+            <div class="seed-ed-font-row">
+              <label>Pattern<select class="ed-div-gpattern" data-div-sid="${sid}">
+                <option value="" ${section.gradient_pattern == null ? 'selected' : ''}>Custom…</option>
+                ${DIVIDER_GRADIENT_PATTERNS.map((p, pi) => `<option value="${pi}" ${String(section.gradient_pattern) === String(pi) ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+              </select></label>
+            </div>
+            <div class="ed-div-stops">${(Array.isArray(section.stops) ? section.stops : []).map((st, i) => {
+              const isT = st.color === 'transparent', isTheme = st.color === 'theme';
+              const posV = clamp(Number(st.pos) || 0, 0, 100);
+              return `<div class="seed-ed-rule ed-div-stop-row">
+                <input type="range" class="ed-div-stop-pos" data-div-sid="${sid}" data-idx="${i}" min="0" max="100" step="1" value="${posV}" style="flex:1;" /><span class="seed-ed-hint ed-div-stop-pos-val">${posV}%</span>
+                <input type="color" class="ed-div-stop-color" data-div-sid="${sid}" data-idx="${i}" value="${/^#[0-9a-f]{6}$/i.test(st.color || '') ? st.color : '#2196F3'}" ${(isT || isTheme) ? 'disabled' : ''} style="width:44px;" />
+                <select class="ed-div-stop-mode" data-div-sid="${sid}" data-idx="${i}" title="Stop color source">
+                  <option value="color" ${(!isT && !isTheme) ? 'selected' : ''}>Color</option>
+                  <option value="theme" ${isTheme ? 'selected' : ''}>Theme</option>
+                  <option value="transparent" ${isT ? 'selected' : ''}>Transp.</option>
+                </select>
+                <ha-icon class="seed-ed-icon-btn ed-div-stop-remove" icon="mdi:close" data-div-sid="${sid}" data-idx="${i}" title="Remove stop"></ha-icon>
+              </div>`;
+            }).join('') || '<span class="seed-ed-hint">No stops yet. Pick a Pattern above, or Add a stop.</span>'}</div>
+            <div class="seed-ed-add-btn seed-ed-add-btn-sm ed-div-stop-add" data-div-sid="${sid}"><ha-icon icon="mdi:plus"></ha-icon>Add color stop</div>
+            ${((section.content_justify || section.justify || 'center') === 'center' && (section.text_position || 'on') === 'on' && !section.hide_line && (section.label || section.icon)) ? `<div class="seed-ed-checkbox-row"><label><input type="checkbox" class="ed-div-check" data-div-sid="${sid}" data-div-key="mirror_center" ${section.mirror_center ? 'checked' : ''}/> Mirror gradient around center</label></div>` : ''}
+            `
+            : `<div class="seed-ed-colors"><div class="seed-ed-color"><label>Color:</label>
+              <input type="color" class="ed-div-input" data-div-sid="${sid}" data-div-key="color" value="${/^#/.test(section.color || '') ? section.color : '#333333'}" /></div></div>`}
+          `)}
+
+          ${this._edDivSub(sid, 'Text', `
+            <div class="seed-ed-slider-row"><label><span>Label:</span></label>
+              <input type="text" class="ed-div-input" data-div-sid="${sid}" data-div-key="label" value="${escapeHtml(section.label || '')}" placeholder="e.g. Active" style="flex:1;" /></div>
+            <div class="seed-ed-font-row">
+              <label>Text position<select class="ed-div-input" data-div-sid="${sid}" data-div-key="text_position">${sel(section.text_position || 'on', [['above','Above line'],['on','On line'],['below','Below line']])}</select></label>
+              <label>Content align<select class="ed-div-input" data-div-sid="${sid}" data-div-key="content_justify">${sel(section.content_justify || section.justify || 'center', [['left','Left'],['center','Center'],['right','Right']])}</select></label>
+            </div>
+            ${this._edDivSlider(sid, 'indent', 'Indent (px)', section.indent ?? 0, 0, 200, 4)}
+            ${this._edDivSlider(sid, 'text_size', 'Text size (px)', section.text_size ?? 13, 8, 40, 1)}
+            <div class="seed-ed-font-row">
+              <label>Text weight<select class="ed-div-input" data-div-sid="${sid}" data-div-key="text_weight">${sel(String(section.text_weight || '600'), [['300','300'],['400','400'],['500','500'],['600','600'],['700','700']])}</select></label>
+              ${(() => { const tm = section.text_color_mode || (section.text_color ? 'fixed' : 'line'); return `<label>Text color<select class="ed-div-input at-structural" data-div-sid="${sid}" data-div-key="text_color_mode">${sel(tm, [['line','Line color'],['theme','Theme'],['fixed','Custom']])}</select></label>`; })()}
+            </div>
+            ${(section.text_color_mode || (section.text_color ? 'fixed' : 'line')) === 'fixed' ? `<div class="seed-ed-colors"><div class="seed-ed-color"><label>Text color:</label><input type="color" class="ed-div-input" data-div-sid="${sid}" data-div-key="text_color" value="${/^#[0-9a-f]{6}$/i.test(section.text_color || '') ? section.text_color : '#ffffff'}" /></div></div>` : ''}
+            ${(section.text_color_mode || (section.text_color ? 'fixed' : 'line')) === 'line' && section.gradient ? `<span class="seed-ed-hint">A gradient line has no single color — "Line color" uses the first solid gradient stop. For an exact color, choose <b>Custom</b>.</span>` : ''}
+          `)}
+
+          ${this._edDivSub(sid, 'Icon', `
+            <div class="seed-ed-slider-row"><label><span>Icon:</span></label>
+              <input type="text" class="ed-div-input" data-div-sid="${sid}" data-div-key="icon" value="${escapeHtml(section.icon || '')}" placeholder="mdi:...  " style="flex:1;" />${section.icon ? `<ha-icon icon="${escapeHtml(normalizeIcon(section.icon))}" style="margin-left:6px;"></ha-icon>` : ''}</div>
+            ${this._edDivSlider(sid, 'icon_size', 'Icon size (px)', section.icon_size ?? 0, 0, 48, 1, 'auto')}
+            ${(() => { const im = section.icon_color_mode || (section.icon_color ? 'fixed' : 'text'); return `
+            <div class="seed-ed-font-row">
+              <label>Icon color<select class="ed-div-input at-structural" data-div-sid="${sid}" data-div-key="icon_color_mode">${sel(im, [['text','Match text'],['theme','Theme'],['fixed','Custom']])}</select></label>
+            </div>
+            ${im === 'fixed' ? `<div class="seed-ed-colors"><div class="seed-ed-color"><label>Icon color:</label><input type="color" class="ed-div-input" data-div-sid="${sid}" data-div-key="icon_color" value="${/^#[0-9a-f]{6}$/i.test(section.icon_color || '') ? section.icon_color : '#ffffff'}" /></div></div>` : ''}`; })()}
+          `)}
+        </div>
+      </details>`;
+  }
+
+  // A collapsible Line/Text/Icon sub-panel inside a divider editor — mirrors the
+  // Color card's _subpanel: an accent header + chevron, body renders only when
+  // open. Uses the existing seed-ed-substyle details (open state auto-preserved
+  // via _openSubPanels), so no new state is needed.
+  _edDivSub(sid, label, bodyHtml) {
+    // Flat 'flush' subpanel (top-divider separator, no bordered box) — matches
+    // the subpanel style used everywhere else in the editor (_edCardSub, section
+    // panels). Open state still persists via _openSubPanels (keyed by data-panel).
+    return `
+      <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="div-${label}">
+        <summary class="seed-ed-substyle-sum">
+          <span class="seed-ed-substyle-name" style="flex:1;">${label}</span>
+        </summary>
+        <div class="seed-ed-substyle-body">${bodyHtml}</div>
+      </details>`;
+  }
+  // Collapsible sub-panel for the Card Appearance groups (Title, Section
+  // Headers, Scaling, …) — same seed-ed-substyle pattern as the divider subs,
+  // so open-state persists automatically via _openSubPanels (keyed by
+  // data-panel). `key` must be stable/unique within the panel.
+  _edCardSub(key, label, bodyHtml, opts) {
+    const o = opts || {};
+    const cls = o.frame ? ' seed-ed-substyle-frame' : '';
+    // seed-ed-substyle-flush: borderless subpanel separated by a top divider
+    // line (matches the Color card's Card Appearance subpanels — image 4),
+    // instead of an individually-bordered box.
+    return `
+      <details class="seed-ed-substyle seed-ed-substyle-flush${cls}" data-panel="card-${key}">
+        <summary class="seed-ed-substyle-sum">
+          <span class="seed-ed-substyle-name" style="flex:1;">${label}</span>
+        </summary>
+        <div class="seed-ed-substyle-body">${bodyHtml}</div>
+      </details>`;
+  }
+  _edDivSlider(sid, key, label, cur, min, max, step, zeroLabel) {
+    const v = Number.isFinite(Number(cur)) ? Number(cur) : min;
+    const unit = key === 'length' ? '%' : (/size|thickness|indent/.test(key) ? 'px' : '');
+    const shown = (v === 0 && zeroLabel) ? zeroLabel : `${v}${unit}`;
+    const zeroAttr = zeroLabel ? ` data-div-zero="${escapeHtml(zeroLabel)}"` : '';
+    return `<div class="seed-ed-slider-row"><label><span>${label}:</span></label>
+      <input type="range" class="ed-div-input" data-div-sid="${sid}" data-div-key="${key}"${zeroAttr} min="${min}" max="${max}" step="${step}" value="${v}" />
+      <span class="seed-ed-slider-value ed-div-val" data-div-sid="${sid}" data-div-key="${key}">${shown}</span></div>`;
+  }
+
   _atFramePresetsPanel() {
+<<<<<<< HEAD
+    // One unified list: the read-only Built-In fallback first, then the
+    // System-wide (shared library) presets. There is no card-local frame
+    // concept — every editable preset lives in the shared System library.
+    // (Any legacy card-local presets from an older config still render for
+    // read-compat, tagged "Local (legacy)", so old cards keep working.)
+    const fxs = this._config.frame_presets || [];
+    const lib = frameLibraryMap(this._config.frame_library_scope);
+    const libSlugs = Object.keys(lib).sort();
+    const builtinBlock = this._atFramePresetEditor(builtinFramePreset());
+    // Show the DRAFT for any lib preset with unsaved edits so the editor reflects them.
+    const libBlocks = libSlugs.map(slug => this._atFramePresetEditor(this._frameDisplayPreset(slug) || lib[slug])).join('');
+    const legacyBlocks = fxs.map(fx => this._atFramePresetEditor(fx)).join('');
+    const blocks = builtinBlock + libBlocks + legacyBlocks;
+    return `
+      <details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>
+        <summary class="seed-ed-panel-summary">
+          <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:auto-fix" class="seed-ed-panel-title-icon"></ha-icon>Frame Styles</div>
+=======
     // One unified list: this card's Local presets first, then the System-wide
     // (shared library) presets. Both render full editor blocks; the Local vs
     // System badge + icon show where each lives.
@@ -5637,12 +7019,18 @@ class SEEDCardEditor extends HTMLElement {
         <summary class="seed-ed-panel-summary">
           <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:auto-fix" class="seed-ed-panel-title-icon"></ha-icon>Frame Presets</div>
           <div class="seed-ed-hint">Named, reusable frame styles (border + glow + shadow + background + edge lines), optionally conditional. Each preset stores only what you set; presets layer onto a section or the card in order (last wins). <b>Local</b> presets live in this card; <b>System</b> presets live in a shared library and are editable from any card. This is the single place all frame styling is defined.</div>
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
         </summary>
+        <span class="seed-ed-hint">Build, edit and store styles. To apply a Frame, use Card Appearance → Card Frame or per section in the section under Section Order.<br>Library items are shared system-wide. Built-In is read-only; duplicate to customize.</span>
         <div class="seed-ed-add-row">
-          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-add"><ha-icon icon="mdi:plus"></ha-icon>Add Frame Preset</div>
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-add"><ha-icon icon="mdi:plus"></ha-icon>Add Frame Style</div>
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-import"><ha-icon icon="mdi:import"></ha-icon>Import from text</div>
         </div>
+<<<<<<< HEAD
+        ${blocks}
+=======
         ${blocks || '<span class="seed-ed-hint">No frame presets yet. Add one, then apply it to a section or the card.</span>'}
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
 
         <div id="fx-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
           <div class="seed-ed-hint" id="fx-portal-label"></div>
@@ -5728,32 +7116,46 @@ class SEEDCardEditor extends HTMLElement {
     fr = fr || { presets: [] };
     const lib = frameLibraryMap(this._config.frame_library_scope);
     const libSlugs = Object.keys(lib).sort();
+    const legacyLocal = this._config.frame_presets || [];
     const opts = (sel, placeholder) => {
       let html = `<option value="" ${!sel ? 'selected' : ''}>${escapeHtml(placeholder || '— none —')}</option>`;
-      html += (this._config.frame_presets || []).map(fx => `<option value="${fx.id}" ${sel === fx.id ? 'selected' : ''}>${escapeHtml(fx.name)}</option>`).join('');
+      // Built-In fallback always available.
+      html += `<option value="${BUILTIN_FRAME_ID}" ${sel === BUILTIN_FRAME_ID ? 'selected' : ''}>Built-In</option>`;
       if (libSlugs.length) {
-        html += `<optgroup label="Preset Library">` +
+        html += `<optgroup label="System Presets">` +
           libSlugs.map(slug => `<option value="lib:${escapeHtml(slug)}" ${sel === 'lib:' + slug ? 'selected' : ''}>${escapeHtml(lib[slug].name || slug)}</option>`).join('') +
+          `</optgroup>`;
+      }
+      if (legacyLocal.length) {
+        html += `<optgroup label="Local (legacy)">` +
+          legacyLocal.map(fx => `<option value="${fx.id}" ${sel === fx.id ? 'selected' : ''}>${escapeHtml(fx.name)}</option>`).join('') +
           `</optgroup>`;
       }
       return html;
     };
     const nameOf = id => {
+      if (id === BUILTIN_FRAME_ID) return 'Built-In';
       if (typeof id === 'string' && id.startsWith('lib:')) {
         const slug = id.slice(4); const p = lib[slug];
-        return (p ? (p.name || slug) : slug) + ' (library)';
+        return (p ? (p.name || slug) : slug) + ' (System)';
       }
-      const p = (this._config.frame_presets || []).find(f => f.id === id);
-      return p ? p.name : id;
+      const p = legacyLocal.find(f => f.id === id);
+      return p ? p.name + ' (legacy)' : id;
     };
     const disabledSet = new Set(fr.disabled || []);
+    const ignoreSet = new Set(fr.ignore_conditions || []);
+    const byId = this._framePresetsById ? this._framePresetsById() : {};
+    // Does this preset carry a condition? (when/when_entity or a section-membership kind)
+    const hasCond = id => { const p = byId[id]; return !!(p && (p.when_kind || (p.when && p.when_entity))); };
     const applied = (fr.presets || []).map((id, i) => {
       const off = disabledSet.has(id);
+      const cond = hasCond(id);
       return `
       <div class="seed-ed-rule" style="${off ? 'opacity:0.5;' : ''}">
         <ha-icon class="seed-ed-icon-btn fr-move" data-fr-sid="${sid}" data-fr-idx="${i}" data-fr-dir="-1" icon="mdi:arrow-up-bold" title="Move up"></ha-icon>
         <ha-icon class="seed-ed-icon-btn fr-move" data-fr-sid="${sid}" data-fr-idx="${i}" data-fr-dir="1" icon="mdi:arrow-down-bold" title="Move down"></ha-icon>
-        <span style="flex:1;">${escapeHtml(nameOf(id))}${off ? ' <span class="seed-ed-hint">(disabled)</span>' : ''}</span>
+        <span style="flex:1;">${escapeHtml(nameOf(id))}${off ? ' <span class="seed-ed-hint">(disabled)</span>' : ''}${cond ? ' <span class="seed-ed-hint" title="Conditional style">◈</span>' : ''}</span>
+        ${cond ? `<label class="seed-ed-hint" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;" title="Apply this layer even when its condition is false"><input type="checkbox" class="fr-ignore" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" ${ignoreSet.has(id) ? 'checked' : ''} />ignore cond.</label>` : ''}
         <ha-icon class="seed-ed-icon-btn fr-toggle" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" icon="${off ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}" title="${off ? 'Disabled — click to enable' : 'Enabled — click to disable (preview without it)'}"></ha-icon>
         <ha-icon class="seed-ed-icon-btn fr-remove" data-fr-sid="${sid}" data-fr-idx="${i}" icon="mdi:close" title="Remove"></ha-icon>
       </div>`;
@@ -5775,6 +7177,50 @@ class SEEDCardEditor extends HTMLElement {
   _friendly(id) {
     const st = this._hass ? this._hass.states[id] : null;
     return st ? (st.attributes.friendly_name || id) : id;
+  }
+
+  // Confirmation gate for destructive editor actions. Returns true to proceed.
+  // Wrapped in try/catch so a headless/blocked confirm() never hard-blocks.
+  _confirmDelete(message) {
+    try { return window.confirm(message); } catch (e) { return true; }
+  }
+
+  // Direct entity picker for an entity-group section: a search box + a
+  // scrollable candidate list (client-filtered, no re-render → keeps focus) with
+  // add buttons, plus the assigned-entity chips. Writes section.entities via the
+  // existing ed-section-entity-* handlers. This is the primary way to pick a
+  // section's entities; rule-set membership (below) is the filter-based option.
+  // "Currently Selected" — just the section's assigned-entity chips (what it
+  // shows right now). assignedChipsHtml is built by the caller.
+  _sectionSelectedChipsHtml(section, assignedChipsHtml) {
+    return `<div class="seed-ed-strip-tags">${assignedChipsHtml}</div>`;
+  }
+
+  // The searchable individual-entity picker (search box + candidate list + add
+  // buttons + add-all/clear). Writes section.entities via ed-sec-* handlers.
+  _sectionEntitySearchHtml(section, pickerOptions) {
+    const sid = section.id;
+    const nameOnly = (opt) => {
+      const l = opt.label || opt.value;
+      return l.replace(/\s*\([^)]*\)\s*$/, '') || opt.value;
+    };
+    const rows = (pickerOptions || []).map(opt => {
+      const nm = nameOnly(opt);
+      return `<div class="seed-ed-ent-row ed-sec-cand" data-section-id="${sid}" data-entity-id="${opt.value}" data-search="${escapeHtml((opt.value + ' ' + nm).toLowerCase())}">
+        <span class="seed-ed-ent-name">${escapeHtml(nm)}</span>
+        <span class="seed-ed-ent-id">${escapeHtml(opt.value)}</span>
+        <button class="seed-ed-ent-add ed-sec-cand-add" data-section-id="${sid}" data-entity-id="${opt.value}" title="Add">+</button>
+      </div>`;
+    }).join('') || '<span class="seed-ed-hint">No more entities match the card filter.</span>';
+    return `
+      <div class="seed-ed-group-div" style="margin:2px 0 6px;">Add individual entities</div>
+      <input type="text" class="seed-ed-search ed-sec-entity-search" data-section-id="${sid}" placeholder="Search entities to add…" />
+      <div class="seed-ed-entity-list ed-sec-cand-list" data-section-id="${sid}">${rows}</div>
+      <div class="seed-ed-select-allnone">
+        <span class="ed-section-select-all" data-section-id="${sid}">Add all shown</span>
+        <span class="seed-ed-allnone-sep">·</span>
+        <span class="ed-section-select-none" data-section-id="${sid}">Clear all</span>
+      </div>`;
   }
 
   _atMembershipPanel(section) {
@@ -5816,10 +7262,10 @@ class SEEDCardEditor extends HTMLElement {
       ? sets.map(s => `<option value="${s.id}" ${s.id === previewId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('')
       : '<option value="">(no rule sets — create one above)</option>';
 
-    // Inner content only (no outer <details>) — the caller wraps this together
-    // with Entity Display Rules inside one "Section Entities" panel.
+    // Filter-rules membership only (assigned sets + assign row + preview). The
+    // Name Cleaner is now a separate group (_atNameCleanerHtml).
     return `
-        <div class="seed-ed-group-div" style="margin:2px 0 6px;">Membership — Rule Sets</div>
+        <div class="seed-ed-group-div" style="margin:2px 0 6px;">Assigned filter rules</div>
         <div class="seed-ed-rules">${assigned}</div>
         <div class="seed-ed-group-div" style="margin:10px 0 6px; font-weight:400; color:#999;">Assign a rule set</div>
         <div class="seed-ed-font-row">
@@ -5838,8 +7284,14 @@ class SEEDCardEditor extends HTMLElement {
         <div class="seed-ed-add-row">
           <div class="seed-ed-add-btn seed-ed-add-btn-sm ms-assign" data-at-sid="${sid}" data-ms-mode="dynamic"><ha-icon icon="mdi:plus"></ha-icon>Assign Dynamic</div>
           <div class="seed-ed-add-btn seed-ed-add-btn-sm ms-assign" data-at-sid="${sid}" data-ms-mode="static"><ha-icon icon="mdi:plus"></ha-icon>Assign Static</div>
-        </div>
-        <div class="seed-ed-group-div" style="margin:12px 0 6px;">Entity Name Cleaner</div>
+        </div>`;
+  }
+
+  // Entity Name Cleaner (per-section strip strings). Its own group now.
+  _atNameCleanerHtml(section) {
+    const sid = section.id;
+    return `
+        <div class="seed-ed-group-div" style="margin:2px 0 6px;">Entity Name Cleaner</div>
         <span class="seed-ed-hint">Strip these substrings from this section's names (added on top of the card-global list).</span>
         <input type="text" class="at-input at-input-multi" data-at-sid="${sid}" data-at-path="strip_strings" value="${escapeHtml((section.strip_strings || []).join(', '))}" placeholder=" Light,  Sensor,  Shade" style="width:100%;" />`;
   }
@@ -6220,6 +7672,262 @@ class SEEDCardEditor extends HTMLElement {
     return `<div class="seed-ed-style-field-title">State icon (advanced)</div>${body}`;
   }
 
+  // Section editor: the applied Header Rule Sets list (ordered) + an add row.
+  // Each applied ref = a set (Built-In or library) + an entity binding (blank =
+  // the section's own primary entity). Mirrors _atFrameRefEditor structurally.
+  _atHeaderRuleRefEditor(sid, section, opts) {
+    const flush = !!(opts && opts.flush);
+    const refs = Array.isArray(section.header_rule_refs) ? section.header_rule_refs : [];
+    const lib = headerLibraryMap((this._config && this._config.header_library_scope) || 'system');
+    const libSlugs = Object.keys(lib).sort();
+    const nameOf = id => {
+      if (id === BUILTIN_HEADER_ID) return 'Built-In';
+      if (typeof id === 'string' && id.startsWith('lib:')) { const slug = id.slice(4); const s = lib[slug]; return (s ? (s.name || slug) : slug) + ' (System)'; }
+      return id;
+    };
+    // The Library default entity for a ref's set (if any), so we can show the
+    // effective binding state and only warn when NOTHING is bound.
+    const libDefaultOf = id => {
+      if (typeof id !== 'string' || !id.startsWith('lib:')) return '';
+      const s = lib[id.slice(4)];
+      return (s && s.default_entity) ? String(s.default_entity) : '';
+    };
+    const applied = refs.map((r, i) => {
+      const libDef = libDefaultOf(r.ref);
+      const boundHere = !!r.entity;
+      const bound = boundHere || !!libDef;   // effective: overridden here, or Library default
+      const src = boundHere ? 'bound here' : (libDef ? 'from Library default' : '');
+      const boundIcon = bound ? 'mdi:link-variant' : 'mdi:link-variant-off';
+      const boundTitle = bound ? ('Entity bound (' + escapeHtml(src) + ')') : 'No entity bound';
+      return `
+      <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-hdr-ref" data-panel="hdrref-${escapeHtml(String(sid))}-${i}">
+        <summary class="seed-ed-substyle-sum">
+          <ha-icon class="seed-ed-hdr-bound ${bound ? 'seed-ed-hdr-bound-on' : 'seed-ed-hdr-bound-off'}" icon="${boundIcon}" title="${boundTitle}"></ha-icon>
+          <span class="seed-ed-substyle-name" style="flex:1;">${escapeHtml(nameOf(r.ref))}</span>
+          ${boundHere ? `<span class="seed-ed-hdr-ref-ent" title="Bound entity">${escapeHtml(r.entity)}</span>` : ''}
+          <ha-icon class="seed-ed-icon-btn at-del" data-at-sid="${sid}" data-at-list="header_rule_refs" data-at-idx="${i}" icon="mdi:trash-can-outline" title="Remove"></ha-icon>
+        </summary>
+        <div class="seed-ed-substyle-body">
+        ${this._atHeaderEntBinding(sid, `header_rule_refs.${i}.entity`, r.entity || '', {
+          checkboxLabel: 'Choose an Entity',
+          blankLabel: libDef ? ('Blank = Library default (' + escapeHtml(libDef) + ')') : "Blank = the section's own entity",
+          warn: !bound,
+          warnText: 'You must bind an entity to this rule for it to be enforced. No entity is bound for this rule in the Rule Library.'
+        })}
+        </div>
+      </details>`;
+    }).join('');
+    const addOpts = `<option value="">— add a Header Rule Set —</option>`
+      + `<option value="${BUILTIN_HEADER_ID}">Built-In</option>`
+      + (libSlugs.length ? `<optgroup label="System">${libSlugs.map(slug => `<option value="lib:${escapeHtml(slug)}">${escapeHtml(lib[slug].name || slug)}</option>`).join('')}</optgroup>` : '');
+    return `
+      <details class="seed-ed-substyle${flush ? ' seed-ed-substyle-flush' : ''}">
+        <summary>HEADER RULES</summary>
+        <div class="seed-ed-substyle-body">
+          <span class="seed-ed-hint">Apply one or more <b>Header Rules</b> (built in the Header Rules panel). Rules set the header icon/glyph/text color/size + a secondary line by an entity's state. Layered top→bottom, last match wins. An entity chosen here <b>overrides</b> the set's Library default entity; leave it blank to use the Library default, else the section's own first entity.</span>
+          ${applied || '<span class="seed-ed-hint">No rule sets applied.</span>'}
+          <div class="seed-ed-font-row">
+            <label>Add<select class="at-hdr-ref-add" data-at-sid="${sid}">${addOpts}</select></label>
+          </div>
+        </div>
+      </details>`;
+  }
+
+  // One rule row inside a Header Rule Set editor: a when-editor + the six
+  // optional outputs (icon color / glyph / text color / icon size / text size /
+  // secondary). Each output is only stored when set (blank = "don't set").
+  // `sid` is the hdr:<slug> target; `path` is the rule's dotted path in the set.
+  _atHeaderRuleRow(sid, path, rule, idx) {
+    rule = rule || {};
+    const sec = rule.set_secondary || {};
+    const slug = sid.startsWith('hdr:') ? sid.slice(4) : sid;
+    const previewing = this._hdrRulePreview && this._hdrRulePreview.has(slug + '||' + idx);
+    // A one-line summary of what this rule OUTPUTS, so a collapsed row is still
+    // legible. Chips for each set output (icon color swatch, mdi glyph, text
+    // color swatch, sizes, secondary line).
+    const chips = [];
+    if (rule.set_icon_color) chips.push(`<span class="seed-ed-hdr-rule-chip"><span class="seed-ed-hdr-rule-swatch" style="background:${escapeHtml(rule.set_icon_color)};"></span>icon</span>`);
+    if (rule.set_icon) chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="${escapeHtml(normalizeIcon(rule.set_icon))}"></ha-icon></span>`);
+    if (rule.set_text_color) chips.push(`<span class="seed-ed-hdr-rule-chip"><span class="seed-ed-hdr-rule-swatch" style="background:${escapeHtml(rule.set_text_color)};"></span>text</span>`);
+    if (Number(rule.set_icon_size) > 0) chips.push(`<span class="seed-ed-hdr-rule-chip">${Number(rule.set_icon_size)}px icon</span>`);
+    if (Number(rule.set_text_size) > 0) chips.push(`<span class="seed-ed-hdr-rule-chip">${Number(rule.set_text_size)}px text</span>`);
+    if (sec.enabled) chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="mdi:subtitles-outline"></ha-icon>2nd</span>`);
+    const summaryChips = chips.length ? `<span class="seed-ed-hdr-rule-chips">${chips.join('')}</span>` : '<span class="seed-ed-hint" style="opacity:0.6;">no outputs set</span>';
+    return `
+      <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-hdr-rule" data-panel="hdrrule-${slug}-${idx}">
+        <summary class="seed-ed-substyle-sum">
+          <span class="seed-ed-rule-when">Rule ${idx + 1}</span>
+          ${summaryChips}
+          <span style="flex:1;"></span>
+          <ha-icon class="seed-ed-icon-btn hdr-rule-preview${previewing ? ' hdr-rule-preview-on' : ''}" data-hdr-slug="${slug}" data-hdr-idx="${idx}" icon="mdi:eye-outline" title="Preview this rule's look"></ha-icon>
+          <ha-icon class="seed-ed-icon-btn at-del" data-at-sid="${sid}" data-at-list="rules" data-at-idx="${idx}" icon="mdi:trash-can-outline" title="Remove rule"></ha-icon>
+        </summary>
+        <div class="seed-ed-substyle-body">
+          ${previewing ? this._hdrRulePreviewHtml(rule) : ''}
+          ${rule.when_entity ? `<div class="seed-ed-hdr-ent-legacy"><span class="seed-ed-hint"><ha-icon icon="mdi:information-outline"></ha-icon> This rule has a per-rule entity (legacy). It's honored unless the card/section binds its own. Clear it to use the set's default entity instead.</span>${this._atEntityPicker(sid, `${path}.when_entity`, 'Entity', rule.when_entity, 'Blank = use the set default')}</div>` : ''}
+          ${this._atRuleWhenEditor(sid, `${path}.when`, rule.when)}
+          <div class="seed-ed-font-row">
+            ${this._atColorField(sid, `${path}.set_icon_color`, 'Icon color', rule.set_icon_color || '')}
+            <label>Icon (mdi)<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_icon" value="${escapeHtml(rule.set_icon || '')}" placeholder="mdi:…" style="width:130px;" /></label>
+          </div>
+          <div class="seed-ed-font-row">
+            ${this._atColorField(sid, `${path}.set_text_color`, 'Text color', rule.set_text_color || '')}
+          </div>
+          ${this._atSlider(sid, `${path}.set_icon_size`, 'Icon size (px)', rule.set_icon_size ?? 0, 0, 48, 1, 'Default')}
+          ${this._atSlider(sid, `${path}.set_text_size`, 'Text size (px)', rule.set_text_size ?? 0, 0, 48, 1, 'Default')}
+          <div class="seed-ed-font-row">
+            <label><input type="checkbox" class="at-check at-structural" data-at-sid="${sid}" data-at-path="${path}.set_secondary.enabled" ${sec.enabled ? 'checked' : ''}/> Show secondary info</label>
+          </div>
+          ${sec.enabled ? `<div class="seed-ed-font-row">
+            <label>Source<select class="at-input at-structural" data-at-sid="${sid}" data-at-path="${path}.set_secondary.source">${this._atOpts([['state', 'State'], ['attribute', 'Attribute'], ['last_changed_ago', 'Time since change']], sec.source || 'state')}</select></label>
+            ${(sec.source || 'state') === 'attribute' ? `<label>Attribute<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_secondary.attribute" value="${escapeHtml(sec.attribute || '')}" placeholder="brightness" style="width:120px;" /></label>` : ''}
+            <label>Prefix<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_secondary.prefix" value="${escapeHtml(sec.prefix || '')}" placeholder="e.g. 'Bri: '" style="width:90px;" /></label>
+          </div>` : ''}
+        </div>
+      </details>`;
+  }
+
+  // A static preview of ONE header rule's look — the rule's outputs force-applied
+  // (its condition ignored) so you can see the styled header without hunting for
+  // a matching entity state. Icon + text (+ a stand-in secondary line).
+  _hdrRulePreviewHtml(rule) {
+    const iconColor = rule.set_icon_color || 'var(--secondary-text-color)';
+    const textColor = rule.set_text_color || 'var(--primary-text-color)';
+    const iconSize = Number(rule.set_icon_size) > 0 ? Number(rule.set_icon_size) : 24;
+    const textSize = Number(rule.set_text_size) > 0 ? Number(rule.set_text_size) : 16;
+    const icon = rule.set_icon ? normalizeIcon(rule.set_icon) : 'mdi:tune-variant';
+    const sec = rule.set_secondary || {};
+    const secLine = sec.enabled
+      ? `<div class="seed-ed-hdr-prev-sec">${escapeHtml(sec.prefix || '')}${sec.source === 'attribute' ? (escapeHtml(sec.attribute || 'attribute')) : (sec.source === 'last_changed_ago' ? '2m ago' : 'sample value')}</div>`
+      : '';
+    return `
+      <div class="seed-ed-hdr-prev">
+        <ha-icon icon="${icon}" style="--mdc-icon-size:${iconSize}px; color:${iconColor};"></ha-icon>
+        <div class="seed-ed-hdr-prev-txt">
+          <div style="font-size:${textSize}px; color:${textColor}; font-weight:600;">Section Title</div>
+          ${secLine}
+        </div>
+      </div>`;
+  }
+
+  // Editor for ONE Header Rule Set (a lib entry). Built-In renders read-only.
+  _atHeaderSetEditor(set) {
+    const builtin = set._builtin === true;
+    const slug = (set.id && set.id.startsWith('lib:')) ? set.id.slice(4) : (set._builtin ? BUILTIN_HEADER_SLUG : headerLibSlug(set.name));
+    const sid = 'hdr:' + slug;
+    const rules = set.rules || [];
+    const body = builtin
+      ? `<span class="seed-ed-hint">Built-in fallback (light on → accent icon+text; off → muted). Read-only — duplicate it to customize.</span>`
+      : `
+        <div class="seed-ed-font-row">
+          <label style="flex:1;">Name<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="name" value="${escapeHtml(set.name || '')}" placeholder="Set name" style="width:100%;" /></label>
+        </div>
+        ${this._atHeaderEntBinding(sid, 'default_entity', set.default_entity || '', {
+          label: 'Default entity',
+          checkboxLabel: 'Bind a Default Entity (optional)',
+          blankLabel: 'No default — the card/section must bind one when applied.'
+        })}
+        ${rules.map((r, i) => this._atHeaderRuleRow(sid, `rules.${i}`, r, i)).join('')}
+        <div class="seed-ed-add-btn seed-ed-add-btn-sm at-add" data-at-sid="${sid}" data-at-list="rules" data-at-new="hdrrule"><ha-icon icon="mdi:plus"></ha-icon>Add rule</div>`;
+    const actions = builtin
+      ? `<ha-icon class="seed-ed-icon-btn hdr-export" data-hdr-slug="${slug}" icon="mdi:export-variant" title="Export this rule set to text"></ha-icon>
+         <ha-icon class="seed-ed-icon-btn hdr-duplicate" data-hdr-slug="${slug}" icon="mdi:content-copy" title="Duplicate into an editable System set"></ha-icon>`
+      : `<ha-icon class="seed-ed-icon-btn hdr-export" data-hdr-slug="${slug}" icon="mdi:export-variant" title="Export this rule set to text"></ha-icon>
+         <ha-icon class="seed-ed-icon-btn hdr-duplicate" data-hdr-slug="${slug}" icon="mdi:content-copy" title="Duplicate"></ha-icon>
+         <ha-icon class="seed-ed-icon-btn hdr-delete" data-hdr-slug="${slug}" icon="mdi:trash-can-outline" title="Delete from the shared library"></ha-icon>`;
+    const dirty = !builtin && !!(this._headerDrafts[slug] && this._headerDrafts[slug].dirty);
+    return `
+      <details class="seed-ed-substyle" data-panel="hdrset-${slug}">
+        <summary class="seed-ed-substyle-sum">
+          ${builtin ? '<span class="seed-ed-loc-badge seed-ed-loc-card"><ha-icon icon="mdi:lock"></ha-icon>Built-In</span>' : '<span class="seed-ed-loc-badge seed-ed-loc-lib"><ha-icon icon="mdi:cloud-check-outline"></ha-icon>System</span>'}
+          ${builtin ? '' : `<ha-icon class="seed-ed-hdr-bound ${set.default_entity ? 'seed-ed-hdr-bound-on' : 'seed-ed-hdr-bound-off'}" icon="${set.default_entity ? 'mdi:link-variant' : 'mdi:link-variant-off'}" title="${set.default_entity ? 'Default entity: ' + escapeHtml(set.default_entity) : 'No default entity bound'}"></ha-icon>`}
+          <span class="seed-ed-substyle-name" style="flex:1;">${escapeHtml(set.name || slug)}${dirty ? ' <span class="seed-ed-hint" title="Unsaved changes">•</span>' : ''}</span>
+        </summary>
+        <div class="seed-ed-substyle-body">
+          <div class="seed-ed-fx-actions">${actions}</div>
+          ${body}
+          ${builtin ? '' : this._atHeaderSaveRow(slug)}
+        </div>
+      </details>`;
+  }
+
+  // Save/Discard row for a Header Rule Set. Edits live in this._headerDrafts[slug]
+  // until Save commits them to the shared library.
+  //
+  // Dirty state is driven ENTIRELY by the `seed-ed-fx-saverow-dirty` class on the
+  // container: the unsaved notice, the accent border, and both buttons' enabled
+  // look are all CSS-gated on it. This lets a live scalar edit flip the whole row
+  // to dirty by toggling ONE class (no re-render, keeps focus) — and, critically,
+  // enables BOTH Save and Discard together (the old markup only class-enabled
+  // Save, so Discard could never light up on a live edit). `data-hdr-saverow`
+  // lets the live path find this row by slug.
+  _atHeaderSaveRow(slug) {
+    const d = this._headerDrafts[slug];
+    const dirty = !!(d && d.dirty);
+    return `<div class="seed-ed-fx-saverow${dirty ? ' seed-ed-fx-saverow-dirty' : ''}" data-hdr-saverow="${escapeHtml(slug)}">
+      <span class="seed-ed-hint seed-ed-fx-unsaved"><ha-icon icon="mdi:content-save-alert"></ha-icon> Unsaved — shared Header Rule; Save applies it to every card that uses it.</span>
+      <div class="seed-ed-font-row" style="gap:8px;">
+        <div class="seed-ed-add-btn seed-ed-add-btn-sm hdr-save-draft" data-hdr-slug="${escapeHtml(slug)}"><ha-icon icon="mdi:content-save"></ha-icon>Save</div>
+        <div class="seed-ed-add-btn seed-ed-add-btn-sm hdr-discard-draft" data-hdr-slug="${escapeHtml(slug)}"><ha-icon icon="mdi:undo"></ha-icon>Discard</div>
+      </div>
+    </div>`;
+  }
+
+  // Top-level "Header Rule Sets" library panel (mirrors Frame Styles).
+  _atHeaderRuleSetsPanel() {
+    const lib = headerLibraryMap((this._config && this._config.header_library_scope) || 'system');
+    const slugs = Object.keys(lib).sort();
+    // Show the DRAFT for any set with unsaved edits so the editor reflects them.
+    const blocks = this._atHeaderSetEditor(builtinHeaderRuleSet())
+      + slugs.map(s => this._atHeaderSetEditor(this._headerDisplaySet(s) || lib[s])).join('');
+    return `
+      <details class="seed-ed-sections-panel seed-ed-collapsible-panel">
+        <summary class="seed-ed-panel-summary">
+          <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:format-list-checks" class="seed-ed-panel-title-icon"></ha-icon>Header Rules</div>
+        </summary>
+        <span class="seed-ed-hint">Named sets of state-driven header rules. Each rule sets any/all of: icon color, MDI icon, text color, icon/text size, and a secondary line. Optionally <b>bind a default entity</b> here so the set works as soon as it's applied. Apply a set to the <b>Card Header</b> (Card Appearance) or any <b>Section Header</b> under its <b>Header Rules</b>. <b>Entity precedence:</b> an entity chosen on the card/section <b>overrides</b> the default entity bound here; if neither is set, the section's own first entity is used. Shared system-wide; Built-In is read-only — duplicate to customize.</span>
+        <div class="seed-ed-add-row">
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-add"><ha-icon icon="mdi:plus"></ha-icon>Add Header Rule</div>
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-import"><ha-icon icon="mdi:import"></ha-icon>Import from text</div>
+        </div>
+        ${blocks}
+
+        <div id="hdr-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
+          <div class="seed-ed-hint" id="hdr-portal-label"></div>
+          <textarea id="hdr-portal-text" class="at-input" rows="8" style="width:100%; font-family:monospace; font-size:11px;" spellcheck="false"></textarea>
+          <div class="seed-ed-add-row">
+            <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-portal-primary"></div>
+            <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-portal-close"><ha-icon icon="mdi:close"></ha-icon>Close</div>
+          </div>
+          <div class="seed-ed-hint" id="hdr-portal-status"></div>
+        </div>
+      </details>`;
+  }
+
+  // Show the shared Header import/export textarea "portal" (mirrors _fxPortal):
+  //   'export' — read-only text + a Copy button
+  //   'import' — editable text + an Import button
+  _hdrPortal(mode, text, label) {
+    const portal = this.querySelector('#hdr-portal');
+    if (!portal) return;
+    const ta = this.querySelector('#hdr-portal-text');
+    const primary = this.querySelector('#hdr-portal-primary');
+    const lbl = this.querySelector('#hdr-portal-label');
+    const status = this.querySelector('#hdr-portal-status');
+    if (status) status.textContent = '';
+    if (lbl) lbl.textContent = label || '';
+    if (ta) { ta.value = text || ''; ta.readOnly = (mode === 'export'); ta.style.display = ''; }
+    if (primary) {
+      primary.style.display = '';
+      primary.dataset.mode = mode;
+      primary.innerHTML = mode === 'export'
+        ? '<ha-icon icon="mdi:content-copy"></ha-icon>Copy'
+        : '<ha-icon icon="mdi:import"></ha-icon>Import';
+    }
+    portal.style.display = '';
+    if (mode === 'import' && ta) { try { ta.focus(); } catch (e) {} }
+  }
+
   _atTitleRowPanel(sid, section) {
     const tr = section.title_row || {};
     const cnt = tr.count || {};
@@ -6265,6 +7973,7 @@ class SEEDCardEditor extends HTMLElement {
           <div class="seed-ed-add-row">
             <div class="seed-ed-add-btn seed-ed-add-btn-sm at-add" data-at-sid="${sid}" data-at-list="title_row.parts.extra" data-at-new="textpart"><ha-icon icon="mdi:plus"></ha-icon>Add new Section Header Part</div>
           </div>
+          ${this._atHeaderRuleRefEditor(sid, section)}
         </div>
       </details>`;
   }
@@ -6369,9 +8078,9 @@ class SEEDCardEditor extends HTMLElement {
     const sid = SEEDCardEditor.TABLE_DEFAULTS_SID;
     const td = normalizeTableDefaults(this._config.table_defaults);
     return `
-      <details class="seed-ed-row" data-panel="table_defaults">
-        <summary><ha-icon class="seed-ed-summary-icon" icon="mdi:table-cog"></ha-icon>Entity Table Defaults</summary>
-        <div class="seed-ed-collapsible-body">
+      <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="table_defaults">
+        <summary class="seed-ed-substyle-sum"><ha-icon class="seed-ed-rs-sum-icon" icon="mdi:table-cog"></ha-icon><span class="seed-ed-substyle-name" style="flex:1;">Entity Table Defaults</span></summary>
+        <div class="seed-ed-substyle-body">
           <span class="seed-ed-hint">Presentation defaults (headers + row style) applied to every <strong>new</strong> Entity Table. Existing tables are unaffected unless you press <em>Reset to Table Defaults</em> inside that table's Table Styles panel.</span>
           <div class="seed-ed-at-body" style="margin-top:8px;">
             ${this._tableStyleControls(sid, td, { strip: false })}
@@ -6478,7 +8187,7 @@ class SEEDCardEditor extends HTMLElement {
         if (summary) this._openTopLevelRows.add(summary.textContent.trim());
       }
     });
-    // Top-level collapsible panels (Sections / Rule Sets / Frame Presets),
+    // Top-level collapsible panels (Sections / Rule Sets / Frame Styles),
     // keyed by their title text so their open/closed state survives re-render.
     this._openPanels = this._openPanels || new Set();
     this._openPanels.clear();
@@ -6580,23 +8289,97 @@ class SEEDCardEditor extends HTMLElement {
 
     const styles = `
       <style>
-        .seed-ed { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+        /* ============================================================
+           DESIGN TOKENS — single source of truth for the whole editor.
+           Change a value here and every control that uses the token
+           updates in one place. Seeded at the pre-refactor values so
+           this is visually identical; tune from here going forward.
+           (Mirror this block in the Color card for cross-card parity.)
+           ============================================================ */
+        .seed-ed {
+          /* Font sizes (by role, not by pixel) */
+          --ltek-fs-panel-title: 16px;  /* top-level panel / section title */
+          --ltek-fs-header: 15px;       /* editor header, panel summary */
+          --ltek-fs-group: 14px;        /* group heading inside a panel */
+          --ltek-fs-label: 13px;        /* standard field label / row */
+          --ltek-fs-body: 12px;         /* body text, most controls */
+          --ltek-fs-small: 11px;        /* hints, secondary text */
+          --ltek-fs-tiny: 10px;         /* badges, micro-labels */
+          /* Font weights */
+          --ltek-fw-normal: 400;        /* control labels (recede) */
+          --ltek-fw-medium: 500;
+          --ltek-fw-semibold: 600;
+          --ltek-fw-bold: 700;          /* titles, values (lead) */
+          /* Text colors */
+          --ltek-c-text: var(--primary-text-color, #e1e1e1);  /* primary */
+          --ltek-c-label: #ccc;         /* control labels */
+          --ltek-c-muted: #888;         /* hints / disabled */
+          --ltek-c-accent: var(--primary-color, #2196F3);
+          /* Accent tints — hover / active fills (kept as rgba literals; one place
+             to change). Default to the Material blue the cards shipped with. */
+          --ltek-c-accent-fade: rgba(var(--rgb-primary-color,33,150,243),0.12);       /* active / pressed fill */
+          --ltek-c-accent-fade-soft: rgba(var(--rgb-primary-color,33,150,243),0.08);  /* hover fill */
+          --ltek-c-error-fade: rgba(244,67,54,0.15);         /* delete hover fill */
+          /* Status colors — defer to the user's theme, fall back to Material. */
+          --ltek-c-error: var(--error-color, #f44336);
+          --ltek-c-success: var(--success-color, #4caf50);
+          --ltek-c-warning: var(--warning-color, #ffb300);
+          --ltek-c-info: var(--info-color, #2196F3);
+          /* Second accent: the green "library / shared" grouping (distinct from
+             the blue layout accent on purpose — NOT tied to --primary-color). */
+          --ltek-c-accent-lib: #7fd18a;
+          --ltek-c-on-accent: #fff;   /* text/icon on a solid accent fill */
+          /* Action icons (edit/copy/hide/etc): neutral idle → brighten on hover.
+             Delete stays a status color (error) on its own hover. */
+          --ltek-c-icon: #aaa;        /* idle action icon */
+          --ltek-c-icon-hover: #fff;  /* hovered action icon */
+          /* Surfaces */
+          --ltek-c-surface: rgba(255,255,255,0.015);        /* panels */
+          --ltek-c-surface-raised: rgba(255,255,255,0.02);  /* cards / rows */
+          /* Borders */
+          --ltek-c-panel-border: #3a3a3a;   /* panels */
+          --ltek-c-border: #444;            /* controls */
+          --ltek-c-border-soft: #333;       /* subtle inner dividers */
+          /* Radii */
+          --ltek-r-panel: 12px;   /* panels */
+          --ltek-r-card: 10px;    /* section cards */
+          --ltek-r-md: 8px;       /* blocks */
+          --ltek-r-ctrl: 6px;     /* inputs, selects, buttons */
+          /* Spacing scale (4px base) */
+          --ltek-sp-1: 4px;
+          --ltek-sp-2: 6px;
+          --ltek-sp-3: 8px;
+          --ltek-sp-4: 10px;
+          --ltek-sp-5: 12px;
+          --ltek-sp-6: 16px;
+          /* Control padding — uniform input/select/button height. */
+          --ltek-ctrl-pad: 6px 10px;
+          /* Icon sizes (two clear roles; one-off glyphs stay literal). */
+          --ltek-icon-sm: 16px;   /* inline / action icons */
+          --ltek-icon-lg: 20px;   /* panel-title icons */
+          /* Slider row geometry (shared by every slider) */
+          --ltek-slider-val-w: 44px;   /* value readout column width */
+          display: flex; flex-direction: column; gap: 8px; padding: 8px 0;
+        }
         .seed-ed-row {
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          border: 1px solid #3a3a3a;
-          border-radius: 12px;
+          gap:var(--ltek-sp-4);
+          border: 1px solid var(--ltek-c-panel-border);
+          border-radius: var(--ltek-r-panel);
           padding: 16px;
-          background: rgba(255,255,255,0.015);
+          background: var(--ltek-c-surface);
         }
-        .seed-ed-row label { font-size: 13px; font-weight: 600; color: var(--primary-text-color, #e1e1e1); }
+        /* Expanded panel → theme-color border around the whole panel, so it's
+           clear which options belong together (matches the Section Order rows). */
+        details.seed-ed-row[open] { border-color: var(--primary-color); }
+        .seed-ed-row label { font-size: var(--ltek-fs-label); font-weight: var(--ltek-fw-semibold); color: var(--ltek-c-text); }
         .seed-ed-row > label:first-child {
-          font-size: 17px;
-          font-weight: 700;
+          font-size: var(--ltek-fs-panel-title);
+          font-weight: var(--ltek-fw-bold);
         }
         .seed-ed-row > .seed-ed-hint:first-of-type {
-          font-size: 12px;
+          font-size: var(--ltek-fs-body);
           padding-bottom: 12px;
           margin-top: -2px;
           border-bottom: 1px solid #3a3a3a;
@@ -6615,19 +8398,19 @@ class SEEDCardEditor extends HTMLElement {
           cursor: pointer;
           user-select: none;
           padding: 10px 14px;
-          font-size: 15px;
-          font-weight: 700;
-          color: var(--primary-text-color, #e1e1e1);
+          font-size: var(--ltek-fs-panel-title);
+          font-weight: var(--ltek-fw-bold);
+          color: var(--ltek-c-text);
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap:var(--ltek-sp-3);
         }
         /* Group heading inside a panel: labels a cluster of related settings
            (e.g. the "Title", "Scaling", "Card Wrapper" groups within the
            single Card Appearance panel). */
         .seed-ed-group-title {
-          font-size: 14px;
-          font-weight: 700;
+          font-size: var(--ltek-fs-group);
+          font-weight: var(--ltek-fw-bold);
           /* Standout accent so group headers pop against the panel. */
           color: var(--accent-color, #2196F3);
           /* Divider line ABOVE, subtitle sits under it. */
@@ -6643,10 +8426,10 @@ class SEEDCardEditor extends HTMLElement {
           margin-top: 4px; padding-top: 0; border-top: none;
         }
         /* Frame-grouping title: distinct green accent so it reads as a separate
-           kind of grouping (Frame Presets) vs the blue layout groups. */
-        .seed-ed-group-title-frame { color: #7fd18a; border-top-color: rgba(127,209,138,0.4); }
+           kind of grouping (Frame Styles) vs the blue layout groups. */
+        .seed-ed-group-title-frame { color: var(--ltek-c-accent-lib); border-top-color: rgba(127,209,138,0.4); }
         details.seed-ed-row > summary > ha-icon.seed-ed-summary-icon {
-          --mdc-icon-size: 20px;
+          --mdc-icon-size:var(--ltek-icon-lg);
           color: ${colors.icon || '#2196F3'};
           flex-shrink: 0;
         }
@@ -6666,7 +8449,7 @@ class SEEDCardEditor extends HTMLElement {
         details.seed-ed-row > .seed-ed-collapsible-body {
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap:var(--ltek-sp-4);
           padding: 0 16px 16px 16px;
         }
         details.seed-ed-row > .seed-ed-collapsible-body > .seed-ed-hint:first-of-type {
@@ -6676,100 +8459,112 @@ class SEEDCardEditor extends HTMLElement {
         }
         .seed-ed-row input[type="text"], .seed-ed-row input[type="number"], .seed-ed-row select {
           background: var(--secondary-background-color, #1c1c1c);
-          border: 1px solid #444;
-          border-radius: 6px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-ctrl);
           padding: 8px 10px;
-          color: var(--primary-text-color, #e1e1e1);
-          font-size: 14px;
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-group);
           width: 100%;
           box-sizing: border-box;
         }
         .seed-ed-row select option { background: #1c1c1c; }
         .seed-ed-row input[type="checkbox"] { cursor: pointer; }
-        .seed-ed-hint { font-size: 11px; color: #888; }
+        .seed-ed-hint { font-size: var(--ltek-fs-small); color: var(--ltek-c-muted); }
         /* Entity Display Rules editor */
-        .seed-ed-rules { display: flex; flex-direction: column; gap: 8px; }
+        .seed-ed-rules { display: flex; flex-direction: column; gap:var(--ltek-sp-3); }
         .seed-ed-rule {
           display: flex;
           flex-wrap: wrap;
           align-items: center;
-          gap: 6px;
+          gap:var(--ltek-sp-2);
           padding: 6px;
-          border: 1px solid #333;
-          border-radius: 6px;
-          background: rgba(255,255,255,0.02);
+          border: 1px solid var(--ltek-c-border-soft);
+          border-radius: var(--ltek-r-ctrl);
+          background: var(--ltek-c-surface-raised);
         }
-        .seed-ed-rule .seed-ed-rule-when { font-size: 11px; color: #888; font-weight: 600; }
-        .seed-ed-rule .seed-ed-rule-label { font-size: 12px; color: #ccc; }
-        .seed-ed-rule-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; }
+        .seed-ed-rule .seed-ed-rule-when { font-size: var(--ltek-fs-small); color: var(--ltek-c-muted); font-weight: var(--ltek-fw-semibold); }
+        .seed-ed-rule .seed-ed-rule-label { font-size: var(--ltek-fs-body); color: var(--ltek-c-label); }
+        .seed-ed-rule-line { display: flex; flex-wrap: wrap; align-items: center; gap:var(--ltek-sp-2); flex: 1; }
         .seed-ed-rule select, .seed-ed-rule input[type="text"] {
           background: var(--secondary-background-color, #1c1c1c);
-          border: 1px solid #444;
-          border-radius: 6px;
-          padding: 5px 8px;
-          color: var(--primary-text-color, #e1e1e1);
-          font-size: 13px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-ctrl);
+          padding:var(--ltek-ctrl-pad);
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-label);
         }
         .seed-ed-rule input[type="text"] { flex: 1; min-width: 90px; }
-        .seed-ed-rule .ed-rule-join { font-weight: 700; }
+        .seed-ed-rule .ed-rule-join { font-weight: var(--ltek-fw-bold); }
         .seed-ed-mini-btn {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap:var(--ltek-sp-1);
           align-self: flex-start;
-          font-size: 12px;
-          color: #2196F3;
+          font-size: var(--ltek-fs-body);
+          color:var(--ltek-c-accent);
           cursor: pointer;
           padding: 4px 8px;
-          border: 1px dashed #2196F3;
-          border-radius: 6px;
+          border: 1px dashed var(--ltek-c-accent);
+          border-radius: var(--ltek-r-ctrl);
           user-select: none;
         }
-        .seed-ed-mini-btn:hover { background: rgba(33,150,243,0.08); }
-        .seed-ed-mini-btn ha-icon { --mdc-icon-size: 16px; }
-        .seed-ed-colors { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 0; }
+        .seed-ed-mini-btn:hover { background: var(--ltek-c-accent-fade-soft); }
+        .seed-ed-mini-btn ha-icon { --mdc-icon-size:var(--ltek-icon-sm); }
+        .seed-ed-colors { display: flex; flex-wrap: wrap; gap:var(--ltek-sp-6); padding: 4px 0; }
         .seed-ed-color {
           display: flex;
           align-items: center;
-          gap: 6px;
-          color: var(--primary-text-color, #e1e1e1);
-          font-size: 12px;
+          gap:var(--ltek-sp-2);
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-body);
         }
-        .seed-ed-color label { min-width: 0; color: #ccc; }
-        .seed-ed-color input[type="color"] {
-          width: 36px;
-          height: 28px;
-          padding: 2px;
-          border: 1px solid #333;
+        .seed-ed-color label { min-width: 0; color: var(--ltek-c-label); }
+        /* Color pickers unified with the Color card: 44x32, thin divider-color
+           border, 4px radius, no padding, flat swatch. Generic rule covers every
+           input[type=color] (bare pickers included); scoped rules just tweak size. */
+        input[type="color"] {
+          width: 44px;
+          height: 32px;
+          padding: 0;
+          border: 1px solid var(--divider-color, #333);
           border-radius: 4px;
           background: transparent;
           cursor: pointer;
+          flex: none;
+          box-sizing: border-box;
         }
-        .seed-ed-color input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-        .seed-ed-color input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
+        .seed-ed-color input[type="color"] { width: 44px; height: 32px; }
+        .seed-ed-style-field input[type="color"] { width: 100%; height: 30px; }
         .seed-ed-section {
-          border: 1px solid #444;
-          border-radius: 10px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-card);
           padding: 12px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
-          background: rgba(255,255,255,0.02);
+          gap:var(--ltek-sp-4);
+          background: var(--ltek-c-surface-raised);
         }
-        details.seed-ed-section { 
+        /* Hidden sections stay in the list but read as dimmed so it's obvious. */
+        .seed-ed-section.seed-ed-section-hidden > summary { opacity: 0.5; }
+        /* Expanded section rows get an accent border around the whole block. */
+        details.seed-ed-section[open] { border-color: var(--primary-color, #2196F3) !important; }
+        details.seed-ed-section {
           background: transparent !important;
           padding: 0;
-          border: 1px solid #444;
-          border-radius: 10px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-card);
+          margin-bottom: 8px;   /* vertical gap between section rows (matches Color's .cpce-order-list gap) */
         }
         details.seed-ed-section > summary {
           list-style: none;
           cursor: pointer;
-          padding: 8px 12px;
+          padding: 6px 8px;
           user-select: none;
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap:var(--ltek-sp-2);
         }
         details.seed-ed-section > summary::-webkit-details-marker { display: none; }
         details.seed-ed-section > summary::marker { content: ""; }
@@ -6777,114 +8572,106 @@ class SEEDCardEditor extends HTMLElement {
           padding: 0 12px 12px 12px;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap:var(--ltek-sp-4);
         }
-        .seed-ed-section-head { display: flex; align-items: center; gap: 8px; flex: 1; }
-        .seed-ed-section-head input[type="text"] { flex: 1; }
+        .seed-ed-section-head { display: flex; align-items: center; gap:var(--ltek-sp-3); flex: 1; }
+        /* Section-name field: compact like the Color card's .cpce-order-rename
+           (control padding + label font) so rows aren't taller than needed. */
+        .seed-ed-section-head input[type="text"] { flex: 1; min-width: 60px; padding: var(--ltek-ctrl-pad); background: var(--secondary-background-color, #1c1c1c); border: 1px solid var(--ltek-c-border); border-radius: var(--ltek-r-ctrl); color: var(--ltek-c-text); font-size: var(--ltek-fs-label); box-sizing: border-box; }
         .seed-ed-icon-btn {
           cursor: pointer;
-          --mdc-icon-size: 20px;
-          color: #aaa;
+          --mdc-icon-size:var(--ltek-icon-lg);
+          color: var(--ltek-c-icon);
           display: flex;
           align-items: center;
         }
-        .seed-ed-icon-btn:hover { color: #fff; }
+        .seed-ed-icon-btn:hover { color: var(--ltek-c-icon-hover); }
         .seed-ed-icon-btn.disabled { opacity: 0.25; pointer-events: none; }
-        .seed-ed-checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #ccc; }
+        .seed-ed-checkbox-row { display: flex; align-items: center; gap:var(--ltek-sp-2); font-size: var(--ltek-fs-body); color: var(--ltek-c-label); }
         .seed-ed-style-block {
-          border: 1px solid #333;
-          border-radius: 8px;
+          border: 1px solid var(--ltek-c-border-soft);
+          border-radius: var(--ltek-r-md);
           padding: 10px;
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap:var(--ltek-sp-3);
         }
         .seed-ed-style-title {
-          font-size: 11px;
-          font-weight: 700;
+          font-size: var(--ltek-fs-small);
+          font-weight: var(--ltek-fw-bold);
           text-transform: uppercase;
           letter-spacing: 0.04em;
-          color: #999;
+          color: var(--accent-color, var(--primary-color));
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap:var(--ltek-sp-3);
         }
-        .seed-ed-style-title .seed-ed-reset-btn {
+        /* All Reset controls are chip-style: accent outline + text, pill shape.
+           Scoped variants below only tweak size/placement. */
+        /* Group sub-heading rows that hold a title + optional Reset chip. Flex so
+           the Reset chip's margin-left:auto right-justifies it (was crammed left
+           because the div defaulted to block). */
+        .seed-ed-group-div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+        .seed-ed-reset-btn {
           margin-left: auto;
-          font-size: 10px;
-          font-weight: 600;
+          font-size: var(--ltek-fs-tiny);
+          font-weight: var(--ltek-fw-semibold);
           text-transform: none;
           letter-spacing: 0;
-          color: #2196F3;
+          color:var(--ltek-c-accent);
           cursor: pointer;
           user-select: none;
           display: inline-flex;
           align-items: center;
           gap: 3px;
-          padding: 2px 6px;
-          border: 1px solid #2a4a63;
-          border-radius: 5px;
-        }
-        .seed-ed-style-title .seed-ed-reset-btn:hover { background: rgba(33,150,243,0.10); }
-        .seed-ed-style-title .seed-ed-reset-btn ha-icon { --mdc-icon-size: 13px; }
-        /* Reset row inside an expanded style panel: a right-aligned pill button
-           styled like the Weather Flex Card "Reset section" control. */
-        .seed-ed-reset-row { display: flex; justify-content: flex-end; margin-top: 2px; }
-        .seed-ed-reset-row .seed-ed-reset-btn {
-          font-size: 13px;
-          font-weight: 600;
-          text-transform: none;
-          letter-spacing: 0;
-          color: #2196F3;
-          cursor: pointer;
-          user-select: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 12px;
-          border: 1px solid #2196F3;
-          border-radius: 8px;
+          padding: 2px 8px;
+          border:1px solid var(--ltek-c-accent);
+          border-radius: 999px;
           background: transparent;
+          transition: background 0.15s ease;
         }
-        .seed-ed-reset-row .seed-ed-reset-btn:hover { background: rgba(33,150,243,0.12); }
-        .seed-ed-reset-row .seed-ed-reset-btn ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
+        .seed-ed-reset-btn:hover { background: rgba(33,150,243,0.15); }
+        .seed-ed-reset-btn ha-icon { --mdc-icon-size: 12px; }
+        .seed-ed-style-title .seed-ed-reset-btn { margin-left: auto; }
+        /* Reset row inside an expanded style panel: right-aligned; same small chip. */
+        .seed-ed-reset-row { display: flex; justify-content: flex-end; margin-top: 2px; }
         .seed-ed-style-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-          gap: 10px;
+          gap:var(--ltek-sp-4);
         }
         .seed-ed-style-field { display: flex; flex-direction: column; gap: 3px; }
-        .seed-ed-style-field label { font-size: 10px; color: #999; font-weight: 400; }
-        .seed-ed-style-field label.seed-ed-custom-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+        .seed-ed-style-field label { font-size: var(--ltek-fs-tiny); color: #999; font-weight: var(--ltek-fw-normal); }
+        .seed-ed-style-field label.seed-ed-custom-toggle { display: inline-flex; align-items: center; gap:var(--ltek-sp-1); cursor: pointer; }
         .seed-ed-style-field label.seed-ed-custom-toggle input { cursor: pointer; }
         .seed-ed-style-field input[type="color"] {
           width: 100%;
           height: 30px;
           padding: 2px;
-          border-radius: 6px;
-          border: 1px solid #444;
+          border-radius: var(--ltek-r-ctrl);
+          border: 1px solid var(--ltek-c-border);
           background: transparent;
           cursor: pointer;
         }
         .seed-ed-style-field input[type="number"] {
           background: var(--secondary-background-color, #1c1c1c);
-          border: 1px solid #444;
-          border-radius: 6px;
-          padding: 5px 8px;
-          color: #e1e1e1;
-          font-size: 12px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-ctrl);
+          padding:var(--ltek-ctrl-pad);
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-body);
           width: 100%;
           box-sizing: border-box;
         }
-        .seed-ed-icon-input-row { display: flex; align-items: center; gap: 6px; }
-        .seed-ed-icon-input-row ha-icon { --mdc-icon-size: 20px; color: #ccc; flex-shrink: 0; }
+        .seed-ed-icon-input-row { display: flex; align-items: center; gap:var(--ltek-sp-2); }
+        .seed-ed-icon-input-row ha-icon { --mdc-icon-size:var(--ltek-icon-lg); color: var(--ltek-c-label); flex-shrink: 0; }
         .seed-ed-icon-input-row input[type="text"] {
           background: var(--secondary-background-color, #1c1c1c);
-          border: 1px solid #444;
-          border-radius: 6px;
-          padding: 5px 8px;
-          color: #e1e1e1;
-          font-size: 12px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-ctrl);
+          padding:var(--ltek-ctrl-pad);
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-body);
           width: 100%;
           box-sizing: border-box;
         }
@@ -6892,71 +8679,171 @@ class SEEDCardEditor extends HTMLElement {
           width: 100%;
           box-sizing: border-box;
           background: var(--secondary-background-color, #1c1c1c);
-          border: 1px solid #444;
-          border-radius: 6px;
-          padding: 6px 8px;
-          color: #e1e1e1;
-          font-size: 12px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-ctrl);
+          padding:var(--ltek-ctrl-pad);
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-body);
         }
         .seed-ed-entity-list {
           max-height: 180px;
           overflow-y: auto;
-          border: 1px solid #333;
-          border-radius: 6px;
+          border: 1px solid var(--ltek-c-border-soft);
+          border-radius: var(--ltek-r-ctrl);
           padding: 4px;
         }
         .seed-ed-entity-item {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap:var(--ltek-sp-3);
           padding: 4px 6px;
-          font-size: 12px;
+          font-size: var(--ltek-fs-body);
           color: #ddd;
           border-radius: 4px;
         }
         .seed-ed-entity-item:hover { background: rgba(255,255,255,0.05); }
-        .seed-ed-entity-item .eid { color: #888; font-size: 10px; }
+        .seed-ed-entity-item .eid { color: var(--ltek-c-muted); font-size: var(--ltek-fs-tiny); }
+        /* Clean candidate row (Color-card style): name truncates, id in a muted
+           fixed column, round accent + button — no horizontal overflow. */
+        .seed-ed-ent-row { display: flex; align-items: center; gap: var(--ltek-sp-3); padding: 5px 6px; border-top: 1px solid var(--ltek-c-border-soft); font-size: var(--ltek-fs-body); color: var(--ltek-c-text); }
+        .seed-ed-ent-row:first-child { border-top: none; }
+        .seed-ed-ent-row:hover { background: rgba(255,255,255,0.05); }
+        .seed-ed-ent-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .seed-ed-ent-id { flex: 0 1 auto; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ltek-c-muted); font-size: var(--ltek-fs-tiny); font-family: var(--code-font-family, monospace); }
+        .seed-ed-ent-add { flex: none; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border: none; border-radius: var(--ltek-r-ctrl); background: var(--ltek-c-accent); color: var(--ltek-c-on-accent); cursor: pointer; font-size: 18px; line-height: 1; }
+        .seed-ed-ent-add:hover { filter: brightness(1.1); }
+        /* Searchable single-entity picker (_atEntityPicker): a shorter list than
+           the section picker, so the row stays compact inside a rule block. */
+        .seed-ed-ent-picker .seed-ed-entity-list { max-height: 160px; }
+        .at-ent-pick { cursor: pointer; }
+        .at-ent-pick-sel { background: var(--ltek-c-accent-fade); }
+        .seed-ed-ent-selicon { flex: none; color: var(--ltek-c-accent); }
+        /* Colour-mode field: label + mode dropdown + (custom picker | theme select). */
+        .seed-ed-color-field { display: flex; align-items: center; gap: var(--ltek-sp-2); flex-wrap: wrap; }
+        .seed-ed-color-field > label { display: flex; align-items: center; gap: var(--ltek-sp-2); }
+        .seed-ed-color-field input[type="color"] { width: 44px; height: 26px; padding: 0; border: none; background: none; cursor: pointer; }
+        /* Header-rule preview box — a stand-in header row with the rule's look. */
+        .seed-ed-hdr-prev { display: flex; align-items: center; gap: var(--ltek-sp-3); padding: 8px 10px; margin: 4px 0 8px; border: 1px dashed var(--ltek-c-panel-border); border-radius: var(--ltek-r-md); background: rgba(255,255,255,0.03); }
+        .seed-ed-hdr-prev-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .seed-ed-hdr-prev-sec { font-size: var(--ltek-fs-tiny); color: var(--ltek-c-muted); }
+        .hdr-rule-preview-on { color: var(--ltek-c-accent); }
+        /* Collapsible header rule row: summary shows Rule N + output chips. */
+        .seed-ed-hdr-rule > summary .seed-ed-rule-when { flex: none; margin-right: 8px; }
+        .seed-ed-hdr-rule-chips { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--ltek-sp-2); }
+        .seed-ed-hdr-rule-chip { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border: 1px solid var(--ltek-c-border); border-radius: 10px; font-size: var(--ltek-fs-tiny); color: var(--ltek-c-muted); background: rgba(255,255,255,0.03); }
+        .seed-ed-hdr-rule-chip ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
+        .seed-ed-hdr-rule-swatch { width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,0.35); display: inline-block; }
+        /* Header-rule entity binding: bound-state icon, reveal checkbox, warning. */
+        .seed-ed-hdr-bound { flex: none; margin-right: 4px; --mdc-icon-size: 18px; }
+        .seed-ed-hdr-bound-on { color: var(--ltek-c-accent); }
+        .seed-ed-hdr-bound-off { color: var(--ltek-c-muted); opacity: 0.7; }
+        /* Bound-entity badge shown on a collapsed Header-rule ref summary. */
+        .seed-ed-hdr-ref-ent {
+          flex: none;
+          font-size: var(--ltek-fs-tiny, 11px);
+          color: var(--ltek-c-muted);
+          font-variant-numeric: tabular-nums;
+          max-width: 40%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .seed-ed-hdr-ent { margin: 4px 0 2px; }
+        .seed-ed-hdr-ent-cb { display: inline-flex; align-items: center; gap: var(--ltek-sp-2); font-size: var(--ltek-fs-body); color: var(--ltek-c-text); cursor: pointer; }
+        .seed-ed-hdr-ent-legacy { margin: 4px 0; padding: 6px 8px; border-left: 3px solid var(--ltek-c-border); border-radius: var(--ltek-r-ctrl); background: rgba(255,255,255,0.03); }
+        .seed-ed-hdr-ent-warn { display: flex; align-items: flex-start; gap: var(--ltek-sp-2); margin: 2px 0 6px; padding: 7px 9px; border: 1px solid #b8860b; border-left: 3px solid #e0a800; border-radius: var(--ltek-r-ctrl); background: rgba(224,168,0,0.10); color: #e0a800; font-size: var(--ltek-fs-tiny); line-height: 1.35; }
+        .seed-ed-hdr-ent-warn ha-icon { flex: none; --mdc-icon-size: 18px; margin-top: 1px; }
         .seed-ed-add-btn {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
+          gap:var(--ltek-sp-2);
           padding: 10px;
           border: 1px dashed ${colors.border || '#2196F3'};
-          border-radius: 8px;
+          border-radius: var(--ltek-r-md);
           color: ${colors.icon || '#2196F3'};
           cursor: pointer;
-          font-size: 13px;
-          font-weight: 600;
+          font-size: var(--ltek-fs-label);
+          font-weight: var(--ltek-fw-semibold);
         }
-        .seed-ed-add-btn:hover { background: rgba(33,150,243,0.08); }
-        .seed-ed-add-btn-sm { padding: 6px 8px; font-size: 12px; }
-        .seed-ed-add-row { display: flex; gap: 8px; }
+        .seed-ed-add-btn:hover { background: var(--ltek-c-accent-fade-soft); }
+        .seed-ed-add-btn-sm { padding: 6px 8px; font-size: var(--ltek-fs-body); }
+        /* Disabled action button (e.g. Save/Discard when there's nothing to save). */
+        .seed-ed-add-btn.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+        /* A solid (enabled) action button — used for the Frame Style Save when dirty. */
+        .seed-ed-add-btn.seed-ed-btn-enabled { border-style: solid; }
+        .seed-ed-add-btn.fx-save-draft.seed-ed-btn-enabled { background: var(--ltek-c-accent-fade); }
+        /* Frame/Header Save+Discard row + unsaved banner. The whole row's dirty
+           state is gated on ONE container class (seed-ed-fx-saverow-dirty): when
+           it's absent the banner is hidden and BOTH buttons read as disabled
+           (dimmed, no pointer events); when present both light up. This lets a
+           live scalar edit flip everything by toggling one class — and fixes the
+           old bug where Discard could never enable on a live edit. */
+        .seed-ed-fx-saverow { margin-top: 10px; padding-top: 8px; border-top: 1px solid #333; }
+        .seed-ed-fx-saverow-dirty { border-top-color: var(--ltek-c-error); }
+        .seed-ed-fx-unsaved { display: flex; align-items: center; gap:var(--ltek-sp-2); margin-bottom: 6px; color: var(--ltek-c-error); font-weight: var(--ltek-fw-semibold); }
+        .seed-ed-fx-unsaved ha-icon { --mdc-icon-size:var(--ltek-icon-sm); }
+        /* Clean row: hide the unsaved notice; both buttons look/behave disabled. */
+        .seed-ed-fx-saverow:not(.seed-ed-fx-saverow-dirty) .seed-ed-fx-unsaved { display: none; }
+        .seed-ed-fx-saverow:not(.seed-ed-fx-saverow-dirty) .seed-ed-add-btn { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+        /* Dirty row: solid buttons; Save takes the accent fill. */
+        .seed-ed-fx-saverow-dirty .seed-ed-add-btn { border-style: solid; }
+        .seed-ed-fx-saverow-dirty .hdr-save-draft,
+        .seed-ed-fx-saverow-dirty .fx-save-draft { background: var(--ltek-c-accent-fade); }
+        .seed-ed-add-row { display: flex; gap:var(--ltek-sp-3); margin-bottom: 16px; }
         .seed-ed-add-row > .seed-ed-add-btn { flex: 1; }
-        .seed-ed-title-part { display: flex; flex-direction: column; gap: 6px; }
+        .seed-ed-title-part { display: flex; flex-direction: column; gap:var(--ltek-sp-2); }
         .seed-ed-sections-panel {
-          border: 1px solid #3a3a3a;
-          border-radius: 12px;
+          border: 1px solid var(--ltek-c-panel-border);
+          border-radius: var(--ltek-r-panel);
           margin-top: 8px;
-          background: rgba(255,255,255,0.015);
+          background: var(--ltek-c-surface);
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap:var(--ltek-sp-4);
         }
         /* Non-collapsible panels keep interior padding. Collapsible ones put
            padding on the summary + body instead, so a COLLAPSED panel is just
            the summary height (no leftover body padding making it too tall). */
         .seed-ed-sections-panel:not(.seed-ed-collapsible-panel) { padding: 16px; }
         .seed-ed-collapsible-panel { padding: 0; gap: 0; }
-        .seed-ed-sections-panel-title { font-size: 17px; font-weight: 700; color: var(--primary-text-color, #e1e1e1); display: flex; align-items: center; gap: 8px; }
+        /* Expanded collapsible panel → theme-color border around the whole panel. */
+        .seed-ed-collapsible-panel[open] { border-color: var(--primary-color); }
+        .seed-ed-sections-panel-title { font-size: var(--ltek-fs-panel-title); font-weight: var(--ltek-fw-bold); color: var(--ltek-c-text); display: flex; align-items: center; gap:var(--ltek-sp-3); }
+        /* Full-width section divider that groups the reusable-definition panels
+           (matches the Color card's Libraries divider). */
+        .seed-ed-lib-divider { display: flex; align-items: center; gap: 10px; margin: 18px 2px 10px; color: var(--ltek-c-accent); font-size: var(--ltek-fs-label); font-weight: var(--ltek-fw-bold); letter-spacing: 0.02em; text-transform: uppercase; }
+        .seed-ed-lib-divider::before, .seed-ed-lib-divider::after { content: ''; flex: 1; height: 2px; background: linear-gradient(to right, transparent, var(--ltek-c-accent)); opacity: 0.5; }
+        .seed-ed-lib-divider::before { background: linear-gradient(to left, transparent, var(--ltek-c-accent)); }
+        .seed-ed-lib-divider ha-icon { --mdc-icon-size: 18px; }
         /* Summary: single click target, holds the title + hint, with a chevron
            matching the seed-ed-row panels (skewed-border, not a text glyph). */
         .seed-ed-collapsible-panel > summary.seed-ed-panel-summary {
           cursor: pointer; user-select: none; list-style: none;
           display: grid; grid-template-columns: 1fr auto; align-items: center;
-          gap: 4px 10px; padding: 14px 16px;
+          gap:var(--ltek-sp-1) 10px; padding: 14px 16px;
         }
         .seed-ed-collapsible-panel > summary.seed-ed-panel-summary > .seed-ed-hint { grid-column: 1; }
+        /* Description now lives in the BODY (shown when expanded). Tighten the
+           gap so it sits directly under the title, not floating far below:
+           the open summary drops its bottom margin, and the first body hint
+           sits snug under the title with a small top offset. */
+        /* Description = first body child (shown when expanded). Matches the
+           Color card's Section panel: sits tight under the title, small muted
+           text, modest gap before content — NO divider line. */
+        /* Description sits tight under the title (pulled up to cancel the
+           summary's bottom padding), small muted text, 8px gap before content
+           — exactly the Color card's .cpce-hint under .cpce-sec-header. */
+        /* MUST be display:block — .seed-ed-hint is a <span> (inline), and inline
+           elements IGNORE vertical margins. Without this the margin-bottom did
+           nothing (why the desc→buttons gap never changed). */
+        .seed-ed-collapsible-panel > .seed-ed-hint:first-of-type {
+          display: block;
+          margin: 0 16px 18px;
+          font-size: var(--ltek-fs-small);
+          color: var(--ltek-c-muted);
+          line-height: 1.4;
+        }
         .seed-ed-collapsible-panel > summary.seed-ed-panel-summary::-webkit-details-marker { display: none; }
         .seed-ed-collapsible-panel > summary.seed-ed-panel-summary::marker { content: ""; }
         .seed-ed-collapsible-panel > summary.seed-ed-panel-summary::after {
@@ -6968,89 +8855,117 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-collapsible-panel[open] > summary.seed-ed-panel-summary::after { transform: rotate(-135deg); }
         /* Interior padding for a collapsible panel's content lives on a wrapper
            after the summary (or directly on flowed children via this rule). */
-        .seed-ed-collapsible-panel[open] > summary.seed-ed-panel-summary { margin-bottom: 6px; }
+        .seed-ed-collapsible-panel[open] > summary.seed-ed-panel-summary { margin-bottom: 0; padding-bottom: 8px; }
         .seed-ed-collapsible-panel > *:not(summary) { margin-left: 16px; margin-right: 16px; }
         .seed-ed-collapsible-panel > *:last-child:not(summary) { margin-bottom: 16px; }
         .seed-ed-panel-title-icon { --mdc-icon-size: 20px; width: 20px; height: 20px; color: ${colors.icon || '#2196F3'}; flex-shrink: 0; }
-        .seed-ed-empty-candidates { font-size: 12px; color: #888; padding: 8px; text-align: center; font-style: italic; }
+        .seed-ed-empty-candidates { font-size: var(--ltek-fs-body); color: var(--ltek-c-muted); padding: 8px; text-align: center; font-style: italic; }
         /* ---- Activity-table editor ---- */
-        .seed-ed-at-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+        .seed-ed-at-body { display: flex; flex-direction: column; gap:var(--ltek-sp-3); margin-top: 8px; }
         /* Panel styling copied from the Weather Flex Card editor (.wfc-panel):
            #3a3a3a border, 12px radius, 8px inter-panel margin, 10px 14px
            summary padding, and a 10px 14px 14px body. */
         .seed-ed-substyle {
-          border: 1px solid #3a3a3a;
-          border-radius: 12px;
-          background: rgba(255,255,255,0.015);
+          border: 1px solid var(--ltek-c-panel-border);
+          border-radius: var(--ltek-r-panel);
+          background: var(--ltek-c-surface);
         }
+        /* Bordered subpanel rows (e.g. Frame Style presets) get vertical gap
+           between them — matches the section rows. Flush variant is exempt
+           (it uses top-dividers, no boxes). */
+        .seed-ed-substyle:not(.seed-ed-substyle-flush) { margin-bottom: 8px; }
         .seed-ed-substyle > summary {
           list-style: none;
           cursor: pointer;
           user-select: none;
           padding: 10px 14px;
-          font-size: 13px;
-          font-weight: 600;
-          color: #ddd;
+          font-size: var(--ltek-fs-label);
+          font-weight: var(--ltek-fw-semibold);
+          color: var(--ltek-c-accent);
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap:var(--ltek-sp-3);
         }
         .seed-ed-substyle > summary::-webkit-details-marker { display: none; }
         .seed-ed-substyle > summary::marker { content: ""; }
-        .seed-ed-substyle-body { padding: 10px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+        /* Sub-panel chevron — blue skewed-border caret, right-aligned, matching
+           the top-level panels. Rotates open. (Sub-panels = blue accent;
+           top-level group titles stay orange --accent-color.) */
+        .seed-ed-substyle > summary::after {
+          content: ""; margin-left: auto;
+          width: 8px; height: 8px;
+          border-right: 2px solid var(--ltek-c-accent); border-bottom: 2px solid var(--ltek-c-accent);
+          transform: rotate(-45deg); transition: transform 0.2s ease;
+        }
+        .seed-ed-substyle[open] > summary::after { transform: rotate(45deg); }
+        .seed-ed-substyle-body { padding: 10px 14px 14px; display: flex; flex-direction: column; gap:var(--ltek-sp-4); }
         /* Summary with an inline mode dropdown (shown even when collapsed). */
         .seed-ed-substyle-sum { list-style: none; }
         .seed-ed-substyle-sum::-webkit-details-marker { display: none; }
-        .seed-ed-rs-sum-icon { color: #4a9eff; --mdc-icon-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
+        .seed-ed-rs-sum-icon { color: var(--ltek-c-accent); --mdc-icon-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
         /* Storage-location badge on a preset's collapsed summary. */
         .seed-ed-loc-badge {
           display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
-          font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
-          padding: 2px 7px; border-radius: 10px; line-height: 1.4;
+          font-size: var(--ltek-fs-tiny); font-weight: var(--ltek-fw-semibold); text-transform: uppercase; letter-spacing: 0.03em;
+          padding: 2px 7px; border-radius: var(--ltek-r-card); line-height: 1.4;
         }
         .seed-ed-loc-badge ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
         .seed-ed-loc-card { color: #cfcfcf; background: rgba(255,255,255,0.08); }
-        .seed-ed-loc-lib { color: #7fd18a; background: rgba(76,175,80,0.15); }
+        .seed-ed-loc-lib { color: var(--ltek-c-accent-lib); background: rgba(76,175,80,0.15); }
         /* Actions row lives INSIDE the expanded body so nothing is clickable
            while collapsed (prevents accidental delete/export). */
-        .seed-ed-fx-actions { display: flex; align-items: center; gap: 6px; }
+        .seed-ed-fx-actions { display: flex; align-items: center; gap:var(--ltek-sp-2); }
         .seed-ed-preview-swatch {
-          height: 56px; border-radius: 10px; margin: 6px 0 10px;
+          height: 56px; border-radius: var(--ltek-r-card); margin: 6px 0 10px;
           background: #1a1a1a; display: flex; align-items: center; justify-content: center;
-          color: #888; font-size: 12px; box-sizing: border-box;
+          color: var(--ltek-c-muted); font-size: var(--ltek-fs-body); box-sizing: border-box;
         }
         .seed-ed-rs-info { margin: 6px 0 10px; }
         .seed-ed-rs-info > summary {
-          display: flex; align-items: center; gap: 6px; cursor: pointer;
-          font-size: 12px; color: #4a9eff; list-style: none; user-select: none;
+          display: flex; align-items: center; gap:var(--ltek-sp-2); cursor: pointer;
+          font-size: var(--ltek-fs-body); color: var(--ltek-c-accent); list-style: none; user-select: none;
         }
         .seed-ed-rs-info > summary::-webkit-details-marker { display: none; }
-        .seed-ed-rs-info > summary ha-icon { --mdc-icon-size: 16px; width: 16px; height: 16px; }
+        .seed-ed-rs-info > summary ha-icon { --mdc-icon-size:var(--ltek-icon-sm); width: 16px; height: 16px; }
         .seed-ed-rs-info-body {
           margin-top: 6px; padding: 8px 10px;
           border-left: 2px solid rgba(74,158,255,0.5);
           background: rgba(74,158,255,0.06); border-radius: 4px;
-          font-size: 12px; color: #cfcfcf; line-height: 1.45;
+          font-size: var(--ltek-fs-body); color: #cfcfcf; line-height: 1.45;
         }
         .seed-ed-rs-info-body p { margin: 0 0 8px; }
         .seed-ed-rs-info-body p:last-child { margin-bottom: 0; }
         .seed-ed-rs-info-body strong { color: #e8e8e8; }
         .ms-preview-list { max-height: 220px; overflow-y: auto; }
-        .ms-prev-row { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; font-size: 12px; }
-        .seed-ed-substyle-sum .seed-ed-substyle-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: 12px; color: #bbb; flex-shrink: 0; }
+        .ms-prev-row { display: flex; justify-content: space-between; gap:var(--ltek-sp-3); padding: 1px 0; font-size: var(--ltek-fs-body); }
+        .seed-ed-substyle-sum .seed-ed-substyle-name { text-transform: uppercase; letter-spacing: 0.04em; font-size: var(--ltek-fs-body); color: var(--ltek-c-accent); flex-shrink: 0; }
+        /* Frame sub-panel: green "library" accent on its summary name, matching
+           the old .seed-ed-group-title-frame accent (Frame Styles grouping). */
+        .seed-ed-substyle-frame > summary .seed-ed-substyle-name { color: var(--ltek-c-accent-lib); }
+        /* Flush subpanel: no box border/radius/bg — just a top divider line
+           between siblings (Color-card style, image 4). First one has no line. */
+        .seed-ed-substyle-flush { border: none; border-radius: 0; background: none; border-top: 1px solid var(--ltek-c-panel-border); }
+        .seed-ed-substyle-flush:first-of-type { border-top: none; }
+        .seed-ed-substyle-flush > summary { padding: 10px 2px 4px; }
+        .seed-ed-substyle-flush > .seed-ed-substyle-body { padding: 0 2px 10px; }
+        /* When flush subpanels sit inside a flex container with a gap (e.g. the
+           section-body), cancel the gap between consecutive flush items so they
+           touch — separated only by the top-divider line, not empty space. */
+        .seed-ed-substyle-flush + .seed-ed-substyle-flush { margin-top: calc(-1 * var(--ltek-sp-4)); }
         .seed-ed-substyle-sum .seed-ed-sum-select {
           flex: 1;
           min-width: 0;
           background: var(--secondary-background-color, #1c1c1c);
-          border: 1px solid #444;
-          border-radius: 6px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-ctrl);
           padding: 4px 6px;
-          color: var(--primary-text-color, #e1e1e1);
-          font-size: 12px;
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-body);
         }
-        .seed-ed-style-field-title { font-size: 12px; font-weight: 600; color: #9cc; margin-top: 4px; }
-        .seed-ed-at-body .at-input, .seed-ed-at-body select.at-input { font-size: 12px; }
-        .seed-ed-at-body .seed-ed-rule { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .seed-ed-style-field-title { font-size: var(--ltek-fs-body); font-weight: var(--ltek-fw-bold); text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent-color, var(--primary-color)); margin-top: 4px; display: flex; align-items: center; gap:var(--ltek-sp-2); }
+        .seed-ed-style-field-title::before { content: ''; flex: none; width: 4px; height: 13px; border-radius: 2px; background: var(--accent-color, var(--primary-color)); }
+        .seed-ed-at-body .at-input, .seed-ed-at-body select.at-input { font-size: var(--ltek-fs-body); }
+        .seed-ed-at-body .seed-ed-rule { display: flex; align-items: center; gap:var(--ltek-sp-2); flex-wrap: wrap; }
         /* Keep rule controls inside the panel: flex children default to
            min-width:auto and refuse to shrink below their content, which pushed
            long dropdowns/inputs past the right edge. Force shrink + clamp. */
@@ -7060,31 +8975,35 @@ class SEEDCardEditor extends HTMLElement {
           box-sizing: border-box;
         }
         .seed-ed-at-body .seed-ed-rule > select.at-input { text-overflow: ellipsis; }
-        .seed-ed-slider-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .seed-ed-slider-row > label { font-size: 12px; color: #ccc; min-width: 90px; }
-        .seed-ed-slider-row input[type="range"] { flex: 1; min-width: 80px; }
-        .seed-ed-slider-row .at-slider-val {
-          font-size: 12px;
-          color: #9cc;
-          min-width: 34px;
+        /* ---- Unified slider row (single definition; was two conflicting
+           blocks + two value classes). Label hugs its control (no min-width,
+           like the dropdown rows); the value is bold + fixed-width +
+           right-aligned + tabular-nums so it stands out and never jitters
+           while dragging. .at-slider-val and .seed-ed-slider-value are kept
+           as aliases so both markup helpers style identically. ---- */
+        .seed-ed-slider-row { display: flex; align-items: center; gap:var(--ltek-sp-4); padding: 4px 0; flex-wrap: wrap; }
+        .seed-ed-slider-row label { font-size: var(--ltek-fs-body); color: var(--ltek-c-label); font-weight: var(--ltek-fw-normal); display: flex; align-items: center; gap:var(--ltek-sp-3); }
+        .seed-ed-slider-row input[type="range"] { flex: 1; min-width: 100px; accent-color: var(--ltek-c-accent); cursor: pointer; }
+        .seed-ed-slider-row .at-slider-val,
+        .seed-ed-slider-row .seed-ed-slider-value {
+          min-width: var(--ltek-slider-val-w);
           text-align: right;
+          font-size: var(--ltek-fs-body);
+          font-weight: var(--ltek-fw-bold);
+          color: var(--ltek-c-text);
           font-variant-numeric: tabular-nums;
         }
         .seed-ed-ruleblock {
           border: 1px solid rgba(255,255,255,0.08);
-          border-radius: 6px;
+          border-radius: var(--ltek-r-ctrl);
           padding: 6px;
           margin: 4px 0;
           display: flex;
           flex-direction: column;
-          gap: 4px;
+          gap:var(--ltek-sp-1);
         }
-        .seed-ed-when { display: flex; flex-direction: column; gap: 4px; }
-        .seed-ed-when-head { display: flex; align-items: center; gap: 6px; }
+        .seed-ed-when { display: flex; flex-direction: column; gap:var(--ltek-sp-1); }
+        .seed-ed-when-head { display: flex; align-items: center; gap:var(--ltek-sp-2); }
         .seed-ed-cond-row { margin-left: 10px; }
         .seed-ed-rule-result { margin-top: 2px; }
         .seed-ed-add-btn-xs {
@@ -7092,17 +9011,17 @@ class SEEDCardEditor extends HTMLElement {
           align-items: center;
           gap: 2px;
           padding: 2px 8px;
-          font-size: 11px;
+          font-size: var(--ltek-fs-small);
           border: 1px dashed rgba(33,150,243,0.5);
-          border-radius: 12px;
-          color: #2196F3;
+          border-radius: var(--ltek-r-panel);
+          color:var(--ltek-c-accent);
           cursor: pointer;
         }
-        .seed-ed-add-btn-xs:hover { background: rgba(33,150,243,0.08); }
+        .seed-ed-add-btn-xs:hover { background: var(--ltek-c-accent-fade-soft); }
         .seed-ed-add-btn-xs ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
         .seed-ed-rule-group {
           border: 1px dashed rgba(33,150,243,0.4);
-          border-radius: 6px;
+          border-radius: var(--ltek-r-ctrl);
           padding: 6px;
           margin: 4px 0;
         }
@@ -7110,50 +9029,50 @@ class SEEDCardEditor extends HTMLElement {
            ANY=amber. Applied to the group border + the mode/match dropdowns. */
         .seed-ed-rule-group.seed-rs-include { border-color: rgba(76,175,80,0.55); }
         .seed-ed-rule-group.seed-rs-exclude { border-color: rgba(244,67,54,0.55); }
-        select.seed-rs-mode { font-weight: 700; }
-        select.seed-rs-mode.seed-rs-include { color: #4CAF50; border-color: #4CAF50; }
-        select.seed-rs-mode.seed-rs-exclude { color: #F44336; border-color: #F44336; }
-        select.seed-rs-match { font-weight: 700; }
-        select.seed-rs-match.seed-rs-all { color: #2196F3; border-color: #2196F3; }
-        select.seed-rs-match.seed-rs-any { color: #FFB300; border-color: #FFB300; }
+        select.seed-rs-mode { font-weight: var(--ltek-fw-bold); }
+        select.seed-rs-mode.seed-rs-include { color: var(--ltek-c-success); border-color: var(--ltek-c-success); }
+        select.seed-rs-mode.seed-rs-exclude { color: var(--ltek-c-error); border-color: var(--ltek-c-error); }
+        select.seed-rs-match { font-weight: var(--ltek-fw-bold); }
+        select.seed-rs-match.seed-rs-all { color:var(--ltek-c-accent); border-color:var(--ltek-c-accent); }
+        select.seed-rs-match.seed-rs-any { color: var(--ltek-c-warning); border-color: var(--ltek-c-warning); }
         .seed-ed-rule-group-body {
           margin-left: 14px;
           padding-left: 8px;
           border-left: 2px solid rgba(255,255,255,0.1);
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap:var(--ltek-sp-2);
           margin-top: 6px;
         }
         .seed-ed-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 12px;
+          gap:var(--ltek-sp-5);
         }
         .seed-ed-subsection {
-          border: 1px solid #333;
-          border-radius: 8px;
+          border: 1px solid var(--ltek-c-border-soft);
+          border-radius: var(--ltek-r-md);
           padding: 8px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
+          gap:var(--ltek-sp-2);
         }
         .seed-ed-subsection label {
-          font-size: 12px;
-          font-weight: 600;
+          font-size: var(--ltek-fs-body);
+          font-weight: var(--ltek-fw-semibold);
         }
         .seed-ed-subsection select {
-          font-size: 12px;
-          padding: 6px 8px;
+          font-size: var(--ltek-fs-body);
+          padding:var(--ltek-ctrl-pad);
         }
         .seed-ed-yaml {
           border: 1px solid ${colors.border || '#2196F3'};
-          border-radius: 10px;
+          border-radius: var(--ltek-r-card);
           padding: 12px;
           background: rgba(0,0,0,0.25);
           color: #cde6ff;
           font-family: monospace;
-          font-size: 12px;
+          font-size: var(--ltek-fs-body);
           line-height: 1.5;
           margin: 0;
           max-height: 320px;
@@ -7161,15 +9080,15 @@ class SEEDCardEditor extends HTMLElement {
           white-space: pre;
         }
         .seed-ed-hint-text {
-          font-size: 11px;
-          color: #888;
+          font-size: var(--ltek-fs-small);
+          color: var(--ltek-c-muted);
           font-style: italic;
           padding: 4px 0;
         }
         .seed-ed-section-type-badge {
-          font-size: 10px;
+          font-size: var(--ltek-fs-tiny);
           padding: 2px 8px;
-          border-radius: 10px;
+          border-radius: var(--ltek-r-card);
           background: ${colors.border || '#2196F3'}33;
           color: ${colors.border || '#2196F3'};
           border: 1px solid ${colors.border || '#2196F3'}66;
@@ -7177,39 +9096,36 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-header {
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap:var(--ltek-sp-3);
           padding: 2px 2px 10px;
           border-bottom: 1px solid #333;
           margin-bottom: 4px;
         }
         .seed-ed-header ha-icon { --mdc-icon-size: 22px; color: ${colors.icon || '#2196F3'}; }
-        .seed-ed-header-title { font-size: 15px; font-weight: 700; color: var(--primary-text-color, #e1e1e1); }
-        .seed-ed-header-build { margin-left: auto; font-size: 11px; color: #888; font-family: var(--code-font-family, monospace); }
-        .seed-ed-slider-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; flex-wrap: wrap; }
-        .seed-ed-slider-row label { font-size: 12px; color: #ccc; display: flex; align-items: center; gap: 8px; }
-        .seed-ed-slider-row input[type="range"] { flex: 1; min-width: 100px; accent-color: ${colors.border || '#2196F3'}; cursor: pointer; }
-        .seed-ed-slider-value { min-width: 40px; text-align: center; font-size: 12px; color: #e1e1e1; font-weight: 500; }
-        .seed-ed-side-toggles { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px 0; }
-        .seed-ed-side-toggles label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #ccc; cursor: pointer; }
-        .seed-ed-corner-toggles { display: flex; gap: 10px; flex-wrap: wrap; padding: 4px 0; }
-        .seed-ed-corner-toggles label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ccc; cursor: pointer; }
-        .seed-ed-strip-tags { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+        .seed-ed-header-title { font-size: var(--ltek-fs-header); font-weight: var(--ltek-fw-bold); color: var(--ltek-c-text); }
+        .seed-ed-header-build { margin-left: auto; font-size: var(--ltek-fs-small); color: var(--ltek-c-muted); font-family: var(--code-font-family, monospace); }
+        /* (slider-row unified above — the second/duplicate definition was removed) */
+        .seed-ed-side-toggles { display: flex; flex-wrap: wrap; gap:var(--ltek-sp-5); padding: 4px 0; }
+        .seed-ed-side-toggles label { display: flex; align-items: center; gap: 5px; font-size: var(--ltek-fs-body); color: var(--ltek-c-label); cursor: pointer; }
+        .seed-ed-corner-toggles { display: flex; gap:var(--ltek-sp-4); flex-wrap: wrap; padding: 4px 0; }
+        .seed-ed-corner-toggles label { display: flex; align-items: center; gap:var(--ltek-sp-1); font-size: var(--ltek-fs-small); color: var(--ltek-c-label); cursor: pointer; }
+        .seed-ed-strip-tags { display: flex; flex-wrap: wrap; gap:var(--ltek-sp-2); padding: 4px 0; }
         .seed-ed-strip-tag {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
+          gap:var(--ltek-sp-2);
           background: rgba(255,255,255,0.06);
-          border: 1px solid #444;
+          border: 1px solid var(--ltek-c-border);
           border-radius: 999px;
           padding: 4px 10px;
-          font-size: 12px;
-          color: #e1e1e1;
+          font-size: var(--ltek-fs-body);
+          color: var(--ltek-c-text);
         }
         .seed-ed-strip-tag .strip-remove { cursor: pointer; opacity: 0.7; font-weight: bold; }
         .seed-ed-strip-tag .strip-remove:hover { opacity: 1; color: #f44336; }
         .seed-ed-strip-tag .ed-section-entity-remove { cursor: pointer; opacity: 0.7; font-weight: bold; }
         .seed-ed-strip-tag .ed-section-entity-remove:hover { opacity: 1; color: #f44336; }
-        .seed-ed-select-allnone { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 12px; }
+        .seed-ed-select-allnone { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: var(--ltek-fs-body); }
         .seed-ed-select-allnone .ed-section-select-all,
         .seed-ed-select-allnone .ed-section-select-none {
           color: #2196F3; cursor: pointer; user-select: none;
@@ -7224,15 +9140,30 @@ class SEEDCardEditor extends HTMLElement {
           flex-wrap: wrap;
           padding: 4px 0;
         }
-        .seed-ed-font-row label { font-size: 12px; color: #ccc; font-weight: 400; display: flex; align-items: center; gap: 6px; }
+        .seed-ed-font-row label { font-size: var(--ltek-fs-body); color: var(--ltek-c-label); font-weight: var(--ltek-fw-normal); display: flex; align-items: center; gap: 6px; }
         .seed-ed-font-row select {
           background: var(--secondary-background-color, #1c1c1c);
-          border: 1px solid #444;
-          border-radius: 6px;
-          padding: 5px 8px;
-          color: #e1e1e1;
-          font-size: 12px;
+          border: 1px solid var(--ltek-c-border);
+          border-radius: var(--ltek-r-ctrl);
+          padding:var(--ltek-ctrl-pad);
+          color: var(--ltek-c-text);
+          font-size: var(--ltek-fs-body);
         }
+        /* Compact pairing row: places related controls (e.g. a slider + a color
+           swatch, or icon-size + icon-color) side-by-side instead of one full
+           row each. Sliders grow to fill; color swatches / short selects hug
+           their content. Wraps to stacked on narrow editors. */
+        .seed-ed-pair {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: var(--ltek-sp-6);
+          padding: 4px 0;
+        }
+        .seed-ed-pair > .seed-ed-slider-row,
+        .seed-ed-pair > .seed-ed-font-row { padding: 0; flex: 1 1 200px; min-width: 150px; }
+        .seed-ed-pair > .seed-ed-color,
+        .seed-ed-pair > .seed-ed-colors { padding: 0; flex: 0 0 auto; }
       </style>
     `;
 
@@ -7240,6 +9171,8 @@ class SEEDCardEditor extends HTMLElement {
 
     // Used by the Title box below (and, for grayIconsWhenOff, by Child Row Visuals further down)
     const showLastChanged = this._config.show_last_changed === true;
+    const showTitleText = this._config.show_title !== false;
+    const showTitleIcon = this._config.show_title_icon !== false;
     const grayIconsWhenOff = this._config.gray_icons_when_off === true;
     const showCardChevron = this._config.show_card_chevron !== false;
 
@@ -7326,31 +9259,45 @@ class SEEDCardEditor extends HTMLElement {
       <details class="seed-ed-row">
         <summary><ha-icon class="seed-ed-summary-icon" icon="mdi:palette-outline"></ha-icon>Card Appearance</summary>
         <div class="seed-ed-collapsible-body">
-        <span class="seed-ed-hint">Title bar, section headers, scaling, and the whole-card collapsible wrapper.</span>
 
-        <div class="seed-ed-group-title">Title</div>
         <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-show-title" ${this._config.show_title !== false ? 'checked' : ''} />
-          <label for="ed-show-title">Show card title text</label>
+          <input type="checkbox" id="ed-card-collapsible" ${cardCollapsible ? 'checked' : ''} />
+          <label for="ed-card-collapsible">Make card collapsible (click title to expand/collapse)</label>
         </div>
-        <input type="text" id="ed-title" value="${this._config.title || ''}" placeholder="e.g. SEED" />
-        <div class="seed-ed-checkbox-row" style="margin-top:8px;">
-          <input type="checkbox" id="ed-show-title-icon" ${this._config.show_title_icon !== false ? 'checked' : ''} />
-          <label for="ed-show-title-icon">Show title icon</label>
+        ${cardCollapsible ? `
+        <div class="seed-ed-checkbox-row">
+          <input type="checkbox" id="ed-show-card-chevron" ${showCardChevron ? 'checked' : ''} />
+          <label for="ed-show-card-chevron">Show expand/collapse chevron on the title row</label>
         </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Icon:</span></label>
-          <input type="text" id="ed-title-icon" value="${this._config.title_icon || 'mdi:view-list'}" style="flex:1;" placeholder="mdi:view-list" />
+        <div class="seed-ed-checkbox-row">
+          <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Default state:</span>
+          <select id="ed-card-default-state">
+            <option value="expanded" ${(this._config.card_default_state || 'expanded') !== 'collapsed' ? 'selected' : ''}>Expanded</option>
+            <option value="collapsed" ${this._config.card_default_state === 'collapsed' ? 'selected' : ''}>Collapsed (title bar only)</option>
+          </select>
         </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Text Size:</span></label>
-          <input type="range" id="ed-title-font-size" min="10" max="40" step="1" value="${this._config.title_font_size || 16}" />
-          <span class="seed-ed-slider-value" id="ed-title-font-size-value">${this._config.title_font_size || 16}px</span>
+        ` : ''}
+
+        ${this._edCardSub('title', 'Card Header', `
+        <div class="seed-ed-group-title">Title Text</div>
+        <div class="seed-ed-pair">
+          <div class="seed-ed-checkbox-row" style="flex:0 0 auto;padding:0;">
+            <input type="checkbox" id="ed-show-title" ${showTitleText ? 'checked' : ''} />
+            <label for="ed-show-title">Show</label>
+          </div>
+          <input type="text" id="ed-title" value="${this._config.title || ''}" placeholder="e.g. SEED" style="flex:1 1 200px;min-width:150px;" />
         </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Icon Size:</span></label>
-          <input type="range" id="ed-title-icon-size" min="10" max="48" step="1" value="${this._config.title_icon_size || 22}" />
-          <span class="seed-ed-slider-value" id="ed-title-icon-size-value">${this._config.title_icon_size || 22}px</span>
+        ${showTitleText ? `
+        <div class="seed-ed-pair">
+          <div class="seed-ed-slider-row">
+            <label><span>Size:</span></label>
+            <input type="range" id="ed-title-font-size" min="10" max="40" step="1" value="${this._config.title_font_size || 16}" />
+            <span class="seed-ed-slider-value" id="ed-title-font-size-value">${this._config.title_font_size || 16}px</span>
+          </div>
+          <div class="seed-ed-color">
+            <label>Color:</label>
+            <input type="color" id="ed-color-title-text" value="${this._config.title_text_color || '#e1e1e1'}" />
+          </div>
         </div>
         <div class="seed-ed-font-row">
           <label>Weight:
@@ -7362,23 +9309,36 @@ class SEEDCardEditor extends HTMLElement {
             </select>
           </label>
           <label><input type="checkbox" id="ed-title-italic" ${this._config.title_font_style === 'italic' ? 'checked' : ''} /> Italic</label>
+          <label style="margin-left:auto;"><input type="checkbox" id="ed-show-last-changed" ${showLastChanged ? 'checked' : ''} /> Show "last changed" time</label>
         </div>
-        <div class="seed-ed-colors">
-          <div class="seed-ed-color">
-            <label>Text:</label>
-            <input type="color" id="ed-color-title-text" value="${this._config.title_text_color || '#e1e1e1'}" />
+        ` : ''}
+
+        <div class="seed-ed-group-title">Title Icon</div>
+        <div class="seed-ed-pair">
+          <div class="seed-ed-checkbox-row" style="flex:0 0 auto;padding:0;">
+            <input type="checkbox" id="ed-show-title-icon" ${showTitleIcon ? 'checked' : ''} />
+            <label for="ed-show-title-icon">Show</label>
+          </div>
+          <input type="text" id="ed-title-icon" value="${this._config.title_icon || 'mdi:view-list'}" style="flex:1 1 200px;min-width:150px;" placeholder="mdi:view-list" />
+        </div>
+        ${showTitleIcon ? `
+        <div class="seed-ed-pair">
+          <div class="seed-ed-slider-row">
+            <label><span>Size:</span></label>
+            <input type="range" id="ed-title-icon-size" min="10" max="48" step="1" value="${this._config.title_icon_size || 22}" />
+            <span class="seed-ed-slider-value" id="ed-title-icon-size-value">${this._config.title_icon_size || 22}px</span>
           </div>
           <div class="seed-ed-color">
-            <label>Icon:</label>
+            <label>Color:</label>
             <input type="color" id="ed-color-title-icon" value="${this._config.title_icon_color || '#2196F3'}" />
           </div>
         </div>
-        <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-show-last-changed" ${showLastChanged ? 'checked' : ''} />
-          <label for="ed-show-last-changed">Show "last changed" time next to the title</label>
-        </div>
+        ` : ''}
 
-        <div class="seed-ed-group-title">Section Headers</div>
+        ${this._atHeaderRuleRefEditor('__card__', this._config, { flush: true })}
+        `)}
+
+        ${this._edCardSub('section-headers', 'Section Header Defaults', `
         <span class="seed-ed-hint">"Show title row" is set per-section below, in each section's settings.</span>
         <div class="seed-ed-checkbox-row">
           <input type="checkbox" id="ed-show-section-count" ${showSectionCount ? 'checked' : ''} />
@@ -7388,8 +9348,9 @@ class SEEDCardEditor extends HTMLElement {
           <input type="checkbox" id="ed-auto-close-sections" ${autoCloseSections ? 'checked' : ''} />
           <label for="ed-auto-close-sections">Auto-close other sections when expanding one</label>
         </div>
+        `)}
 
-        <div class="seed-ed-group-title">Scaling</div>
+        ${this._edCardSub('scaling', 'Scaling', `
         <span class="seed-ed-hint">Adjust the size of different card elements independently</span>
         <div class="seed-ed-slider-row">
           <label><span>Overall Scale:</span></label>
@@ -7421,50 +9382,28 @@ class SEEDCardEditor extends HTMLElement {
           <input type="range" id="ed-slider-max-width" min="80" max="500" step="10" value="${currentSliderMaxWidth}" />
           <span class="seed-ed-slider-value" id="ed-slider-max-width-value">${currentSliderMaxWidth}px</span>
         </div>
+        `)}
 
-        <div class="seed-ed-group-title">Performance</div>
+        ${this._edCardSub('performance', 'Performance', `
         <span class="seed-ed-hint">Minimum time between live refreshes. Raise this if a frequently-updating sensor (e.g. a lux value that keeps resetting "last changed") makes the card refresh too often. 0 = default (~4×/sec).</span>
         <div class="seed-ed-slider-row">
           <label><span>Min refresh:</span></label>
           <input type="range" id="ed-min-refresh" min="0" max="60" step="1" value="${this._config.min_refresh_seconds || 0}" />
           <span class="seed-ed-slider-value" id="ed-min-refresh-value">${(this._config.min_refresh_seconds || 0) === 0 ? 'Default' : (this._config.min_refresh_seconds + 's')}</span>
         </div>
+        `)}
 
-        <div class="seed-ed-group-title">Card Wrapper</div>
-        <span class="seed-ed-hint">Collapse the entire card down to just the title bar.</span>
-        <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-card-collapsible" ${cardCollapsible ? 'checked' : ''} />
-          <label for="ed-card-collapsible">Make the whole card collapsible (title bar only when collapsed)</label>
-        </div>
-        ${cardCollapsible ? `
-        <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-show-card-chevron" ${showCardChevron ? 'checked' : ''} />
-          <label for="ed-show-card-chevron">Show expand/collapse chevron on the title row</label>
-        </div>
-        <div class="seed-ed-checkbox-row">
-          <span style="font-size:12px; color:#ccc;">Default state:</span>
-          <select id="ed-card-default-state">
-            <option value="expanded" ${(this._config.card_default_state || 'expanded') !== 'collapsed' ? 'selected' : ''}>Expanded</option>
-            <option value="collapsed" ${this._config.card_default_state === 'collapsed' ? 'selected' : ''}>Collapsed (title bar only)</option>
-          </select>
-        </div>
-        ` : ''}
-        <div class="seed-ed-group-title seed-ed-group-title-frame" style="margin-top:14px;">Card Frame</div>
-        <span class="seed-ed-hint">The card's frame (border / glow / shadow / background / edges) comes from Frame Presets, layered here — independent of the per-section frames.</span>
+        ${this._edCardSub('card-frame', 'Card Frame', `
+        <span class="seed-ed-hint">The card's frame (border / glow / shadow / background / edges) comes from Frame Styles, layered here — independent of the per-section frames.</span>
         ${this._atFrameRefEditor('__card_frame__', this._config.card_frame)}
+        `)}
         </div>
       </details>
     `;
 
     const rowBorderColorVal = colors.row_border && colors.row_border !== 'transparent' ? colors.row_border : '#333333';
     const stripStrings = this._config.strip_entity_strings || [];
-    const showSectionDivider = this._config.show_section_divider === true;
-    const sectionDividerWidth = this._config.section_divider_width ?? 1;
-    const sectionDividerTopLength = this._config.section_divider_length ?? 100;
-    const showSectionDividerBottom = this._config.show_section_divider_bottom === true;
-    const sectionDividerBottomWidth = this._config.section_divider_bottom_width ?? 1;
-    const sectionDividerBottomLength = this._config.section_divider_bottom_length ?? 100;
-    const sectionDividerColorVal = colors.section_divider && colors.section_divider !== 'transparent' ? colors.section_divider : '#333333';
+    // (Global section-divider editor vars removed — dividers are their own sections.)
     const rowIndent = this._config.row_indent ?? 16;
     const showRowBorder = this._config.show_row_border === true;
     const rowBorderWidth = this._config.row_border_width ?? 1;
@@ -7480,82 +9419,47 @@ class SEEDCardEditor extends HTMLElement {
       <details class="seed-ed-row seed-ed-section-defaults">
         <summary><ha-icon class="seed-ed-summary-icon" icon="mdi:cog-outline"></ha-icon>Section Layout Defaults</summary>
         <div class="seed-ed-collapsible-body">
-        <span class="seed-ed-hint">Layout defaults for sections: between-section dividers, entity-group row visuals, and the seed style for new Entity Tables. Frame styling (border / glow / shadow / background / edges) is now defined entirely in <strong>Frame Presets</strong> and applied per section or to the card.</span>
+        <span class="seed-ed-hint">Layout defaults for sections: between-section dividers, entity-group row visuals, and the seed style for new Entity Tables. Frame styling (border / glow / shadow / background / edges) is now defined entirely in <strong>Frame Styles</strong> and applied per section or to the card.</span>
 
-      <details class="seed-ed-row">
-        <summary><ha-icon class="seed-ed-summary-icon" icon="mdi:minus"></ha-icon>Dividers</summary>
-        <div class="seed-ed-collapsible-body">
-        <span class="seed-ed-hint">A line drawn between consecutive sections (independent of each section's own border). Above and below are independent - enable either or both.</span>
-        <div class="seed-ed-colors">
-          <div class="seed-ed-color">
-            <label>Divider:</label>
-            <input type="color" id="ed-color-section-divider" value="${sectionDividerColorVal}" />
-          </div>
-        </div>
-        <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-show-section-divider" ${showSectionDivider ? 'checked' : ''} />
-          <label for="ed-show-section-divider">Enable divider above each section</label>
-        </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Line Weight (Above):</span></label>
-          <input type="range" id="ed-section-divider-width" min="1" max="8" step="1" value="${sectionDividerWidth}" />
-          <span class="seed-ed-slider-value" id="ed-section-divider-width-value">${sectionDividerWidth}px</span>
-        </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Length (Above):</span></label>
-          <input type="range" id="ed-section-divider-length" min="5" max="100" step="5" value="${sectionDividerTopLength}" />
-          <span class="seed-ed-slider-value" id="ed-section-divider-length-value">${sectionDividerTopLength}%</span>
-        </div>
-        <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-show-section-divider-bottom" ${showSectionDividerBottom ? 'checked' : ''} />
-          <label for="ed-show-section-divider-bottom">Enable divider below each section</label>
-        </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Line Weight (Below):</span></label>
-          <input type="range" id="ed-section-divider-bottom-width" min="1" max="8" step="1" value="${sectionDividerBottomWidth}" />
-          <span class="seed-ed-slider-value" id="ed-section-divider-bottom-width-value">${sectionDividerBottomWidth}px</span>
-        </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Length (Below):</span></label>
-          <input type="range" id="ed-section-divider-bottom-length" min="5" max="100" step="5" value="${sectionDividerBottomLength}" />
-          <span class="seed-ed-slider-value" id="ed-section-divider-bottom-length-value">${sectionDividerBottomLength}%</span>
-        </div>
-        </div>
-      </details>
-
-      <details class="seed-ed-row">
-        <summary><ha-icon class="seed-ed-summary-icon" icon="mdi:format-list-bulleted"></ha-icon>Entity Group Row Defaults</summary>
-        <div class="seed-ed-collapsible-body">
+      <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="row_defaults">
+        <summary class="seed-ed-substyle-sum"><ha-icon class="seed-ed-rs-sum-icon" icon="mdi:format-list-bulleted"></ha-icon><span class="seed-ed-substyle-name" style="flex:1;">Entity Group Row Defaults</span></summary>
+        <div class="seed-ed-substyle-body">
         <span class="seed-ed-hint">Default row visuals for Entity Group sections (indent + row border). Entity Tables use Entity Table Defaults instead.</span>
+
+        <div class="seed-ed-group-title">Row</div>
         <div class="seed-ed-slider-row">
           <label><span>Row Indent:</span></label>
           <input type="range" id="ed-row-indent" min="0" max="48" step="2" value="${rowIndent}" />
           <span class="seed-ed-slider-value" id="ed-row-indent-value">${rowIndent}px</span>
         </div>
-        <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-gray-icons-when-off" ${grayIconsWhenOff ? 'checked' : ''} />
-          <label for="ed-gray-icons-when-off">Gray out icons for entities that are off or unavailable</label>
-        </div>
-        <div class="seed-ed-colors">
+
+        <div class="seed-ed-group-title">Icon</div>
+        <div class="seed-ed-pair">
+          <div class="seed-ed-checkbox-row" style="flex:1 1 220px;padding:0;">
+            <input type="checkbox" id="ed-gray-icons-when-off" ${grayIconsWhenOff ? 'checked' : ''} />
+            <label for="ed-gray-icons-when-off">Gray out icons when off / unavailable</label>
+          </div>
           <div class="seed-ed-color">
             <label>Default Icon:</label>
             <input type="color" id="ed-color-icon" value="${colors.icon || '#2196F3'}" />
           </div>
         </div>
+
+        <div class="seed-ed-group-title">Row Border</div>
         <div class="seed-ed-checkbox-row">
           <input type="checkbox" id="ed-show-row-border" ${showRowBorder ? 'checked' : ''} />
           <label for="ed-show-row-border">Enable row borders</label>
         </div>
-        <div class="seed-ed-colors">
+        <div class="seed-ed-pair">
+          <div class="seed-ed-slider-row">
+            <label><span>Weight:</span></label>
+            <input type="range" id="ed-row-border-width" min="1" max="8" step="1" value="${rowBorderWidth}" />
+            <span class="seed-ed-slider-value" id="ed-row-border-width-value">${rowBorderWidth}px</span>
+          </div>
           <div class="seed-ed-color">
-            <label>Border:</label>
+            <label>Color:</label>
             <input type="color" id="ed-color-row-border" value="${rowBorderColorVal}" />
           </div>
-        </div>
-        <div class="seed-ed-slider-row">
-          <label><span>Border Weight:</span></label>
-          <input type="range" id="ed-row-border-width" min="1" max="8" step="1" value="${rowBorderWidth}" />
-          <span class="seed-ed-slider-value" id="ed-row-border-width-value">${rowBorderWidth}px</span>
         </div>
         <div class="seed-ed-slider-row">
           <label><span>Corner Radius:</span></label>
@@ -7616,13 +9520,15 @@ class SEEDCardEditor extends HTMLElement {
     // "Add ..." buttons all live inside the same bordered box.
     html += `<details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>`;
     html += `<summary class="seed-ed-panel-summary">
-      <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:view-dashboard-outline" class="seed-ed-panel-title-icon"></ha-icon>Section : Select, Order, Config</div>
-      <div class="seed-ed-hint">Sections appear in this order.</div>
+      <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:view-dashboard-outline" class="seed-ed-panel-title-icon"></ha-icon>Section Layout &amp; Config</div>
     </summary>`;
+    // Description shows INSIDE the panel (when expanded), like every other panel.
+    html += `<span class="seed-ed-hint">Select and Order the card sections. Click the section icon to edit the section settings.</span>`;
     // Add buttons at the TOP of the panel, sharing one row.
     html += `<div class="seed-ed-add-row">
-      <div class="seed-ed-add-btn" id="ed-add-table-menu"><ha-icon icon="mdi:table-plus"></ha-icon>Add Entity Table</div>
-      <div class="seed-ed-add-btn" id="ed-add-section"><ha-icon icon="mdi:plus"></ha-icon>Add Entity Group</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-table-menu"><ha-icon icon="mdi:table-plus"></ha-icon>Add Entity Table</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-section"><ha-icon icon="mdi:plus"></ha-icon>Add Entity Group</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-divider"><ha-icon icon="mdi:minus"></ha-icon>Add Divider</div>
     </div>`;
     html += `<div id="ed-table-preset-menu" style="display:none; flex-direction:column; gap:4px; margin-top:6px;">
       ${getActivityPresets().map(p => `<div class="seed-ed-add-btn seed-ed-add-btn-sm ed-add-table-preset" data-preset="${p.key}"><ha-icon icon="mdi:plus"></ha-icon>${p.label}</div>`).join('')}
@@ -7637,6 +9543,11 @@ class SEEDCardEditor extends HTMLElement {
 
     const sections = this._config.sections || [];
     sections.forEach((section, idx) => {
+      // Divider section: a compact config card (no entities/table/frame editor).
+      if (section.type === 'divider') {
+        html += this._edDividerSection(section, idx, sections.length);
+        return;
+      }
       const assigned = new Set(section.entities || []);
 
       // Friendly display name for any entity id (resolves through the state
@@ -7756,7 +9667,7 @@ class SEEDCardEditor extends HTMLElement {
         `<span class="seed-ed-reset-btn" data-section-id="${section.id}" data-reset-group="${group}" title="Reset this group to defaults"><ha-icon icon="mdi:backup-restore"></ha-icon>Reset</span>`;
 
       html += `
-        <details class="seed-ed-section" data-section-id="${section.id}">
+        <details class="seed-ed-section${section.hidden ? ' seed-ed-section-hidden' : ''}" data-section-id="${section.id}">
           <summary>
             <span class="seed-ed-section-head">
               <ha-icon class="ed-section-icon-preview" data-section-id="${section.id}" icon="${headerIcon}" style="color: ${section.icon_color || colors.icon || '#2196F3'};"></ha-icon>
@@ -7764,6 +9675,8 @@ class SEEDCardEditor extends HTMLElement {
               <span class="seed-ed-section-type-badge">${section.type === 'activity_table' ? 'Table' : 'Entities'}</span>
               <ha-icon class="seed-ed-icon-btn ed-move-up ${idx === 0 ? 'disabled' : ''}" icon="mdi:arrow-up-bold" data-section-id="${section.id}"></ha-icon>
               <ha-icon class="seed-ed-icon-btn ed-move-down ${idx === sections.length - 1 ? 'disabled' : ''}" icon="mdi:arrow-down-bold" data-section-id="${section.id}"></ha-icon>
+              <ha-icon class="seed-ed-icon-btn ed-duplicate-section" icon="mdi:content-copy" data-section-id="${section.id}" title="Duplicate this section"></ha-icon>
+              <ha-icon class="seed-ed-icon-btn ed-hide-section" icon="${section.hidden ? 'mdi:eye-off' : 'mdi:eye'}" data-section-id="${section.id}" title="${section.hidden ? 'Hidden — click to show on card' : 'Shown — click to hide from card'}"></ha-icon>
               <ha-icon class="seed-ed-icon-btn ed-remove-section" icon="mdi:trash-can-outline" data-section-id="${section.id}"></ha-icon>
             </span>
           </summary>
@@ -7796,68 +9709,19 @@ class SEEDCardEditor extends HTMLElement {
               <label>Chips Only (every entity in this section renders as just its chip - no row icon or name)</label>
             </div>`}
 
-            <details class="seed-ed-substyle" data-panel="frame">
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="frame">
               <summary class="seed-ed-substyle-sum">
                 <span class="seed-ed-substyle-name">Frame (border / glow / shadow / edges)</span>
                 <span class="seed-ed-hint">${section.frame ? ((section.frame.presets || []).length + ' preset(s)') : 'none'}</span>
               </summary>
               <div class="seed-ed-substyle-body">
-                <span class="seed-ed-hint">This section's frame comes entirely from Frame Presets (defined in the Frame Presets panel). Choose a Default and layer presets on top.</span>
+                <span class="seed-ed-hint">This section's frame comes entirely from Frame Styles (defined in the Frame Styles panel). Choose a Default and layer presets on top.</span>
                 ${this._atFrameRefEditor(section.id, section.frame)}
               </div>
             </details>
 
-            <details class="seed-ed-substyle" data-panel="divider">
-              <summary class="seed-ed-substyle-sum">
-                <span class="seed-ed-substyle-name">Divider</span>
-                <select class="ed-section-divider-mode seed-ed-sum-select" data-section-id="${section.id}">
-                  <option value="global" ${(section.divider_mode || 'global') === 'global' ? 'selected' : ''}>Use Section Default Dividers</option>
-                  <option value="custom" ${section.divider_mode === 'custom' ? 'selected' : ''}>Custom</option>
-                </select>
-              </summary>
-              <div class="seed-ed-substyle-body">
-              ${section.divider_mode === 'custom' ? `
-              <div class="seed-ed-style-grid">
-                <div class="seed-ed-style-field">
-                  <label>Color</label>
-                  <input type="color" class="ed-sec-divider-color" data-section-id="${section.id}" value="${section.divider_color || colors.section_divider || '#333333'}" />
-                </div>
-              </div>
-              <div class="seed-ed-checkbox-row">
-                <input type="checkbox" class="ed-sec-divider-above" data-section-id="${section.id}" ${section.divider_above ? 'checked' : ''} />
-                <label>Show divider above this section</label>
-              </div>
-              <div class="seed-ed-slider-row">
-                <label><span>Weight (Above):</span></label>
-                <input type="range" class="ed-sec-divider-above-width" data-section-id="${section.id}" min="1" max="8" step="1" value="${section.divider_above_width ?? 1}" />
-                <span class="seed-ed-slider-value ed-sec-divider-above-width-value" data-section-id="${section.id}">${section.divider_above_width ?? 1}px</span>
-              </div>
-              <div class="seed-ed-slider-row">
-                <label><span>Length (Above):</span></label>
-                <input type="range" class="ed-sec-divider-above-length" data-section-id="${section.id}" min="5" max="100" step="5" value="${section.divider_above_length ?? 100}" />
-                <span class="seed-ed-slider-value ed-sec-divider-above-length-value" data-section-id="${section.id}">${section.divider_above_length ?? 100}%</span>
-              </div>
-              <div class="seed-ed-checkbox-row">
-                <input type="checkbox" class="ed-sec-divider-below" data-section-id="${section.id}" ${section.divider_below ? 'checked' : ''} />
-                <label>Show divider below this section</label>
-              </div>
-              <div class="seed-ed-slider-row">
-                <label><span>Weight (Below):</span></label>
-                <input type="range" class="ed-sec-divider-below-width" data-section-id="${section.id}" min="1" max="8" step="1" value="${section.divider_below_width ?? 1}" />
-                <span class="seed-ed-slider-value ed-sec-divider-below-width-value" data-section-id="${section.id}">${section.divider_below_width ?? 1}px</span>
-              </div>
-              <div class="seed-ed-slider-row">
-                <label><span>Length (Below):</span></label>
-                <input type="range" class="ed-sec-divider-below-length" data-section-id="${section.id}" min="5" max="100" step="5" value="${section.divider_below_length ?? 100}" />
-                <span class="seed-ed-slider-value ed-sec-divider-below-length-value" data-section-id="${section.id}">${section.divider_below_length ?? 100}%</span>
-              </div>
-              ` : '<span class="seed-ed-hint">Using the selected mode. Switch to Custom for options.</span>'}
-              <div class="seed-ed-reset-row">${resetBtn('divider')}</div>
-              </div>
-            </details>
-
             ${section.type === 'activity_table' ? `
-            <details class="seed-ed-substyle" data-panel="row_visuals">
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="row_visuals">
               <summary class="seed-ed-substyle-sum">
                 <span class="seed-ed-substyle-name">Row Layout</span>
                 <select class="ed-section-row-visuals-mode seed-ed-sum-select" data-section-id="${section.id}">
@@ -7873,7 +9737,7 @@ class SEEDCardEditor extends HTMLElement {
             </details>` : ''}
 
             ${section.type === 'activity_table' ? '' : `
-            <details class="seed-ed-substyle" data-panel="section_header">
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="section_header">
               <summary class="seed-ed-substyle-sum">
                 <span class="seed-ed-substyle-name">Section Header</span>
                 <span class="seed-ed-hint">icon / title / count / visibility</span>
@@ -7969,12 +9833,13 @@ class SEEDCardEditor extends HTMLElement {
                   <option value="hide_when_empty" ${section.section_display === 'hide_when_empty' ? 'selected' : ''}>Hide the whole section (header included)</option>
                 </select>
               </div>
+              ${this._atHeaderRuleRefEditor(section.id, section)}
               </div>
             </details>
             `}
 
             ${section.type === 'activity_table' ? '' : `
-            <details class="seed-ed-substyle" data-panel="entity_rows">
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="entity_rows">
               <summary class="seed-ed-substyle-sum">
                 <span class="seed-ed-substyle-name">Entity Rows</span>
                 <span class="seed-ed-hint">layout / style / secondary line</span>
@@ -8078,7 +9943,7 @@ class SEEDCardEditor extends HTMLElement {
             `; })()}
 
             ${section.type === 'activity_table' ? '' : `
-            <details class="seed-ed-substyle" data-panel="chip">
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="chip">
               <summary class="seed-ed-substyle-sum">
                 <span class="seed-ed-substyle-name">Chip Style</span>
                 <span class="seed-ed-hint">chips-only sections</span>
@@ -8167,7 +10032,7 @@ class SEEDCardEditor extends HTMLElement {
               </div>
             </details>
 
-            <details class="seed-ed-substyle" data-panel="chip_actions">
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="chip_actions">
               <summary class="seed-ed-substyle-sum">
                 <span class="seed-ed-substyle-name">Chip Actions</span>
                 <span class="seed-ed-hint">tap / hold</span>
@@ -8181,22 +10046,32 @@ class SEEDCardEditor extends HTMLElement {
             </details>
 
             `}
-            <details class="seed-ed-substyle" data-panel="section_entities-${section.id}">
-              <summary class="seed-ed-substyle-sum">
-                <ha-icon icon="mdi:filter-variant" class="seed-ed-rs-sum-icon"></ha-icon>
-                <span class="seed-ed-substyle-name">Section Entities</span>
-                <span class="seed-ed-hint">membership${section.type === 'activity_table' ? '' : ' / display rules'}</span>
-              </summary>
+            ${section.type === 'activity_table' ? `
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="se-filter-${section.id}">
+              <summary class="seed-ed-substyle-sum"><ha-icon icon="mdi:filter-variant" class="seed-ed-rs-sum-icon"></ha-icon><span class="seed-ed-substyle-name">Entity Filters</span></summary>
+              <div class="seed-ed-substyle-body">${this._atMembershipPanel(section)}</div>
+            </details>
+            ` : `
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="se-entities-${section.id}">
+              <summary class="seed-ed-substyle-sum"><ha-icon icon="mdi:format-list-bulleted" class="seed-ed-rs-sum-icon"></ha-icon><span class="seed-ed-substyle-name">Entities</span></summary>
               <div class="seed-ed-substyle-body">
-              ${this._atMembershipPanel(section)}
-              ${section.type === 'activity_table' ? '' : `
-              <div class="seed-ed-group-div" style="margin:12px 0 6px;">Entity Display Rules</div>
-              <span class="seed-ed-hint">Of the entities above, each is shown only if it passes these rules (checked per entity, top to bottom; each joins the running result with AND / OR). No rules = show all.</span>
-              <div class="seed-ed-rules" data-section-id="${section.id}">${rulesHtml || '<span class="seed-ed-hint">No rules — every entity is shown.</span>'}</div>
-              <div class="seed-ed-mini-btn ed-rule-add" data-section-id="${section.id}"><ha-icon icon="mdi:plus"></ha-icon>Add Rule</div>
-              `}
+                <div class="seed-ed-group-div" style="margin:2px 0 6px;">Selected entities</div>
+                ${this._sectionSelectedChipsHtml(section, assignedChipsHtml)}
+                ${this._sectionEntitySearchHtml(section, pickerOptions)}
+                ${this._atMembershipPanel(section)}
               </div>
             </details>
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="se-display-${section.id}">
+              <summary class="seed-ed-substyle-sum"><ha-icon icon="mdi:eye-check-outline" class="seed-ed-rs-sum-icon"></ha-icon><span class="seed-ed-substyle-name">Display Rules &amp; Names</span></summary>
+              <div class="seed-ed-substyle-body">
+                <div class="seed-ed-group-div" style="margin:2px 0 6px;">Entity Display Rules</div>
+                <span class="seed-ed-hint">Of the selected entities, each is shown only if it passes these rules (checked per entity, top to bottom; each joins the running result with AND / OR). No rules = show all.</span>
+                <div class="seed-ed-rules" data-section-id="${section.id}">${rulesHtml || '<span class="seed-ed-hint">No rules — every entity is shown.</span>'}</div>
+                <div class="seed-ed-mini-btn ed-rule-add" data-section-id="${section.id}"><ha-icon icon="mdi:plus"></ha-icon>Add Rule</div>
+                ${this._atNameCleanerHtml(section)}
+              </div>
+            </details>
+            `}
           </div>
         </details>
       `;
@@ -8204,11 +10079,16 @@ class SEEDCardEditor extends HTMLElement {
 
     html += `</details>`; // .seed-ed-sections-panel
 
-    // Global Entity Rule Sets panel.
+    // LIBRARIES section divider — groups the reusable-definition panels
+    // (Entity Filter Rules, Frame Styles, Header Rules) under one heading.
+    html += `<div class="seed-ed-lib-divider"><ha-icon icon="mdi:bookshelf"></ha-icon>Libraries</div>`;
+
+    // Global Entity Filter Rules panel.
     html += this._atRuleSetsPanel();
 
-    // Global Frame Presets panel.
+    // Global Frame Styles panel.
     html += this._atFramePresetsPanel();
+    html += this._atHeaderRuleSetsPanel();
 
     // YAML config preview
     html += `
@@ -8303,7 +10183,7 @@ class SEEDCardEditor extends HTMLElement {
     };
     // Controls with dedicated handlers below (they mutate object shape, not a
     // scalar, so the generic scalar-set bind must NOT touch them).
-    const DEDICATED = ['at-group-kind', 'at-cond-what', 'at-cond-kind', 'at-width-mode', 'at-width-val', 'at-gradient-toggle'];
+    const DEDICATED = ['at-group-kind', 'at-cond-what', 'at-cond-kind', 'at-width-mode', 'at-width-val', 'at-gradient-toggle', 'at-color-mode'];
     this.querySelectorAll('.at-input[data-at-path], .at-check[data-at-path]').forEach(el => {
       if (DEDICATED.some(c => el.classList.contains(c))) return;
       bind(el);
@@ -8315,7 +10195,11 @@ class SEEDCardEditor extends HTMLElement {
     this.querySelectorAll('.at-input[data-at-path="name"][data-at-sid]').forEach(el => {
       el.addEventListener('input', () => {
         const panel = this.querySelector(`[data-panel="effect-${el.dataset.atSid}"] .seed-ed-substyle-name`);
+<<<<<<< HEAD
+        if (panel) panel.textContent = el.value || 'Frame Style';
+=======
         if (panel) panel.textContent = el.value || 'Frame Preset';
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       });
     });
 
@@ -8340,6 +10224,26 @@ class SEEDCardEditor extends HTMLElement {
       };
       el.addEventListener('input', apply);
       el.addEventListener('change', apply);
+    });
+
+    // Colour-mode picker (_atColorField): Default clears the value; Custom seeds
+    // the last hex; Theme seeds the last var(--…). Structural — re-renders to
+    // swap in the matching value control.
+    this.querySelectorAll('.at-color-mode').forEach(el => {
+      el.addEventListener('change', () => {
+        const sid = el.dataset.atSid, path = el.dataset.atPath, mode = el.value;
+        const val = mode === 'unset' ? '' : mode === 'theme' ? (el.dataset.atColorTheme || 'var(--primary-color)') : (el.dataset.atColorHex || '#2196F3');
+        this._atApply(sid, sec => {
+          if (val === '') {
+            // Remove the key entirely so nothing is emitted (byte-stable).
+            const parts = path.split('.'); const key = parts.pop();
+            const parent = this._atGet(sec, parts.join('.'));
+            if (parent && typeof parent === 'object') delete parent[key];
+          } else {
+            this._atSet(sec, path, val);
+          }
+        });
+      });
     });
 
     // Color-gradient toggle: enabling seeds two default stops; disabling removes
@@ -8369,7 +10273,11 @@ class SEEDCardEditor extends HTMLElement {
         const defaults = {
           glow: { color: '#2196F3', intensity: 1.0, borders_only: false },
           shadow: { color: '#000000', x: 0, y: 4, blur: 12, spread: 0, opacity: 0.35 },
+<<<<<<< HEAD
+          border: { color: '#2196F3', width: 1, radius: 12, corners: [true, true, true, true], follow_icon: false, sides: ['top', 'bottom', 'left', 'right'] },
+=======
           border: { color: '#2196F3', width: 1, radius: 12, follow_icon: false, sides: ['top', 'bottom', 'left', 'right'] },
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
           background: { mode: 'custom', color: '#1c1c1c' }
         };
         this._atApply(sid, fx => {
@@ -8427,6 +10335,99 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
+<<<<<<< HEAD
+    // Gradient-border pattern picker (per side): applies a preset's stops to
+    // that edge and records the pattern name. '' = Custom (leave stops as-is).
+    this.querySelectorAll('.fx-edge-pattern').forEach(el => {
+      el.addEventListener('change', () => {
+        const fid = el.dataset.fxId, side = el.dataset.fxSide, pat = el.value;
+        this._atApply(fid, fx => {
+          fx.edges = fx.edges || {};
+          const cur = fx.edges[side] || { enabled: true, thickness: 1, stops: [] };
+          if (pat && EDGE_GRADIENT_PATTERNS[pat]) {
+            fx.edges[side] = { ...cur, enabled: true, pattern: pat,
+              stops: JSON.parse(JSON.stringify(EDGE_GRADIENT_PATTERNS[pat])) };
+          } else {
+            // Custom: keep current stops, drop the pattern tag.
+            const { pattern, ...rest } = cur;
+            fx.edges[side] = rest;
+          }
+        });
+      });
+    });
+
+    // Per-stop color SOURCE mode: Color (a hex) / Match (border-icon color) /
+    // Transparent. Mirrors the Divider stop-mode dropdown. Structural so the
+    // color picker enables/disables to match.
+    this.querySelectorAll('.fx-edge-stop-mode').forEach(el => {
+      el.addEventListener('change', () => {
+        const fid = el.dataset.fxId, side = el.dataset.fxSide, i = Number(el.dataset.fxIdx), mode = el.value;
+        this._atApply(fid, fx => {
+          if (!fx.edges || !fx.edges[side] || !Array.isArray(fx.edges[side].stops) || !fx.edges[side].stops[i]) return;
+          const st = fx.edges[side].stops[i];
+          if (mode === 'match') st.color = 'match';
+          else if (mode === 'transparent') st.color = 'transparent';
+          else if (!/^#[0-9a-f]{6}$/i.test(st.color || '')) st.color = '#2196F3';
+          delete fx.edges[side].pattern;   // manual edit → custom
+        });
+      });
+    });
+
+    // Solid-edge color SOURCE: Match / Theme / Custom. Structural (_atApply
+    // re-renders so the Custom color picker shows/hides to match).
+    this.querySelectorAll('.fx-edge-solid-mode').forEach(el => {
+      el.addEventListener('change', () => {
+        const fid = el.dataset.fxId, side = el.dataset.fxSide, mode = el.value;
+        this._atApply(fid, fx => {
+          fx.edges = fx.edges || {};
+          const cur = fx.edges[side] || { enabled: true, thickness: 1, gradient: false };
+          if (mode === 'match') cur.color = 'match';
+          else if (mode === 'theme') cur.color = 'theme';
+          else if (!/^#[0-9a-f]{6}$/i.test(cur.color || '')) cur.color = '#2196F3';
+          cur.gradient = false;
+          fx.edges[side] = cur;
+        });
+      });
+    });
+
+    // Edge sub-mode: Solid line ↔ Gradient. Seeds a sensible default for the
+    // chosen mode (a center-fade gradient, or a solid 'match' line).
+    this.querySelectorAll('.fx-edge-mode').forEach(el => {
+      el.addEventListener('change', () => {
+        const fid = el.dataset.fxId, side = el.dataset.fxSide, mode = el.value;
+        this._atApply(fid, fx => {
+          fx.edges = fx.edges || {};
+          const cur = fx.edges[side] || { enabled: true, thickness: 1 };
+          if (mode === 'solid') {
+            fx.edges[side] = { enabled: true, thickness: cur.thickness || 1, gradient: false, color: cur.color || 'match' };
+          } else {
+            fx.edges[side] = { enabled: true, thickness: cur.thickness || 1, gradient: true, pattern: 'center_fade',
+              stops: JSON.parse(JSON.stringify(EDGE_GRADIENT_PATTERNS.center_fade)) };
+          }
+        });
+      });
+    });
+
+    // "All edges the same" toggle — normalizeEdges mirrors top→all when on.
+    this.querySelectorAll('.fx-edges-allsame').forEach(el => {
+      el.addEventListener('change', () => {
+        const fid = el.dataset.fxId;
+        this._atApply(fid, fx => {
+          fx.edges = fx.edges || {};
+          if (el.checked) {
+            fx.edges.all_same = true;
+            // Ensure the source (top) is enabled so there's something to mirror.
+            fx.edges.top = fx.edges.top || { enabled: true, thickness: 1, gradient: true, pattern: 'center_fade', stops: JSON.parse(JSON.stringify(EDGE_GRADIENT_PATTERNS.center_fade)) };
+            if (!fx.edges.top.enabled) fx.edges.top.enabled = true;
+          } else {
+            delete fx.edges.all_same;
+          }
+        });
+      });
+    });
+
+=======
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     // Effect border side toggles: maintain the border.sides array.
     this.querySelectorAll('.fx-border-side').forEach(el => {
       el.addEventListener('change', () => {
@@ -8440,16 +10441,168 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-    // Add Effect preset.
+    // Frame Style dirty-draft Save / Discard (per lib: preset).
+    this.querySelectorAll('.fx-save-draft').forEach(el => el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const d = this._frameDrafts[el.dataset.fxSlug];
+      if (!d || !d.dirty) return;   // disabled visual = no-op
+      this._saveFrameDraft(el.dataset.fxSlug);
+    }));
+    this.querySelectorAll('.fx-discard-draft').forEach(el => el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const d = this._frameDrafts[el.dataset.fxSlug];
+      if (!d || !d.dirty) return;
+      this._discardFrameDraft(el.dataset.fxSlug);
+    }));
+
+    // Add Frame Style — creates a new preset directly in the shared System
+    // library (there is no card-local frame concept).
+    // ---- Header Rule Set library: add / duplicate / delete ----
+    const hdrScope = () => (this._config && this._config.header_library_scope) || 'system';
+    // Reflect a new map in the module cache immediately so the UI shows it
+    // before the subscription round-trips (mirrors _saveHeaderDraft).
+    const hdrEcho = (scope, map) => { SEED_HEADER_LIBRARY[scope === 'system' ? 'system' : 'user'].map = map; };
+    const hdrAdd = this.querySelector('#hdr-add');
+    if (hdrAdd) hdrAdd.addEventListener('click', () => {
+      const scope = hdrScope();
+      const map = { ...headerLibraryMap(scope) };
+      const base = 'New Header Rule';
+      let slug = headerLibSlug(base), n = 2;
+      while (map[slug]) { slug = headerLibSlug(base + ' ' + n); n++; }
+      map[slug] = normalizeHeaderRuleSet({ name: n > 2 ? `${base} ${n - 1}` : base, rules: [{ when: { op: 'is_on' }, set_icon_color: 'var(--primary-color)' }] });
+      hdrEcho(scope, map);
+      saveHeaderLibrary(this._hass, scope, map).then(() => this.renderEditor()).catch(() => this.renderEditor());
+    });
+    this.querySelectorAll('.hdr-duplicate').forEach(el => el.addEventListener('click', () => {
+      const scope = hdrScope();
+      const map = { ...headerLibraryMap(scope) };
+      const srcSlug = el.dataset.hdrSlug;
+      // Duplicate the CURRENT (draft-aware) look if the source has unsaved edits.
+      const src = srcSlug === BUILTIN_HEADER_SLUG ? builtinHeaderRuleSet() : (this._headerDisplaySet(srcSlug) || map[srcSlug]);
+      if (!src) return;
+      const base = (src.name || 'Header Rules') + ' (copy)';
+      let slug = headerLibSlug(base), n = 2;
+      while (map[slug]) { slug = headerLibSlug(base + ' ' + n); n++; }
+      const copy = normalizeHeaderRuleSet(JSON.parse(JSON.stringify(src))); copy.name = base; delete copy._builtin; delete copy.id;
+      map[slug] = copy;
+      hdrEcho(scope, map);
+      saveHeaderLibrary(this._hass, scope, map).then(() => this.renderEditor()).catch(() => this.renderEditor());
+    }));
+    this.querySelectorAll('.hdr-delete').forEach(el => el.addEventListener('click', () => {
+      const slug = el.dataset.hdrSlug;
+      if (!window.confirm('Delete this Header Rule Set from the shared library? Sections referencing it will fall back to no header rules.')) return;
+      const scope = hdrScope();
+      const map = { ...headerLibraryMap(scope) };
+      delete map[slug];
+      delete this._headerDrafts[slug];   // drop any staged edits for the deleted set
+      hdrEcho(scope, map);
+      saveHeaderLibrary(this._hass, scope, map).then(() => this.renderEditor()).catch(() => this.renderEditor());
+    }));
+
+    // ---- Header Rule Set portability: export / import ----
+    const hdrPortalStatus = (msg) => { const s = this.querySelector('#hdr-portal-status'); if (s) s.textContent = msg || ''; };
+    const hdrNowISO = () => { try { return new Date().toISOString().slice(0, 10); } catch (e) { return ''; } };
+    const hdrCopyText = (text) => {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+      }
+      try {
+        const ta = this.querySelector('#hdr-portal-text');
+        if (ta) { ta.select(); document.execCommand('copy'); return Promise.resolve(true); }
+      } catch (e) {}
+      return Promise.resolve(false);
+    };
+    // Resolve any header-set slug to its current (draft-aware) object.
+    const hdrSetBySlug = (slug) => slug === BUILTIN_HEADER_SLUG
+      ? builtinHeaderRuleSet()
+      : (this._headerDisplaySet(slug) || headerLibraryMap(hdrScope())[slug] || null);
+
+    // Export a single set to text. Bindings are KEPT so the exported text fully
+    // reflects what the user is running (this is a debugging aid — they hand it
+    // back with their card YAML), unlike frame presets which strip conditions.
+    this.querySelectorAll('.hdr-export').forEach(el => el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const src = hdrSetBySlug(el.dataset.hdrSlug);
+      if (!src) return;
+      this._hdrPortal('export', serializeHeaderRuleSets([src], { exported: hdrNowISO(), keepBindings: true }),
+        `Exported "${src.name || 'Header Rules'}". Copy this text — paste it into another card's Import, or share it (with your card YAML) to debug why a rule isn't applying.`);
+    }));
+
+    // Open the import portal.
+    const hdrImport = this.querySelector('#hdr-import');
+    if (hdrImport) hdrImport.addEventListener('click', () => {
+      this._hdrPortal('import', '', 'Paste exported Header Rule text below, then Import. Imported sets are added to the shared System library with fresh names.');
+    });
+
+    // Portal primary: Copy (export) or Import (import).
+    const hdrPortalPrimary = this.querySelector('#hdr-portal-primary');
+    if (hdrPortalPrimary) hdrPortalPrimary.addEventListener('click', () => {
+      const mode = hdrPortalPrimary.dataset.mode;
+      const ta = this.querySelector('#hdr-portal-text');
+      if (mode === 'export') {
+        hdrCopyText(ta ? ta.value : '').then(okc => hdrPortalStatus(okc ? 'Copied to clipboard.' : 'Copy failed — select the text and copy manually.'));
+        return;
+      }
+      // import: parse, then add each set to the shared library under a fresh
+      // slug/name (dedupe byte-identical sets by content key).
+      const res = parseHeaderRuleSetBlob(ta ? ta.value : '');
+      if (!res.ok) { hdrPortalStatus('Import failed: ' + res.error); return; }
+      const scope = hdrScope();
+      const map = { ...headerLibraryMap(scope) };
+      const seen = new Set(Object.keys(map).map(s => headerRuleSetContentKey(map[s])));
+      let added = 0, skipped = 0;
+      res.sets.forEach(s => {
+        const key = headerRuleSetContentKey(s);
+        if (seen.has(key)) { skipped += 1; return; }
+        seen.add(key);
+        const base = s.name || 'Imported Header Rules';
+        let slug = headerLibSlug(base), n = 2;
+        while (map[slug]) { slug = headerLibSlug(base + ' ' + n); n++; }
+        const store = normalizeHeaderRuleSet(s); store.id = 'lib:' + slug;
+        map[slug] = store; added += 1;
+      });
+      hdrEcho(scope, map);
+      this._hdrPendingStatus = `Imported ${added} rule set${added === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? '' : 's'}` : ''}.`;
+      saveHeaderLibrary(this._hass, scope, map).then(() => this.renderEditor()).catch(() => this.renderEditor());
+    });
+
+    // Close the portal.
+    const hdrPortalClose = this.querySelector('#hdr-portal-close');
+    if (hdrPortalClose) hdrPortalClose.addEventListener('click', () => {
+      const portal = this.querySelector('#hdr-portal');
+      if (portal) portal.style.display = 'none';
+    });
+
+    // Re-show a status stashed before the last re-render (import summary), so it
+    // survives the DOM rebuild. Status-only: message row, no textarea/primary.
+    if (this._hdrPendingStatus) {
+      const portal = this.querySelector('#hdr-portal');
+      const ta = this.querySelector('#hdr-portal-text');
+      const primary = this.querySelector('#hdr-portal-primary');
+      const lbl = this.querySelector('#hdr-portal-label');
+      if (portal) portal.style.display = '';
+      if (lbl) lbl.textContent = '';
+      if (ta) ta.style.display = 'none';
+      if (primary) primary.style.display = 'none';
+      hdrPortalStatus(this._hdrPendingStatus);
+      this._hdrPendingStatus = null;
+    }
+
     const fxAdd = this.querySelector('#fx-add');
     if (fxAdd) fxAdd.addEventListener('click', () => {
-      this._config.frame_presets = this._config.frame_presets || [];
-      this._config.frame_presets.push(normalizeFramePreset({
-        name: 'New Frame Preset',
+      const scope = this._config.frame_library_scope || 'system';
+      const map = { ...frameLibraryMap(scope) };
+      const baseName = 'New Frame Style';
+      let slug = frameLibSlug(baseName), n = 2;
+      while (map[slug]) { slug = frameLibSlug(baseName + ' ' + n); n++; }
+      map[slug] = normalizeFramePreset({
+        name: n > 2 ? `${baseName} ${n - 1}` : baseName,
         glow: { color: '#2196F3', intensity: 1.0, borders_only: false }
-      }));
-      this._fireConfigChanged();
-      this.renderEditor();
+      });
+      this._libEchoJSON = null;
+      saveFrameLibrary(this._hass, scope, map)
+        .then(() => this.renderEditor())
+        .catch(() => { this._fxPendingStatus = 'Could not create — the shared library store is unavailable on this connection.'; this.renderEditor(); });
     });
 
     // Duplicate Effect preset (deep copy with a fresh id + " (copy)" name).
@@ -8473,6 +10626,7 @@ class SEEDCardEditor extends HTMLElement {
     this.querySelectorAll('.fx-delete').forEach(el => {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
+        if (!this._confirmDelete('Delete this Frame Style? Sections/cards using it will lose that frame. This cannot be undone.')) return;
         const fid = el.dataset.fxId;
         this._config.frame_presets = (this._config.frame_presets || []).filter(f => f.id !== fid);
         const scrub = fr => {
@@ -8487,7 +10641,7 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-    // ---- Frame Preset portability: export / import / library ----
+    // ---- Frame Style portability: export / import / library ----
 
     // Copy text to clipboard with a textarea fallback for non-secure contexts.
     const copyText = (text) => {
@@ -8503,8 +10657,15 @@ class SEEDCardEditor extends HTMLElement {
     const portalStatus = (msg) => { const s = this.querySelector('#fx-portal-status'); if (s) s.textContent = msg || ''; };
     const nowISO = () => { try { return new Date().toISOString().slice(0, 10); } catch (e) { return ''; } };
 
+<<<<<<< HEAD
+    // Resolve any preset id (Built-In, lib:<slug>, or legacy local fx_*) to its
+    // object.
+    const presetById = (id) => {
+      if (id === BUILTIN_FRAME_ID) return builtinFramePreset();
+=======
     // Resolve any preset id (local fx_* or lib:<slug>) to its object.
     const presetById = (id) => {
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       if (typeof id === 'string' && id.startsWith('lib:')) {
         return frameLibraryMap(this._config.frame_library_scope)[id.slice(4)] || null;
       }
@@ -8569,12 +10730,22 @@ class SEEDCardEditor extends HTMLElement {
         const scope = this._config.frame_library_scope || 'system';
         const usesLib = fr => fr && (fr.presets || []).some(id => id === 'lib:' + slug);
         const usedHere = usesLib(this._config.card_frame) || (this._config.sections || []).some(s => usesLib(s.frame));
+<<<<<<< HEAD
+        const msg = usedHere
+          ? 'This card references this System Frame Style. Deleting it from the shared library will leave those spots with no frame.\n\nDelete it anyway?'
+          : 'Delete this System Frame Style from the shared library? This affects every card that uses it. This cannot be undone.';
+        if (!this._confirmDelete(msg)) return;
+        const map = { ...frameLibraryMap(scope) };
+        delete map[slug];
+        delete this._frameDrafts[slug];   // drop any open draft for the deleted preset
+=======
         if (usedHere) {
           const ok = (() => { try { return window.confirm(`This card references this System preset. Deleting it from the shared library will leave those spots with no frame.\n\nDelete it anyway?`); } catch (e) { return true; } })();
           if (!ok) return;
         }
         const map = { ...frameLibraryMap(scope) };
         delete map[slug];
+>>>>>>> d65989548fdbf203a804606d75440bca7a95012c
         this._libEchoJSON = null;
         saveFrameLibrary(this._hass, scope, map)
           .then(() => this.renderEditor())
@@ -8594,7 +10765,7 @@ class SEEDCardEditor extends HTMLElement {
       (this._config.sections || []).forEach(s => fix(s.frame));
     };
 
-    // Save to Library: publish the preset to the Preset Library, then LINK this
+    // Save to Library: publish the preset to the Style Library, then LINK this
     // card to it — repoint every ref from the local preset to lib:<slug> and
     // drop the now-orphaned local copy. The library becomes the single source
     // of truth (Color-Light "Save to Entity" model): editing the library entry
@@ -8609,7 +10780,7 @@ class SEEDCardEditor extends HTMLElement {
         const slug = frameLibSlug(src.name);
         map[slug] = portableFramePreset(src, true);   // keep conditions within-system
         this._fxPortal('export', '', '');
-        portalStatus(`Publishing "${src.name}" to the Preset Library as lib:${slug}…`);
+        portalStatus(`Publishing "${src.name}" to the Style Library as lib:${slug}…`);
         saveFrameLibrary(this._hass, scope, map)
           .then(() => {
             // Link the card to the library entry: swap refs, remove local copy.
@@ -8617,17 +10788,17 @@ class SEEDCardEditor extends HTMLElement {
             repointRefs(src.id, libId);
             this._config.frame_presets = (this._config.frame_presets || []).filter(f => f.id !== src.id);
             this._fireConfigChanged();
-            this._fxPendingStatus = `Published "${src.name}" to the Preset Library and linked this card to it (lib:${slug}). It now follows the library.`;
+            this._fxPendingStatus = `Published "${src.name}" to the Style Library and linked this card to it (lib:${slug}). It now follows the library.`;
             this.renderEditor();
           })
-          .catch(() => { portalStatus('Could not save — the Preset Library store is unavailable on this connection.'); });
+          .catch(() => { portalStatus('Could not save — the Style Library store is unavailable on this connection.'); });
       });
     });
 
     // Open the import portal.
     const fxImport = this.querySelector('#fx-import');
     if (fxImport) fxImport.addEventListener('click', () => {
-      this._fxPortal('import', '', 'Paste exported Frame Preset text below, then Import.');
+      this._fxPortal('import', '', 'Paste exported Frame Style text below, then Import.');
     });
 
     // Portal primary button: Copy (export mode) or Import (import mode).
@@ -8707,6 +10878,7 @@ class SEEDCardEditor extends HTMLElement {
             kind === 'textpart'    ? { kind: 'text', template: '{last_changed_ago}', align: 'right', size: 14 } :
             kind === 'iconpart'    ? { kind: 'icon', icon: 'mdi:information-outline', align: 'right', size: 20 } :
             kind === 'gradientstop'? { value: 0, color: '#888888' } :
+            kind === 'hdrrule'     ? { when: { op: 'is_on' } } :
             kind === 'edgestop'    ? { pos: 50, color: '#2196F3' } : {};
           this._atSet(sec, list, arr.concat([item]));
         });
@@ -8715,7 +10887,12 @@ class SEEDCardEditor extends HTMLElement {
 
     // Delete from a list.
     this.querySelectorAll('.at-del[data-at-list]').forEach(el => {
-      el.addEventListener('click', () => {
+      el.addEventListener('click', (ev) => {
+        // Some at-del icons live inside a <summary> (e.g. Header rule rows);
+        // stop the click from toggling that <details> open/closed.
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (!this._confirmDelete('Delete this item?')) return;
         const sid = el.dataset.atSid, list = el.dataset.atList, idx = Number(el.dataset.atIdx);
         this._atApply(sid, sec => {
           const arr = this._atGet(sec, list) || [];
@@ -8724,6 +10901,92 @@ class SEEDCardEditor extends HTMLElement {
         });
       });
     });
+
+    // Header Rule Set: apply a set to a section (append a ref, blank entity).
+    this.querySelectorAll('.at-hdr-ref-add').forEach(el => {
+      el.addEventListener('change', () => {
+        const ref = el.value; if (!ref) return;
+        const sid = el.dataset.atSid;
+        this._atApply(sid, sec => {
+          const arr = Array.isArray(sec.header_rule_refs) ? sec.header_rule_refs.slice() : [];
+          arr.push({ ref, entity: '' });
+          sec.header_rule_refs = arr;
+        });
+      });
+    });
+
+    // Searchable single-entity picker (_atEntityPicker). Search filters rows in
+    // place (no re-render → keeps focus); clicking a row sets the value; the
+    // chip's clear button empties it. Uses the generic at-* apply so drafts +
+    // sections + card all persist correctly.
+    this.querySelectorAll('.at-ent-search').forEach(el => {
+      el.addEventListener('input', () => {
+        const pid = el.dataset.entPid;
+        const list = this.querySelector(`.at-ent-list[data-ent-pid="${pid}"]`);
+        if (!list) return;
+        const term = el.value.trim().toLowerCase();
+        list.querySelectorAll('.at-ent-pick').forEach(row => {
+          const hay = row.dataset.search || '';
+          row.style.display = (!term || hay.includes(term)) ? '' : 'none';
+        });
+      });
+    });
+    this.querySelectorAll('.at-ent-pick').forEach(el => {
+      el.addEventListener('click', () => {
+        const sid = el.dataset.atSid, path = el.dataset.atPath, id = el.dataset.entityId;
+        if (!sid || !path || !id) return;
+        this._atApply(sid, sec => this._atSet(sec, path, id));
+      });
+    });
+    this.querySelectorAll('.at-ent-clear').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const sid = el.dataset.atSid, path = el.dataset.atPath;
+        this._atApply(sid, sec => this._atSet(sec, path, ''));
+      });
+    });
+
+    // "Choose an Entity" / "Bind a Default Entity" checkbox — reveals or hides
+    // the entity picker for a Header Rule binding. Transient (_hdrEntPickerOpen),
+    // not persisted; re-renders so the picker appears/disappears. Unchecking
+    // also clears any partially-typed (unselected) state — the actual value only
+    // persists when a row is clicked, so nothing to undo there.
+    this.querySelectorAll('.hdr-ent-toggle').forEach(el => {
+      el.addEventListener('change', () => {
+        const key = el.dataset.hdrEntKey;
+        if (el.checked) this._hdrEntPickerOpen.add(key);
+        else this._hdrEntPickerOpen.delete(key);
+        this.renderEditor();
+      });
+    });
+
+    // Header rule Preview toggle — flips a transient per-rule flag and re-renders
+    // so the preview box shows/hides. Not persisted to config.
+    this.querySelectorAll('.hdr-rule-preview').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        // Lives in the rule's <summary>; stop the click from toggling the row.
+        ev.preventDefault();
+        ev.stopPropagation();
+        const key = el.dataset.hdrSlug + '||' + el.dataset.hdrIdx;
+        if (this._hdrRulePreview.has(key)) this._hdrRulePreview.delete(key);
+        else this._hdrRulePreview.add(key);
+        this.renderEditor();
+      });
+    });
+
+    // Header Rule Set dirty-draft Save / Discard (per set).
+    this.querySelectorAll('.hdr-save-draft').forEach(el => el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const d = this._headerDrafts[el.dataset.hdrSlug];
+      if (!d || !d.dirty) return;   // disabled visual = no-op
+      this._saveHeaderDraft(el.dataset.hdrSlug);
+    }));
+    this.querySelectorAll('.hdr-discard-draft').forEach(el => el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const d = this._headerDrafts[el.dataset.hdrSlug];
+      if (!d || !d.dirty) return;
+      this._discardHeaderDraft(el.dataset.hdrSlug);
+    }));
 
     // Group kind toggle (any_of <-> all_of): rename the key, keep children.
     this.querySelectorAll('.at-group-kind[data-at-path]').forEach(el => {
@@ -8817,7 +11080,7 @@ class SEEDCardEditor extends HTMLElement {
     const rsAdd = this.querySelector('#rs-add');
     if (rsAdd) rsAdd.addEventListener('click', () => {
       this._config.rule_sets = this._config.rule_sets || [];
-      this._config.rule_sets.push(normalizeRuleSetDef({ name: 'New Rule Set',
+      this._config.rule_sets.push(normalizeRuleSetDef({ name: 'New Filter Rule',
         filter: { include: [{ field: 'domain', op: 'eq', value: 'light' }], exclude: [] } }));
       this._fireConfigChanged();
       this.renderEditor();
@@ -8847,7 +11110,10 @@ class SEEDCardEditor extends HTMLElement {
         const id = el.dataset.rsId;
         const usedBy = (this._config.sections || []).filter(s =>
           Array.isArray(s.rule_sets) && s.rule_sets.some(r => r.ref === id)).length;
-        if (usedBy && !confirm(`This rule set is used by ${usedBy} section(s). Delete it and remove those references?`)) return;
+        const msg = usedBy
+          ? `Delete this filter rule? It's used by ${usedBy} section(s) — those references will be removed too. This cannot be undone.`
+          : 'Delete this filter rule? This cannot be undone.';
+        if (!this._confirmDelete(msg)) return;
         this._config.rule_sets = (this._config.rule_sets || []).filter(r => r.id !== id);
         // Drop refs to it from every section.
         (this._config.sections || []).forEach(s => {
@@ -8920,6 +11186,7 @@ class SEEDCardEditor extends HTMLElement {
     // recompute dynamically).
     this.querySelectorAll('.ms-unassign').forEach(el => {
       el.addEventListener('click', () => {
+        if (!this._confirmDelete('Unassign this filter rule from the section? Its entities will be removed from this section.')) return;
         const sid = el.dataset.atSid, ref = el.dataset.msRef;
         this._atApply(sid, sec => {
           if (Array.isArray(sec.rule_sets)) sec.rule_sets = sec.rule_sets.filter(r => r.ref !== ref);
@@ -9251,74 +11518,6 @@ class SEEDCardEditor extends HTMLElement {
       }
     });
 
-    // Section divider controls
-    const showSectionDividerEl = this.querySelector('#ed-show-section-divider');
-    if (showSectionDividerEl) {
-      showSectionDividerEl.addEventListener('change', () => {
-        this._config.show_section_divider = showSectionDividerEl.checked;
-        this._fireConfigChanged();
-      });
-    }
-
-    const sectionDividerColorEl = this.querySelector('#ed-color-section-divider');
-    if (sectionDividerColorEl) {
-      sectionDividerColorEl.addEventListener('input', () => {
-        this._config.colors = { ...this._config.colors, section_divider: sectionDividerColorEl.value };
-        this._fireConfigChanged();
-      });
-    }
-
-    const sectionDividerWidthEl = this.querySelector('#ed-section-divider-width');
-    if (sectionDividerWidthEl) {
-      sectionDividerWidthEl.addEventListener('input', () => {
-        const val = parseInt(sectionDividerWidthEl.value, 10);
-        this._config.section_divider_width = val;
-        const label = this.querySelector('#ed-section-divider-width-value');
-        if (label) label.textContent = `${val}px`;
-        this._fireConfigChanged();
-      });
-    }
-
-    const sectionDividerLengthEl = this.querySelector('#ed-section-divider-length');
-    if (sectionDividerLengthEl) {
-      sectionDividerLengthEl.addEventListener('input', () => {
-        const val = parseInt(sectionDividerLengthEl.value, 10);
-        this._config.section_divider_length = val;
-        const label = this.querySelector('#ed-section-divider-length-value');
-        if (label) label.textContent = `${val}%`;
-        this._fireConfigChanged();
-      });
-    }
-
-    const showSectionDividerBottomEl = this.querySelector('#ed-show-section-divider-bottom');
-    if (showSectionDividerBottomEl) {
-      showSectionDividerBottomEl.addEventListener('change', () => {
-        this._config.show_section_divider_bottom = showSectionDividerBottomEl.checked;
-        this._fireConfigChanged();
-      });
-    }
-
-    const sectionDividerBottomWidthEl = this.querySelector('#ed-section-divider-bottom-width');
-    if (sectionDividerBottomWidthEl) {
-      sectionDividerBottomWidthEl.addEventListener('input', () => {
-        const val = parseInt(sectionDividerBottomWidthEl.value, 10);
-        this._config.section_divider_bottom_width = val;
-        const label = this.querySelector('#ed-section-divider-bottom-width-value');
-        if (label) label.textContent = `${val}px`;
-        this._fireConfigChanged();
-      });
-    }
-
-    const sectionDividerBottomLengthEl = this.querySelector('#ed-section-divider-bottom-length');
-    if (sectionDividerBottomLengthEl) {
-      sectionDividerBottomLengthEl.addEventListener('input', () => {
-        const val = parseInt(sectionDividerBottomLengthEl.value, 10);
-        this._config.section_divider_bottom_length = val;
-        const label = this.querySelector('#ed-section-divider-bottom-length-value');
-        if (label) label.textContent = `${val}%`;
-        this._fireConfigChanged();
-      });
-    }
 
     // Row indent
     const rowIndentEl = this.querySelector('#ed-row-indent');
@@ -9470,6 +11669,7 @@ class SEEDCardEditor extends HTMLElement {
       this._fireConfigChanged(); this.renderEditor();
     }));
     this.querySelectorAll('.fr-remove').forEach(el => el.addEventListener('click', () => {
+      if (!this._confirmDelete('Remove this applied frame from here? (The Frame Style itself is kept in the library.)')) return;
       const fr = frameRefFor(el.dataset.frSid); if (!fr) return;
       const removed = fr.presets.splice(Number(el.dataset.frIdx), 1)[0];
       // Keep `disabled` in sync when a preset is removed.
@@ -9492,6 +11692,17 @@ class SEEDCardEditor extends HTMLElement {
       const i = Number(el.dataset.frIdx), dir = Number(el.dataset.frDir), j = i + dir;
       if (j < 0 || j >= fr.presets.length) return;
       const t = fr.presets[i]; fr.presets[i] = fr.presets[j]; fr.presets[j] = t;
+      this._fireConfigChanged(); this.renderEditor();
+    }));
+    // Ignore-conditions: this layer applies HERE even when its own condition is
+    // false. Kept in sync with the preset list; emitted only when non-empty.
+    this.querySelectorAll('.fr-ignore').forEach(el => el.addEventListener('change', () => {
+      const fr = frameRefFor(el.dataset.frSid); if (!fr) return;
+      const id = el.dataset.frId;
+      const set = new Set(fr.ignore_conditions || []);
+      if (el.checked) set.add(id); else set.delete(id);
+      fr.ignore_conditions = [...set].filter(x => (fr.presets || []).includes(x));
+      if (!fr.ignore_conditions.length) delete fr.ignore_conditions;
       this._fireConfigChanged(); this.renderEditor();
     }));
 
@@ -9540,17 +11751,21 @@ class SEEDCardEditor extends HTMLElement {
 
     const showTitleEl = this.querySelector('#ed-show-title');
     if (showTitleEl) {
+      // Toggling shows/hides the title-text sub-settings, so re-render.
       showTitleEl.addEventListener('change', () => {
         this._config.show_title = showTitleEl.checked;
         this._fireConfigChanged();
+        this.renderEditor();
       });
     }
 
     const showTitleIconEl = this.querySelector('#ed-show-title-icon');
     if (showTitleIconEl) {
+      // Toggling shows/hides the title-icon sub-settings, so re-render.
       showTitleIconEl.addEventListener('change', () => {
         this._config.show_title_icon = showTitleIconEl.checked;
         this._fireConfigChanged();
+        this.renderEditor();
       });
     }
 
@@ -9568,6 +11783,129 @@ class SEEDCardEditor extends HTMLElement {
         this.renderEditor();
       });
     }
+
+    // Add a standalone Divider section (seeded with a subtle center-fade line).
+    const addDividerBtn = this.querySelector('#ed-add-divider');
+    if (addDividerBtn) {
+      addDividerBtn.addEventListener('click', () => {
+        this._config.sections.push(normalizeDividerSection({
+          type: 'divider', label: '', thickness: 1, length: 100, justify: 'center'
+        }));
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    }
+
+    // Divider section config. `_dividerPatch` mutates the section in place then
+    // re-normalizes it (keeps the divider shape clean). Text/number/color/select
+    // apply live (no re-render); checkboxes that reveal fields re-render.
+    const dividerPatch = (sid, key, val, rerender) => {
+      const s = (this._config.sections || []).find(x => x.id === sid);
+      if (!s) return;
+      s[key] = val;
+      const i = this._config.sections.findIndex(x => x.id === sid);
+      this._config.sections[i] = normalizeDividerSection(s);
+      this._fireConfigChanged();
+      if (rerender) this.renderEditor();
+    };
+    // Live-repaint a divider's preview box in place (no full re-render) after a
+    // value edit, so the user sees the change without losing focus/scroll.
+    const refreshDivPreview = (sid) => {
+      const box = this.querySelector(`.ed-div-preview[data-div-sid="${sid}"]`);
+      const s = (this._config.sections || []).find(x => x.id === sid);
+      if (box && s) box.innerHTML = dividerLineHtml(s, { scale: this._config.scale || 1.0, divider_color: this._edColors().section_divider });
+    };
+    this.querySelectorAll('.ed-div-input').forEach(el => {
+      const evt = (el.type === 'range' || el.type === 'text' || el.type === 'color') ? 'input' : 'change';
+      // Selects that reveal/hide dependent controls must re-render the editor.
+      const structural = el.classList.contains('at-structural');
+      el.addEventListener(evt, () => {
+        const sid = el.dataset.divSid, key = el.dataset.divKey;
+        let val = el.value;
+        if (el.type === 'range') {
+          val = Number(el.value);
+          const lbl = this.querySelector(`.ed-div-val[data-div-sid="${sid}"][data-div-key="${key}"]`);
+          if (lbl) lbl.textContent = (val === 0 && el.dataset.divZero) ? el.dataset.divZero : `${val}${key === 'length' ? '%' : (/size|thickness|indent/.test(key) ? 'px' : '')}`;
+        }
+        dividerPatch(sid, key, val, structural);
+        if (!structural) refreshDivPreview(sid);
+      });
+    });
+    this.querySelectorAll('.ed-div-check').forEach(el => {
+      el.addEventListener('change', () => {
+        // Show Line/Text/Icon are inverse of the stored hide_* flags (data-invert).
+        const val = el.dataset.invert ? !el.checked : el.checked;
+        // gradient/hide toggles change revealed fields → re-render.
+        dividerPatch(el.dataset.divSid, el.dataset.divKey, val, true);
+      });
+    });
+    this.querySelectorAll('.ed-div-gpattern').forEach(el => {
+      el.addEventListener('change', () => {
+        const sid = el.dataset.divSid, idx = el.value;
+        const s = (this._config.sections || []).find(x => x.id === sid);
+        if (!s) return;
+        if (idx === '') { delete s.gradient_pattern; }
+        else {
+          const pat = DIVIDER_GRADIENT_PATTERNS[Number(idx)];
+          if (!pat) return;
+          // Resolve null placeholder stops to the divider's own color.
+          const color = /^#/.test(s.color || '') ? s.color : '#333333';
+          s.stops = pat.stops.map(st => ({ pos: st.pos, color: st.color == null ? color : st.color }));
+          s.gradient = true;
+          s.gradient_pattern = Number(idx);
+        }
+        const i = this._config.sections.findIndex(x => x.id === sid);
+        this._config.sections[i] = normalizeDividerSection(s);
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    });
+    // Per-stop gradient editor: position slider (live) + color + source mode +
+    // add/remove. A manual stop edit drops the pattern tag (→ Custom).
+    const stopMutate = (sid, fn, rerender) => {
+      const s = (this._config.sections || []).find(x => x.id === sid);
+      if (!s) return;
+      s.stops = Array.isArray(s.stops) ? s.stops : [];
+      fn(s);
+      delete s.gradient_pattern;
+      const i = this._config.sections.findIndex(x => x.id === sid);
+      this._config.sections[i] = normalizeDividerSection(s);
+      this._fireConfigChanged();
+      if (rerender) this.renderEditor(); else refreshDivPreview(sid);
+    };
+    this.querySelectorAll('.ed-div-stop-pos').forEach(el => el.addEventListener('input', () => {
+      const sid = el.dataset.divSid, i = Number(el.dataset.idx), v = clamp(Number(el.value) || 0, 0, 100);
+      const lbl = el.parentElement && el.parentElement.querySelector('.ed-div-stop-pos-val');
+      if (lbl) lbl.textContent = `${v}%`;
+      stopMutate(sid, s => { if (s.stops[i]) s.stops[i].pos = v; }, false);
+    }));
+    this.querySelectorAll('.ed-div-stop-color').forEach(el => el.addEventListener('input', () => {
+      const sid = el.dataset.divSid, i = Number(el.dataset.idx);
+      stopMutate(sid, s => { if (s.stops[i]) s.stops[i].color = el.value; }, false);
+    }));
+    this.querySelectorAll('.ed-div-stop-mode').forEach(el => el.addEventListener('change', () => {
+      const sid = el.dataset.divSid, i = Number(el.dataset.idx), mode = el.value;
+      stopMutate(sid, s => {
+        const st = s.stops[i]; if (!st) return;
+        if (mode === 'transparent') st.color = 'transparent';
+        else if (mode === 'theme') st.color = 'theme';
+        else if (!/^#[0-9a-f]{6}$/i.test(st.color || '')) st.color = /^#/.test(s.color || '') ? s.color : '#2196F3';
+      }, true);   // re-render so the color picker enables/disables
+    }));
+    this.querySelectorAll('.ed-div-stop-remove').forEach(el => el.addEventListener('click', () => {
+      if (!this._confirmDelete('Remove this gradient stop?')) return;
+      const sid = el.dataset.divSid, i = Number(el.dataset.idx);
+      stopMutate(sid, s => { s.stops.splice(i, 1); }, true);
+    }));
+    this.querySelectorAll('.ed-div-stop-add').forEach(el => el.addEventListener('click', () => {
+      const sid = el.dataset.divSid;
+      stopMutate(sid, s => {
+        const last = s.stops[s.stops.length - 1];
+        const base = /^#/.test(s.color || '') ? s.color : '#2196F3';
+        s.stops.push({ pos: last ? Math.min(100, (Number(last.pos) || 0) + 10) : 50, color: base });
+        s.gradient = true;
+      }, true);
+    }));
 
     // Activity table: toggle the preset menu, then add the chosen preset.
     const addTableMenuBtn = this.querySelector('#ed-add-table-menu');
@@ -9653,9 +11991,45 @@ class SEEDCardEditor extends HTMLElement {
     // Remove section (entities only)
     this.querySelectorAll('.ed-remove-section').forEach(el => {
       el.addEventListener('click', () => {
+        const sec = (this._config.sections || []).find(s => s.id === el.dataset.sectionId);
+        const nm = sec ? (sec.name || sec.label || sec.type || 'section') : 'section';
+        if (!this._confirmDelete(`Delete the "${nm}" section? This removes the section and its settings. This cannot be undone.`)) return;
         this._config.sections = this._config.sections.filter(
           s => s.id !== el.dataset.sectionId
         );
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    });
+
+    // Duplicate a section (entities, table, or divider). Deep-copies, gives it a
+    // fresh id + a " (copy)" name, and inserts it right after the original.
+    this.querySelectorAll('.ed-duplicate-section').forEach(el => {
+      el.addEventListener('click', () => {
+        const sections = this._config.sections;
+        const idx = sections.findIndex(s => s.id === el.dataset.sectionId);
+        if (idx < 0) return;
+        const clone = JSON.parse(JSON.stringify(sections[idx]));
+        clone.id = uid();
+        if (clone.type === 'divider') { if (clone.label) clone.label = clone.label + ' (copy)'; }
+        else clone.name = (clone.name || 'Section') + ' (copy)';
+        const norm = clone.type === 'divider' ? normalizeDividerSection(clone) : normalizeSection(clone);
+        sections.splice(idx + 1, 0, norm);
+        this._fireConfigChanged();
+        this.renderEditor();
+      });
+    });
+
+    // Hide / show a section: toggles section.hidden (kept in config + editor list,
+    // skipped at render). Re-normalizes so the flag is emitted only when true.
+    this.querySelectorAll('.ed-hide-section').forEach(el => {
+      el.addEventListener('click', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (!section) return;
+        const next = { ...section, hidden: !section.hidden };
+        const norm = next.type === 'divider' ? normalizeDividerSection(next) : normalizeSection(next);
+        const idx = this._config.sections.findIndex(s => s.id === section.id);
+        this._config.sections[idx] = norm;
         this._fireConfigChanged();
         this.renderEditor();
       });
@@ -9711,100 +12085,6 @@ class SEEDCardEditor extends HTMLElement {
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (section) {
           section.default_state = el.value === 'expanded' ? 'expanded' : 'collapsed';
-          this._fireConfigChanged();
-        }
-      });
-    });
-
-    // Per-section Divider override
-    this.querySelectorAll('.ed-section-divider-mode').forEach(el => {
-      el.addEventListener('change', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          section.divider_mode = el.value;
-          this._fireConfigChanged();
-          this.renderEditor();
-        }
-      });
-    });
-
-    this.querySelectorAll('.ed-sec-divider-color').forEach(el => {
-      el.addEventListener('input', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          section.divider_color = el.value;
-          this._fireConfigChanged();
-        }
-      });
-    });
-
-    this.querySelectorAll('.ed-sec-divider-above').forEach(el => {
-      el.addEventListener('change', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          section.divider_above = el.checked;
-          this._fireConfigChanged();
-        }
-      });
-    });
-
-    this.querySelectorAll('.ed-sec-divider-above-width').forEach(el => {
-      el.addEventListener('input', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          const val = parseInt(el.value, 10);
-          section.divider_above_width = val;
-          const label = this.querySelector(`.ed-sec-divider-above-width-value[data-section-id="${el.dataset.sectionId}"]`);
-          if (label) label.textContent = `${val}px`;
-          this._fireConfigChanged();
-        }
-      });
-    });
-
-    this.querySelectorAll('.ed-sec-divider-above-length').forEach(el => {
-      el.addEventListener('input', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          const val = parseInt(el.value, 10);
-          section.divider_above_length = val;
-          const label = this.querySelector(`.ed-sec-divider-above-length-value[data-section-id="${el.dataset.sectionId}"]`);
-          if (label) label.textContent = `${val}%`;
-          this._fireConfigChanged();
-        }
-      });
-    });
-
-    this.querySelectorAll('.ed-sec-divider-below').forEach(el => {
-      el.addEventListener('change', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          section.divider_below = el.checked;
-          this._fireConfigChanged();
-        }
-      });
-    });
-
-    this.querySelectorAll('.ed-sec-divider-below-width').forEach(el => {
-      el.addEventListener('input', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          const val = parseInt(el.value, 10);
-          section.divider_below_width = val;
-          const label = this.querySelector(`.ed-sec-divider-below-width-value[data-section-id="${el.dataset.sectionId}"]`);
-          if (label) label.textContent = `${val}px`;
-          this._fireConfigChanged();
-        }
-      });
-    });
-
-    this.querySelectorAll('.ed-sec-divider-below-length').forEach(el => {
-      el.addEventListener('input', () => {
-        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
-        if (section) {
-          const val = parseInt(el.value, 10);
-          section.divider_below_length = val;
-          const label = this.querySelector(`.ed-sec-divider-below-length-value[data-section-id="${el.dataset.sectionId}"]`);
-          if (label) label.textContent = `${val}%`;
           this._fireConfigChanged();
         }
       });
@@ -10341,6 +12621,7 @@ class SEEDCardEditor extends HTMLElement {
 
     this.querySelectorAll('.ed-rule-remove').forEach(el => {
       el.addEventListener('click', () => {
+        if (!this._confirmDelete('Delete this display rule?')) return;
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (!section || !Array.isArray(section.entity_rules)) return;
         section.entity_rules.splice(parseInt(el.dataset.ruleIndex, 10), 1);
@@ -10447,6 +12728,35 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
+    // ---- Searchable section entity picker (client-filter + add rows) ----
+    // Search box: show/hide candidate rows in place (no re-render → keeps focus).
+    this.querySelectorAll('.ed-sec-entity-search').forEach(el => {
+      el.addEventListener('input', () => {
+        const sid = el.dataset.sectionId;
+        const term = el.value.trim().toLowerCase();
+        const list = this.querySelector(`.ed-sec-cand-list[data-section-id="${sid}"]`);
+        if (!list) return;
+        list.querySelectorAll('.ed-sec-cand').forEach(row => {
+          const hay = row.dataset.search || '';
+          row.style.display = (!term || hay.includes(term)) ? '' : 'none';
+        });
+      });
+    });
+    // Add a candidate entity (the + on a search-list row).
+    this.querySelectorAll('.ed-sec-cand-add').forEach(el => {
+      el.addEventListener('click', () => {
+        const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
+        if (!section) return;
+        const id = el.dataset.entityId;
+        if (!id) return;
+        if (!(section.entities || []).includes(id)) {
+          section.entities = [...(section.entities || []), id];
+          this._fireConfigChanged();
+          this.renderEditor();
+        }
+      });
+    });
+
     // ---- Section entity selector: picker, chips, select all / remove all ----
     // Picker adds the chosen entity immediately on selection (no + button).
     this.querySelectorAll('.ed-section-entity-picker').forEach(el => {
@@ -10465,6 +12775,7 @@ class SEEDCardEditor extends HTMLElement {
     // Remove an assigned-entity chip.
     this.querySelectorAll('.ed-section-entity-remove').forEach(el => {
       el.addEventListener('click', () => {
+        if (!this._confirmDelete(`Remove "${this._friendly(el.dataset.entityId)}" from this section?`)) return;
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (!section) return;
         section.entities = (section.entities || []).filter(id => id !== el.dataset.entityId);
@@ -10491,6 +12802,8 @@ class SEEDCardEditor extends HTMLElement {
       el.addEventListener('click', () => {
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (!section) return;
+        if (!(section.entities || []).length) return;
+        if (!this._confirmDelete(`Clear all ${(section.entities || []).length} entities from this section?`)) return;
         section.entities = [];
         this._fireConfigChanged();
         this.renderEditor();
@@ -10511,8 +12824,8 @@ console.log('[easy-entity-styler-card] Loaded successfully -', BUILD_NUMBER);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'easy-entity-styler-card',
-  name: 'Smart & Easy Entity Display Card',
-  description: 'Smart & Easy Entity Display Card',
+  name: 'Easy Entity Styler Card',
+  description: 'Easy Entity Styler Card',
 });
 
 console.log(`✅ easy-entity-styler-card registered successfully! [${BUILD_NUMBER}]`);
