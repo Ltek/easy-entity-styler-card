@@ -1,89 +1,85 @@
 # Easy Entity Styler Card
 
-A highly customizable dashboard card that organizes and displays your entities in a clean way while giving you full control over the look and behavior of your entity cards. Bonus: 1000x easier and better performance than card-mod.
+A highly customizable Home Assistant Dashboard card that organizes and displays your entities cleanly while giving you full control over the look and behavior of your entity cards. Bonus: far easier and far better performance than card-mod.
 
 * **Hundreds of styling options** — card-wide, per section, and per entity
-* **Reusable Rule Sets, Frame Presets, and a shared Preset Library**
-* **Entity Tables** with rule-based color / icons / sorting
-
-... all in a super easy to use Visual Editor — YAML optional, never required
+* **Reusable rule sets, shared style libraries, and rich entity tables**
+* **Everything in a visual editor** — YAML optional, never required
 
 https://github.com/Ltek/easy-entity-styler-card
 
-### ✨ Features
+Current build: **v2026.08.29.186**
 
-* **Extensive Rules Engine for filtering** – A global, reusable, point-and-click filtering engine — no raw YAML or templates.
-  * Build named **Rule Sets** once and assign them to any number of sections.
-  * Each set is a flat list of **Include / Exclude rule groups** (match **ALL** or **ANY**) — an entity shows when it passes every Include group and matches no Exclude group.
-  * Match on entity ID, name, state, attribute, domain, area, **Labels**, **Group helpers**, integration, or device class, with operators like equals / contains / in / regex / numeric compare.
-  * **Live dropdowns** pull the real values from your system and show friendly display names.
+---
 
-* **Static & Dynamic entity lists (auto-entities-like)** – Populate sections automatically from a Rule Set, without hand-listing entities.
-  * **Dynamic** – re-evaluated live: entities appear/disappear as they start/stop matching.
-  * **Static** – a one-time snapshot you can hand-curate; refresh any time with one click.
-  * **Preview** the resolved entities before assigning, and "update all sections" that use a set at once.
+## Options at a glance
 
-* **Everything in the Visual Editor** – Every feature below is fully point-and-click; YAML is optional, never required.
-  * Per-group **Reset** buttons, inherit-vs-custom toggles, and live preview.
+Every option below is fully point-and-click in the visual editor.
 
-* **Color Blender (gradient by value)** – Give any icon or text color a smooth, value-driven gradient instead of hard color steps.
-  * Define **value → color stops** (e.g. 10 lux → dark grey, 900 lux → bright yellow); the card interpolates every shade in between.
-  * As many stops as you like for multi-color ramps; values below/above the ends clamp to the nearest stop.
-  * Discrete rules still take precedence, so you can special-case states (e.g. "off") before the ramp.
+### Sections & layout
+- **Collapsible sections and card** — sections expand/collapse individually; the whole card can collapse to just its title bar (or run with no title bar); sections can auto-stay-open when they hold entities.
+- **Two section types** — *Entities* (rows and/or chips) and *Entity Tables* (rich multi-column tables).
+- **Conditional display** — show a section, entity, or the whole card only when your rules pass; auto-hide a section when it has nothing to show.
 
-* **State-driven header icon (by an entity)** – The section header icon can change **glyph and color from any entity's value**, not just the section's own count.
-  * Point it at any entity (e.g. `sensor.sun_solar_elevation`) and set rules — e.g. brightness glyphs that ramp with the sun's elevation, or shield-check/green ↔ shield-alert/yellow by an alarm state.
-  * Pull an arbitrary entity's value into any title/header text with **`{entity:sensor.x}`** / **`{entity:sensor.x:attribute}`** tokens.
+### Entity selection
+- **Rules engine** — build named, reusable rule sets with point-and-click include/exclude groups (match ALL or ANY); match on id, name, state, attribute, domain, area, label, group helper, integration, or device class, with operators like equals / contains / in / regex / numeric compare. Live dropdowns pull real values from your system.
+- **Static & dynamic lists** — populate a section automatically from a rule set (dynamic re-evaluates live; static is a hand-curatable snapshot). Preview resolved entities before assigning.
 
-* **Entity Tables** – Render entities (or list data) as a rich, multi-column table.
-  * Columns for icon, name, value, "last changed" age, change time, or any attribute.
-  * Point-and-click **color coding** and **state/time-based icon rules** per column.
-  * Show each entity's **own native HA icon**, or override the glyph by state.
-  * **Flexible column widths** — px / % / fr / Auto — for responsive scaling.
-  * **Rule-based sorting** with weights, tie-breakers, and pin-to-top.
-  * Templated **title row** — name/count/newest/oldest tokens, a **state-driven header icon** (swap glyph + color), and custom **"All Secure"-style text** when the count is 0.
-  * Global **Table Defaults**: set your house style once and every new table inherits it.
+### Entity tables
+- Multi-column tables from your entities or from a sensor's array attribute (one row per element).
+- Columns for icon, name, value, "last changed" age, change time, or any attribute; flexible widths (px / % / fr / auto).
+- Rule-based color coding, state/time-based icon rules, rule-based sorting with pin-to-top, templated title row, and global table defaults.
 
-* **Tables from a sensor's array attribute** – Drive a table from an attribute that holds a **list of objects** (e.g. a history/log sensor), rendering **one row per element**.
-  * Point the table's **Row Source** at the entity + attribute (e.g. `sensor.house_mode_history` → `history`).
-  * Set each column's value **Source** to **Array field** and name the field (`mode`, `start`, `end`, …).
-  * Use the **Timestamp → time / date** and **Seconds → duration** transforms for time fields.
-  * An element with no `end` renders live as **"Now"** with a ticking duration; enable **reverse** for newest-first.
+### Appearance & styling
+- **Colors, fonts & scaling** — global palette plus independent scale sliders (overall, icons, title icon/text, entity text); per-section header/row/chip styling; a secondary info line under entity names.
+- **Chips** — compact, colorful chips in wrap / column / grid layouts, with separate tap and hold actions.
+- **Color blender** — smooth value-driven color gradients for any icon or text color (value → color stops, interpolated).
+- **State-driven header icons** — a section or title header icon whose glyph and color change from any entity's value; pull entity values into title text with `{entity:…}` tokens.
+- **Entity name cleaner** — strip repeated text (e.g. "Living Room") card-wide or per section.
+- **Frame Styles** and **Header Rules** — see **Libraries** below.
 
-* **Collapsible sections & card** – Sections expand/collapse individually; the whole card can collapse to just its title bar (or run with no title bar). Sections can auto-stay-open whenever they have entities.
+### Interaction
+- **Native entity controls** — toggle switches, adjust sliders, and interact with entities just like standard HA cards.
 
-* **Conditional display & section rules** – Show each entity only when it passes your rules (compare a value to a constant or another entity, chained AND/OR, live). Auto-hide a section when it has nothing to show, and show a live, fully-styled entity **count** in the header.
+---
 
-* **Chips** – Colorful, compact chips for instant readability, in wrap / column / grid layouts, optional per section, with separate **tap and hold actions** (more-info, toggle, navigate, URL, call-service).
+## Libraries
 
-* **Native entity controls** – Toggle switches, adjust sliders, and interact with entities just like standard HA cards.
+Both this card and the **Color Light & Scene Manager** card share the same two style libraries, stored in Home Assistant's built-in frontend key/value store — **no add-on or custom integration required**. A style you save in one place is available to every card of either type on the instance, and edits propagate live.
 
-* **Frame Presets (borders / glow / shadow / background / edge lines)** – All frame styling lives in one place: named, reusable **Frame Presets** you layer onto a section or the whole card.
-  * Each preset is **sparse** — it stores only the properties you set (a "bottom glow" preset touches nothing else), so presets stack cleanly: apply an ordered list to any section or the Card Wrapper and the **last one wins per property**.
-  * Presets can be **conditional** — apply only when an entity is in a given state, or when a section currently **has / has no** visible entities (e.g. the card glows only while something is active).
-  * Border color / glow / shadow can **follow the section's icon color**, per-side borders + glow, per-side gradient **edge lines**, and background — all point-and-click with a live preview swatch.
+- **Scope is system-wide.** Libraries are shared across all users of the instance (Dashboard editing is admin-only, so there's a single shared author). There is no per-user scope.
+- **Built-In styles are read-only.** Each library ships with a set of Built-In examples you can't overwrite; **duplicate** one to create an editable copy.
+- **Edit once, updates everywhere.** A card references a library entry by name; editing that entry updates every card using it, live — no reload.
+- **Portable.** Any entry can be **exported** as text and **imported** on another system to share a style with someone else.
 
-* **Preset Library (share styles across cards & systems)** – Save a Frame Preset to a **shared library** that lives in Home Assistant (no add-on or integration needed) and reference it from any card as `lib:<name>`.
-  * Edit a library preset once and **every card using it updates live**.
-  * **Local ↔ Library** badges show where each preset lives; **Save to Library** publishes and links a card to it; **Detach** forks a library preset back to a local copy.
-  * **Export / Import** presets as text to share a great style with someone on another system.
+### Frame Styles
+Named, reusable frame bundles — borders, glow, shadow, background, and per-side edge lines. Each style is **sparse** (it stores only the properties you set), so you can layer an ordered list on a section or the whole card and the last one wins per property. Styles can be **conditional** — applied only when an entity is in a given state, or when a section currently has / has no visible entities.
 
-* **Colors, fonts & scaling** – Global color palette (text, icons, chips, dividers…), independent **scale sliders** (overall, icons, title icon/text, entity text), per-section header/row/chip styling, a **secondary info line** under entity names, and an **Entity Name Cleaner** (strip text like "Living Room") card-wide or per section.
+*Storage key:* `ltek_frame_library`
 
-### 🚀 Installation
+### Header Rules
+Named, reusable, state-driven header styling. A rule set is an ordered list of rules (a condition → the outputs it sets) plus optional defaults. Outputs can set the header's **icon color, icon glyph, text color, icon size, text size,** and a **secondary text line** driven by an entity value. Outputs are sparse — anything left "Not set" defers to the card's own header look — and revert automatically when a rule stops matching. Apply a set to the card title and/or to any section.
 
-1. Create the folder `\config\www\community\easy-entity-styler-card`
-2. Download [`easy-entity-styler-card.js`](https://github.com/Ltek/seed-card/blob/main/easy-entity-styler-card.js) and place it in that folder.
-3. Add as a Dashboard Resource:
+*Storage key:* `ltek_header_library`
 
-   * Go to Settings > Dashboards > three-dot menu > Add Resource
-   * Enter `/local/community/easy-entity-styler-card/easy-entity-styler-card.js` and select "JavaScript Module"
-   * Click "Add"
-4. Clear your browser cache and refresh.
+---
 
-### 📸 Screenshots
+## Installation
 
-Example showing just a fraction of the available options...
+1. Create the folder `\config\www\community\easy-entity-styler-card`.
+2. Download [`easy-entity-styler-card.js`](https://github.com/Ltek/easy-entity-styler-card) and place it in that folder.
+3. Add it as a Dashboard resource:
+   - **Settings → Dashboards → ⋮ → Resources → Add Resource**
+   - URL: `/local/community/easy-entity-styler-card/easy-entity-styler-card.js`  ·  Type: **JavaScript Module**
+4. Clear your browser cache and hard-refresh.
+
+---
+
+## Version
+
+Build number format: `v<year>.<month>.<day>.<increment>` — the trailing increment is a monotonic counter that never resets. It's defined once at the top of `easy-entity-styler-card.js` (`BUILD_NUMBER`) and shown in the editor header and browser console on load.
+
+## Screenshots
 
 <!-- SCREENSHOTS:START -->
 <table>
