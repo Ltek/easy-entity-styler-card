@@ -10,17 +10,20 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.08.29.186
+// Version: v2026.08.31.201
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
 //
 // ============================================================================
+
 // Debug logging - disabled by default
 let DEBUG = false;
 function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
+
+const BUILD_NUMBER = 'v2026.08.31.201';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1526,6 +1529,28 @@ function normalizeFrameRef(f) {
   if (Array.isArray(f.ignore_conditions)) {
     const ign = f.ignore_conditions.map(String).filter(id => presets.includes(id));
     if (ign.length) out.ignore_conditions = ign;
+  }
+  // Optional: per-location condition OVERRIDES, keyed by preset id — a full rule
+  // override that replaces the preset's own condition where it's applied (the
+  // shared library preset is untouched). Fields: `when_entity` (rebind the tested
+  // entity) and `when: { op, value }` (change the operator/value). Each is
+  // optional; a blank field inherits the preset's condition. Emitted only when it
+  // holds a non-empty override for an id actually in the list (byte-stable).
+  if (f.overrides && typeof f.overrides === 'object') {
+    const ov = {};
+    Object.keys(f.overrides).forEach(id => {
+      if (!presets.includes(id)) return;
+      const o = f.overrides[id] || {};
+      const clean = {};
+      if (o.when_entity) clean.when_entity = String(o.when_entity);
+      if (o.when && typeof o.when === 'object' && o.when.op) {
+        const w = { op: String(o.when.op) };
+        if (o.when.value !== undefined && o.when.value !== '') w.value = o.when.value;
+        clean.when = w;
+      }
+      if (Object.keys(clean).length) ov[id] = clean;
+    });
+    if (Object.keys(ov).length) out.overrides = ov;
   }
   return out;
 }
@@ -3271,20 +3296,38 @@ class SEEDCard extends HTMLElement {
 
   // True if a preset's `when` condition is satisfied (or it has none). A
   // conditional preset whose entity/state doesn't match is skipped in layering.
-  _framePresetActive(fx) {
+  // `override` (optional) is the per-location override for THIS applied preset
+  // (from the frame ref's `overrides` map): a full rule override —
+  // { when_entity, when:{op,value} } — where each field, when present, replaces
+  // the library preset's own condition HERE (blank fields inherit the preset).
+  _framePresetActive(fx, override) {
     if (!fx) return false;
     // Section-membership condition: active when the target section has (or
-    // lacks) visible entities. No entity state involved.
+    // lacks) visible entities. No entity state involved (override N/A).
     if (fx.when_kind === 'section_has_entities' || fx.when_kind === 'section_empty') {
       const section = (this._config.sections || []).find(s => s.id === fx.when_section);
       if (!section) return false;
       const hasVisible = this._visibleCount(section) > 0;
       return fx.when_kind === 'section_has_entities' ? hasVisible : !hasVisible;
     }
-    if (!fx.when) return true;
-    const ctxId = fx.when_entity || '';
+    // Merge the per-location override onto the preset's own condition. A blank
+    // override field inherits the preset's value; an override op/value replaces
+    // it (so a location can flip "is on" → "is off", or compare a new value).
+    const ov = override || {};
+    const ctxId = ov.when_entity || fx.when_entity || '';
+    const baseWhen = fx.when || null;
+    const ovWhen = (ov.when && typeof ov.when === 'object') ? ov.when : null;
+    let when = baseWhen;
+    if (ovWhen && ovWhen.op) {
+      when = { ...(baseWhen || {}), op: ovWhen.op };
+      if (ovWhen.value !== undefined && ovWhen.value !== '') when.value = ovWhen.value;
+      else if (baseWhen && baseWhen.value !== undefined) when.value = baseWhen.value;
+      else delete when.value;
+    }
+    // No condition anywhere (preset unconditional and no override op) → always on.
+    if (!when || !when.op) return true;
     if (!ctxId || !this._hass || !this._hass.states[ctxId]) return false;
-    return evalCondition(ctxId, fx.when, this._hass);
+    return evalCondition(ctxId, when, this._hass);
   }
 
   // Resolve a section/card FRAME reference (ordered presets) into composed
@@ -3305,6 +3348,10 @@ class SEEDCard extends HTMLElement {
     // Layers whose own condition is ignored HERE — they always apply on this
     // section/card regardless of their when/when_entity.
     const ignoreCond = new Set(frameRef.ignore_conditions || []);
+    // Per-location condition overrides (keyed by preset id) — e.g. a rebound
+    // when_entity so a shared conditional frame is driven by a different entity
+    // here than in the library.
+    const overrides = (frameRef.overrides && typeof frameRef.overrides === 'object') ? frameRef.overrides : {};
     const layerIds = (frameRef.presets || []).filter(id => !disabled.has(id));
     if (!layerIds.length) return null;
     const acc = {};
@@ -3313,8 +3360,9 @@ class SEEDCard extends HTMLElement {
       const fx = byId[id];
       if (!fx) return;
       // Skip conditional presets that aren't active — UNLESS this application
-      // opted to ignore the condition (then the layer always applies).
-      if (!ignoreCond.has(id) && !this._framePresetActive(fx)) return;
+      // opted to ignore the condition (then the layer always applies). The
+      // per-location override (if any) rebinds the condition entity here.
+      if (!ignoreCond.has(id) && !this._framePresetActive(fx, overrides[id])) return;
       ['glow', 'shadow', 'border', 'background', 'edges'].forEach(g => {
         if (fx[g]) { acc[g] = JSON.parse(JSON.stringify(fx[g])); any = true; }
       });
@@ -3371,14 +3419,10 @@ class SEEDCard extends HTMLElement {
         : mode === 'transparent' ? 'transparent'
         : (acc.background.color || 'transparent');
     }
-<<<<<<< HEAD
     // 'match' edge stops resolve to the frame's border color if it has one,
     // else the section/icon color — so a gradient border follows the accent.
     const edgeMatch = (acc.border && !acc.border.follow_icon && acc.border.color) ? acc.border.color : iconCol;
     if (acc.edges) out.edge = buildEdgeBackground(acc.edges, edgeMatch);
-=======
-    if (acc.edges) out.edge = buildEdgeBackground(acc.edges);
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     return out;
   }
 
@@ -5608,7 +5652,6 @@ class SEEDCardEditor extends HTMLElement {
     // ignore its own just-saved value so it doesn't re-render mid-typing.
     this._libEditTimer = null;
     this._libEchoJSON = null;
-<<<<<<< HEAD
     // Frame Style DIRTY DRAFTS — keyed by slug. Editing a lib: preset mutates
     // its draft (a deep copy); nothing is written to the shared library until
     // the user clicks Save. The panel shows all presets at once, so drafts are
@@ -5633,8 +5676,6 @@ class SEEDCardEditor extends HTMLElement {
   _edColors() {
     const defaults = SEEDCard.getStubConfig().colors;
     return { ...defaults, ...((this._config && this._config.colors) || {}) };
-=======
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
   }
 
   _normalizeConfig(config) {
@@ -5703,14 +5744,11 @@ class SEEDCardEditor extends HTMLElement {
       if (this._libEchoJSON !== null && cur === this._libEchoJSON) { this._libEchoJSON = null; return; }
       this._libEchoJSON = null;
       this._rendered = false; this.renderEditor();
-<<<<<<< HEAD
     });
     // Header Rule Set library — load live so the panel + section pickers reflect it.
     ensureHeaderLibrary(hass, (this._config && this._config.header_library_scope) || 'system', () => {
       if (!this._config) return;
       this._rendered = false; this.renderEditor();
-=======
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     });
     // Only render if we haven't rendered yet or if config changed
     if (this._config && !this._rendered) {
@@ -5829,7 +5867,6 @@ class SEEDCardEditor extends HTMLElement {
     if (idx !== -1) return { list: this._config.rule_sets, idx, kind: 'rule_set' };
     idx = (this._config.frame_presets || []).findIndex(f => f.id === sid);
     if (idx !== -1) return { list: this._config.frame_presets, idx, kind: 'frame_preset' };
-<<<<<<< HEAD
     // Header Rule Set library entry (hdr:<slug>): edits target a DRAFT (deep
     // copy), seeded lazily from the shared-library entry. Nothing is written to
     // the store until the user clicks Save (mirrors the Frame Style drafts).
@@ -5845,15 +5882,6 @@ class SEEDCardEditor extends HTMLElement {
       const slug = sid.slice(4);
       const d = this._frameDraftFor(slug);
       if (d) return { list: [d.fx], idx: 0, kind: 'frame_lib', slug };
-=======
-    // Library preset (lib:<slug>): edit the shared-library entry in place. The
-    // module cache object is mutated by reference; _atApply* debounce-saves it
-    // back to the store. Wrapped in a single-element list to match the shape.
-    if (typeof sid === 'string' && sid.startsWith('lib:')) {
-      const slug = sid.slice(4);
-      const map = frameLibraryMap(this._config.frame_library_scope);
-      if (map && map[slug]) return { list: [map[slug]], idx: 0, kind: 'frame_lib', slug };
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     }
     return null;
   }
@@ -5951,7 +5979,6 @@ class SEEDCardEditor extends HTMLElement {
       this._config.table_defaults = normalizeTableDefaults(t.list[t.idx]);
       this._fireConfigChanged();
     } else if (t.kind === 'frame_lib') {
-<<<<<<< HEAD
       // Library preset: normalize the DRAFT in place (preserve the lib: id) and
       // mark it dirty. NOTHING is written to the shared store until Save.
       const norm = normalizeFramePreset(t.list[t.idx]);
@@ -5977,17 +6004,6 @@ class SEEDCardEditor extends HTMLElement {
         if (!this._config.header_rule_refs.length) delete this._config.header_rule_refs;
       }
       this._fireConfigChanged();
-=======
-      // Library preset: normalize in place (preserve the lib: id) and persist
-      // to the shared store; card config is untouched.
-      const norm = normalizeFramePreset(t.list[t.idx]);
-      norm.id = 'lib:' + t.slug;
-      const map = frameLibraryMap(this._config.frame_library_scope);
-      map[t.slug] = norm;
-      this._saveLibraryDebounced();
-      this.renderEditor();
-      return;
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     } else if (t.kind === 'frame_preset') {
       t.list[t.idx] = normalizeFramePreset(t.list[t.idx]);
       this._fireConfigChanged();
@@ -6014,7 +6030,6 @@ class SEEDCardEditor extends HTMLElement {
     }, 400);
   }
 
-<<<<<<< HEAD
   // Debounced persist of the in-memory Header Rule Set library to the store.
   _saveHeaderLib() {
     const scope = (this._config && this._config.header_library_scope) || 'system';
@@ -6026,8 +6041,6 @@ class SEEDCardEditor extends HTMLElement {
     }, 400);
   }
 
-=======
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
   // Apply a LIVE VALUE edit (typing in a text/number field, dragging a slider)
   // - update config + push to the card, but do NOT rebuild the editor DOM, so
   // the input keeps focus and the caret doesn't jump. Re-normalization is
@@ -6039,7 +6052,6 @@ class SEEDCardEditor extends HTMLElement {
     if (!t) return;
     mutate(t.list[t.idx]);
     if (t.kind === 'frame_lib') {
-<<<<<<< HEAD
       // Live value edit on a library preset: the draft object was mutated in
       // place (already done). Mark dirty; no store write, no re-render (keeps
       // focus). Enable the Save/Discard buttons without rebuilding the DOM.
@@ -6052,6 +6064,10 @@ class SEEDCardEditor extends HTMLElement {
         const row = root.querySelector(`.seed-ed-fx-saverow[data-fx-saverow="${t.slug}"]`);
         if (row) row.classList.add('seed-ed-fx-saverow-dirty');
       } else if (d) { d.dirty = true; }
+      // Repaint the live preview swatch in place so slider/color edits show
+      // immediately (structural checkboxes already refresh via _atApply's
+      // re-render; live scalar edits must repaint here or the swatch goes stale).
+      this._paintFramePreviews();
       return;
     }
     if (t.kind === 'header_lib') {
@@ -6066,11 +6082,6 @@ class SEEDCardEditor extends HTMLElement {
         const row = root.querySelector(`.seed-ed-fx-saverow[data-hdr-saverow="${t.slug}"]`);
         if (row) row.classList.add('seed-ed-fx-saverow-dirty');
       } else if (d) { d.dirty = true; }
-=======
-      // Live value edit on a library preset: mutate the cache object in place
-      // (already done) and debounce-save; no card config change, no re-render.
-      this._saveLibraryDebounced();
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       return;
     }
     this._fireConfigChanged();
@@ -6430,16 +6441,18 @@ class SEEDCardEditor extends HTMLElement {
       const rid = rs.id;
       const usedBy = (this._config.sections || []).filter(s =>
         Array.isArray(s.rule_sets) && s.rule_sets.some(r => r.ref === rid)).length;
+      const nGroups = (rs.filter && Array.isArray(rs.filter.groups)) ? rs.filter.groups.length : 0;
+      const rsSub = `${nGroups} group${nGroups === 1 ? '' : 's'}`;
       return `
-        <details class="seed-ed-substyle" data-panel="ruleset-${rid}">
+        <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-lib-row" data-panel="ruleset-${rid}">
           <summary class="seed-ed-substyle-sum">
-            <ha-icon icon="mdi:filter-variant" class="seed-ed-rs-sum-icon"></ha-icon>
-            <input type="text" class="rs-name at-input" data-at-sid="${rid}" data-at-path="name" value="${escapeHtml(rs.name || '')}" placeholder="Rule set name" style="flex:1;" />
+            <span class="seed-ed-lib-name" style="flex:1;">${escapeHtml(rs.name || 'Rule Set')}<span class="seed-ed-lib-sub">${escapeHtml(rsSub)}</span></span>
             <span class="seed-ed-hint">${usedBy} section${usedBy === 1 ? '' : 's'}</span>
             <ha-icon class="seed-ed-icon-btn rs-duplicate" icon="mdi:content-copy" data-rs-id="${rid}" title="Duplicate rule set"></ha-icon>
             <ha-icon class="seed-ed-icon-btn rs-delete" icon="mdi:trash-can-outline" data-rs-id="${rid}" title="Delete rule set"></ha-icon>
           </summary>
           <div class="seed-ed-substyle-body">
+            <div class="seed-ed-font-row"><label style="flex:1;">Name<input type="text" class="rs-name at-input" data-at-sid="${rid}" data-at-path="name" value="${escapeHtml(rs.name || '')}" placeholder="Rule set name" style="width:100%;" /></label></div>
             ${this._atFilterGroups(rid, rs.filter)}
             ${this._atRuleSetPreviewHtml(rs)}
             <div class="seed-ed-reset-row">
@@ -6468,7 +6481,7 @@ class SEEDCardEditor extends HTMLElement {
         <div class="seed-ed-add-row">
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="rs-add"><ha-icon icon="mdi:plus"></ha-icon>Add Filter Rule</div>
         </div>
-        ${setBlocks || '<span class="seed-ed-hint">No rule sets yet. Add one, then assign it to a section.</span>'}
+        ${setBlocks ? `<div class="seed-ed-lib-list">${setBlocks}</div>` : '<span class="seed-ed-hint">No rule sets yet. Add one, then assign it to a section.</span>'}
       </details>`;
   }
 
@@ -6572,42 +6585,14 @@ class SEEDCardEditor extends HTMLElement {
 
   // A small storage-location badge for a preset. A local preset lives in THIS
   // card's config; if an identical (by content) preset also exists in the
-<<<<<<< HEAD
   // Style Library, we mark it "In Library" so the user knows it's published.
-=======
-  // Preset Library, we mark it "In Library" so the user knows it's published.
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
   // Location badge distinguishing where a preset lives:
   //  - a lib: preset is System-wide (shared library, every card can use it)
   //  - otherwise it's Local (this card only)
-  _fxLocationBadge(fx) {
-<<<<<<< HEAD
-    if (fx && fx._builtin) {
-      return `<span class="seed-ed-loc-badge seed-ed-loc-builtin" title="Built-in fallback frame — read-only. Duplicate it to make an editable System preset."><ha-icon icon="mdi:lock-outline"></ha-icon>Built-In</span>`;
-    }
-    const isLib = typeof fx.id === 'string' && fx.id.startsWith('lib:');
-    if (isLib) {
-      return `<span class="seed-ed-loc-badge seed-ed-loc-lib" title="Shared System preset — available to every card. Edits here update every card that uses it."><ha-icon icon="mdi:earth"></ha-icon>System</span>`;
-    }
-    // Legacy local preset from a pre-System-only config (read-compat only).
-    return `<span class="seed-ed-loc-badge seed-ed-loc-card" title="Legacy card-local preset. Use Move to System to publish it to the shared library."><ha-icon icon="mdi:card-outline"></ha-icon>Local (legacy)</span>`;
-=======
-    const isLib = typeof fx.id === 'string' && fx.id.startsWith('lib:');
-    if (isLib) {
-      return `<span class="seed-ed-loc-badge seed-ed-loc-lib" title="Shared library preset — available to every card. Edits here update every card that uses it."><ha-icon icon="mdi:earth"></ha-icon>System</span>`;
-    }
-    return `<span class="seed-ed-loc-badge seed-ed-loc-card" title="Lives in this card only. Use Save to Library to make it available to every card."><ha-icon icon="mdi:card-outline"></ha-icon>Local</span>`;
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
-  }
-
   _atFramePresetEditor(fx) {
     const fid = fx.id;
-<<<<<<< HEAD
     const isBuiltin = !!fx._builtin;
     const isLib = typeof fid === 'string' && fid.startsWith('lib:') && !isBuiltin;
-=======
-    const isLib = typeof fid === 'string' && fid.startsWith('lib:');
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     const usesFid = fr => fr && Array.isArray(fr.presets) && fr.presets.includes(fid);
     const usedBy = (this._config.sections || []).filter(s => usesFid(s.frame)).length
       + (usesFid(this._config.card_frame) ? 1 : 0);
@@ -6618,13 +6603,19 @@ class SEEDCardEditor extends HTMLElement {
     const g = fx.glow || {}, sh = fx.shadow || {}, bd = fx.border || {}, wh = fx.when || {};
     const bgMode = fx.background ? (fx.background.mode || 'custom') : 'custom';
     const sideOn = s => bd.sides ? bd.sides.includes(s) : true;
-    const badge = this._fxLocationBadge(fx);
+    // Muted subtitle line under the name (Color-card style): which style groups
+    // this preset sets, plus its condition summary if any.
+    const groupsSub = ['glow', 'shadow', 'border', 'background', 'edges'].filter(g => fx[g]).join(' + ') || 'empty';
+    const condSub = isSectionCond
+      ? (fx.when_kind === 'section_empty' ? 'when section empty' : 'when section has entities')
+      : (fx.when && fx.when_entity ? `when ${fx.when_entity} ${(fx.when.op || 'eq')}${['is_on', 'is_off', 'unavailable'].includes(fx.when.op) ? '' : ' ' + (fx.when.value ?? '')}` : '');
+    const subtitle = [isBuiltin ? 'built-in (read-only)' : '', groupsSub, condSub].filter(Boolean).join(' · ');
     return `
-      <details class="seed-ed-substyle" data-panel="effect-${fid}">
+      <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-lib-row" data-panel="effect-${fid}">
         <summary class="seed-ed-substyle-sum">
-          <ha-icon icon="mdi:auto-fix" class="seed-ed-rs-sum-icon"></ha-icon>
-          ${badge}
-          <span class="seed-ed-substyle-name" style="flex:1;">${escapeHtml(fx.name || 'Frame Style')}${fx.note ? ` <span class="seed-ed-hint" title="${escapeHtml(fx.note)}">📝</span>` : ''}</span>
+          ${isBuiltin ? '<ha-icon icon="mdi:lock" class="seed-ed-rs-sum-icon" title="Built-in — read-only. Duplicate to customize."></ha-icon>' : ''}
+          <span class="seed-ed-lib-name" style="flex:1;">${escapeHtml(fx.name || 'Frame Style')}${fx.note ? ` <span class="seed-ed-hint" title="${escapeHtml(fx.note)}">📝</span>` : ''}<span class="seed-ed-lib-sub">${escapeHtml(subtitle)}</span></span>
+          ${condActive ? `<ha-icon icon="mdi:call-split" class="seed-ed-rs-cond-icon" title="Conditional — this style applies only when its condition is met${isSectionCond ? ' (section membership)' : ''}."></ha-icon>` : ''}
           <span class="seed-ed-hint">${usedBy} use${usedBy === 1 ? '' : 's'}</span>
         </summary>
         <div class="seed-ed-substyle-body">
@@ -6633,20 +6624,12 @@ class SEEDCardEditor extends HTMLElement {
               ? `<span class="at-input" style="flex:1; opacity:0.7;">${escapeHtml(fx.name || 'Built-In')}</span>`
               : `<input type="text" class="at-input" data-at-sid="${fid}" data-at-path="name" value="${escapeHtml(fx.name || '')}" placeholder="Style name" style="flex:1;" />`}
             <ha-icon class="seed-ed-icon-btn fx-export" icon="mdi:export-variant" data-fx-id="${fid}" title="Export preset to text"></ha-icon>
-<<<<<<< HEAD
             ${isBuiltin
               ? `<ha-icon class="seed-ed-icon-btn fx-lib-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate into an editable System preset"></ha-icon>`
               : isLib
               ? `<ha-icon class="seed-ed-icon-btn fx-lib-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate in the shared System library"></ha-icon>
                  <ha-icon class="seed-ed-icon-btn fx-lib-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete from the shared System library"></ha-icon>`
               : `<ha-icon class="seed-ed-icon-btn fx-save-lib" icon="mdi:cloud-upload-outline" data-fx-id="${fid}" title="Move to System: publish to the shared library and link this card to it"></ha-icon>
-=======
-            ${isLib
-              ? `<ha-icon class="seed-ed-icon-btn fx-lib-tolocal" icon="mdi:card-plus-outline" data-fx-id="${fid}" title="Copy to this card as a Local preset"></ha-icon>
-                 <ha-icon class="seed-ed-icon-btn fx-lib-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate in the shared library"></ha-icon>
-                 <ha-icon class="seed-ed-icon-btn fx-lib-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete from the shared library"></ha-icon>`
-              : `<ha-icon class="seed-ed-icon-btn fx-save-lib" icon="mdi:cloud-upload-outline" data-fx-id="${fid}" title="Make System-wide: publish to the shared library and link this card to it"></ha-icon>
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
                  <ha-icon class="seed-ed-icon-btn fx-duplicate" icon="mdi:content-copy" data-fx-id="${fid}" title="Duplicate preset"></ha-icon>
                  <ha-icon class="seed-ed-icon-btn fx-delete" icon="mdi:trash-can-outline" data-fx-id="${fid}" title="Delete preset"></ha-icon>`}
           </div>
@@ -6779,7 +6762,6 @@ class SEEDCardEditor extends HTMLElement {
   // whole editor whenever a config had an effect preset.
   _paintFramePreviews() {
     const iconColor = (this._config.colors && this._config.colors.icon) || '#2196F3';
-<<<<<<< HEAD
     // Built-In + System library presets + any legacy local presets all render
     // editor blocks, so paint swatches for all of them.
     const lib = frameLibraryMap(this._config.frame_library_scope);
@@ -6787,12 +6769,6 @@ class SEEDCardEditor extends HTMLElement {
       // Draft-aware: paint the unsaved draft look for any lib preset being edited.
       .concat(Object.keys(lib).map(s => this._frameDisplayPreset(s) || lib[s]))
       .concat(this._config.frame_presets || []);
-=======
-    // Local presets + shared-library presets both render editor blocks now, so
-    // paint swatches for both.
-    const lib = frameLibraryMap(this._config.frame_library_scope);
-    const allPresets = (this._config.frame_presets || []).concat(Object.keys(lib).map(s => lib[s]));
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     allPresets.forEach(fx => {
       const el = this.querySelector(`[data-fx-preview="${fx.id}"]`);
       if (!el) return;
@@ -6827,12 +6803,8 @@ class SEEDCardEditor extends HTMLElement {
       } else {
         el.style.backgroundColor = '#1a1a1a';
       }
-<<<<<<< HEAD
       const edgeMatch = (fx.border && !fx.border.follow_icon && fx.border.color) ? fx.border.color : iconColor;
       const edge = fx.edges ? buildEdgeBackground(fx.edges, edgeMatch) : null;
-=======
-      const edge = fx.edges ? buildEdgeBackground(fx.edges) : null;
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       if (edge) {
         el.style.backgroundImage = edge.image; el.style.backgroundSize = edge.size;
         el.style.backgroundPosition = edge.position; el.style.backgroundRepeat = edge.repeat;
@@ -6851,8 +6823,8 @@ class SEEDCardEditor extends HTMLElement {
       <details class="seed-ed-section seed-ed-divider-editor${section.hidden ? ' seed-ed-section-hidden' : ''}" data-section-id="${sid}">
         <summary>
           <span class="seed-ed-section-head">
-            <ha-icon icon="mdi:minus"></ha-icon>
-            <span style="flex:1;">${section.label ? escapeHtml(section.label) : 'Divider'}</span>
+            <ha-icon class="ed-section-icon-preview" icon="mdi:minus"></ha-icon>
+            <span class="seed-ed-section-name-label" style="flex:1;">${section.label ? escapeHtml(section.label) : 'Divider'}</span>
             <span class="seed-ed-section-type-badge">Divider</span>
             <ha-icon class="seed-ed-icon-btn ed-move-up ${idx === 0 ? 'disabled' : ''}" icon="mdi:arrow-up-bold" data-section-id="${sid}"></ha-icon>
             <ha-icon class="seed-ed-icon-btn ed-move-down ${idx === total - 1 ? 'disabled' : ''}" icon="mdi:arrow-down-bold" data-section-id="${sid}"></ha-icon>
@@ -6986,7 +6958,6 @@ class SEEDCardEditor extends HTMLElement {
   }
 
   _atFramePresetsPanel() {
-<<<<<<< HEAD
     // One unified list: the read-only Built-In fallback first, then the
     // System-wide (shared library) presets. There is no card-local frame
     // concept — every editable preset lives in the shared System library.
@@ -7004,33 +6975,13 @@ class SEEDCardEditor extends HTMLElement {
       <details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>
         <summary class="seed-ed-panel-summary">
           <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:auto-fix" class="seed-ed-panel-title-icon"></ha-icon>Frame Styles</div>
-=======
-    // One unified list: this card's Local presets first, then the System-wide
-    // (shared library) presets. Both render full editor blocks; the Local vs
-    // System badge + icon show where each lives.
-    const fxs = this._config.frame_presets || [];
-    const lib = frameLibraryMap(this._config.frame_library_scope);
-    const libSlugs = Object.keys(lib).sort();
-    const localBlocks = fxs.map(fx => this._atFramePresetEditor(fx)).join('');
-    const libBlocks = libSlugs.map(slug => this._atFramePresetEditor(lib[slug])).join('');
-    const blocks = localBlocks + libBlocks;
-    return `
-      <details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>
-        <summary class="seed-ed-panel-summary">
-          <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:auto-fix" class="seed-ed-panel-title-icon"></ha-icon>Frame Presets</div>
-          <div class="seed-ed-hint">Named, reusable frame styles (border + glow + shadow + background + edge lines), optionally conditional. Each preset stores only what you set; presets layer onto a section or the card in order (last wins). <b>Local</b> presets live in this card; <b>System</b> presets live in a shared library and are editable from any card. This is the single place all frame styling is defined.</div>
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
         </summary>
         <span class="seed-ed-hint">Build, edit and store styles. To apply a Frame, use Card Appearance → Card Frame or per section in the section under Section Order.<br>Library items are shared system-wide. Built-In is read-only; duplicate to customize.</span>
         <div class="seed-ed-add-row">
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-add"><ha-icon icon="mdi:plus"></ha-icon>Add Frame Style</div>
-          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-import"><ha-icon icon="mdi:import"></ha-icon>Import from text</div>
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-import"><ha-icon icon="mdi:import"></ha-icon>Import Style</div>
         </div>
-<<<<<<< HEAD
-        ${blocks}
-=======
-        ${blocks || '<span class="seed-ed-hint">No frame presets yet. Add one, then apply it to a section or the card.</span>'}
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
+        <div class="seed-ed-lib-list">${blocks}</div>
 
         <div id="fx-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
           <div class="seed-ed-hint" id="fx-portal-label"></div>
@@ -7144,21 +7095,55 @@ class SEEDCardEditor extends HTMLElement {
     };
     const disabledSet = new Set(fr.disabled || []);
     const ignoreSet = new Set(fr.ignore_conditions || []);
-    const byId = this._framePresetsById ? this._framePresetsById() : {};
+    const overrides = (fr.overrides && typeof fr.overrides === 'object') ? fr.overrides : {};
+    // Resolve an applied id to its preset object using the editor's own maps
+    // (Built-In / System library / legacy locals) — the renderer's
+    // _framePresetsById lives on SEEDCard, not this editor class.
+    const presetById = id => {
+      if (id === BUILTIN_FRAME_ID) return builtinFramePreset();
+      if (typeof id === 'string' && id.startsWith('lib:')) return lib[id.slice(4)] || null;
+      return legacyLocal.find(f => f.id === id) || null;
+    };
     // Does this preset carry a condition? (when/when_entity or a section-membership kind)
-    const hasCond = id => { const p = byId[id]; return !!(p && (p.when_kind || (p.when && p.when_entity))); };
+    const hasCond = id => { const p = presetById(id); return !!(p && (p.when_kind || (p.when && p.when_entity))); };
+    // Entity-based condition only (a rebindable when_entity) — section-membership
+    // conditions have no entity to override.
+    const hasEntCond = id => { const p = presetById(id); return !!(p && p.when && !p.when_kind); };
     const applied = (fr.presets || []).map((id, i) => {
       const off = disabledSet.has(id);
       const cond = hasCond(id);
+      const ignored = ignoreSet.has(id);
+      const p = presetById(id) || {};
+      // Per-location entity rebind: shown for entity-conditional presets that
+      // aren't force-applied (ignore cond.). The preset's own when_entity is the
+      // placeholder/fallback; typing here overrides which entity drives it HERE.
+      const ov = overrides[id] || {};
+      // Full per-location rule override (entity + operator + value). Each field
+      // blank inherits the library preset's own condition; a set field replaces
+      // it HERE only. Shown for entity-conditional presets not force-applied.
+      const ovWhen = (ov.when && typeof ov.when === 'object') ? ov.when : {};
+      const pWhen = p.when || {};
+      const effOp = ovWhen.op || pWhen.op || 'is_on';
+      const hasOverride = !!(ov.when_entity || (ov.when && ov.when.op));
+      const entRow = (hasEntCond(id) && !ignored) ? `
+      <div class="seed-ed-fr-override" style="padding:2px 0 6px 24px;">
+        <div class="seed-ed-hint" title="Override this preset's condition here only — the shared library preset is unchanged. Blank fields inherit the preset's own condition.">Condition override (this ${sid === '__card_frame__' ? 'card' : 'section'} only)${hasOverride ? '' : ' — <em>inheriting preset</em>'}</div>
+        <div class="seed-ed-font-row" style="align-items:center;gap:6px;">
+          <input type="text" class="at-input fr-override-entity" list="ees-all-entities" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" value="${escapeHtml(ov.when_entity || '')}" placeholder="${escapeHtml(p.when_entity || 'entity id')}" style="flex:1;min-width:0;" title="Entity the condition tests (blank = preset's own)" />
+          <select class="fr-override-op" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" title="Operator (blank row = preset's own)">${this._atOpts(this._AT_OPS, effOp)}</select>
+          <input type="text" class="at-input fr-override-value" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" value="${escapeHtml(ovWhen.value ?? '')}" placeholder="${escapeHtml(pWhen.value ?? 'value')}" style="width:90px;" title="Compare value (blank = preset's own)" />
+          ${hasOverride ? `<ha-icon class="seed-ed-icon-btn fr-override-clear" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" icon="mdi:backup-restore" title="Clear override — inherit the library preset's condition"></ha-icon>` : ''}
+        </div>
+      </div>` : '';
       return `
       <div class="seed-ed-rule" style="${off ? 'opacity:0.5;' : ''}">
         <ha-icon class="seed-ed-icon-btn fr-move" data-fr-sid="${sid}" data-fr-idx="${i}" data-fr-dir="-1" icon="mdi:arrow-up-bold" title="Move up"></ha-icon>
         <ha-icon class="seed-ed-icon-btn fr-move" data-fr-sid="${sid}" data-fr-idx="${i}" data-fr-dir="1" icon="mdi:arrow-down-bold" title="Move down"></ha-icon>
         <span style="flex:1;">${escapeHtml(nameOf(id))}${off ? ' <span class="seed-ed-hint">(disabled)</span>' : ''}${cond ? ' <span class="seed-ed-hint" title="Conditional style">◈</span>' : ''}</span>
-        ${cond ? `<label class="seed-ed-hint" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;" title="Apply this layer even when its condition is false"><input type="checkbox" class="fr-ignore" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" ${ignoreSet.has(id) ? 'checked' : ''} />ignore cond.</label>` : ''}
+        ${cond ? `<label class="seed-ed-hint" style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;" title="Apply this layer even when its condition is false"><input type="checkbox" class="fr-ignore" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" ${ignored ? 'checked' : ''} />ignore cond.</label>` : ''}
         <ha-icon class="seed-ed-icon-btn fr-toggle" data-fr-sid="${sid}" data-fr-id="${escapeHtml(id)}" icon="${off ? 'mdi:eye-off-outline' : 'mdi:eye-outline'}" title="${off ? 'Disabled — click to enable' : 'Enabled — click to disable (preview without it)'}"></ha-icon>
         <ha-icon class="seed-ed-icon-btn fr-remove" data-fr-sid="${sid}" data-fr-idx="${i}" icon="mdi:close" title="Remove"></ha-icon>
-      </div>`;
+      </div>${entRow}`;
     }).join('');
     return `
       <div class="seed-ed-group-div" style="margin:4px 0 4px;">Applied presets (layered in order — last wins)</div>
@@ -7816,6 +7801,11 @@ class SEEDCardEditor extends HTMLElement {
     const slug = (set.id && set.id.startsWith('lib:')) ? set.id.slice(4) : (set._builtin ? BUILTIN_HEADER_SLUG : headerLibSlug(set.name));
     const sid = 'hdr:' + slug;
     const rules = set.rules || [];
+    // How many places apply this set: the card title header + any section header.
+    const refId = builtin ? BUILTIN_HEADER_ID : ('lib:' + slug);
+    const refsUse = refs => Array.isArray(refs) && refs.some(r => r && r.ref === refId);
+    const usedBy = (refsUse(this._config.header_rule_refs) ? 1 : 0)
+      + (this._config.sections || []).filter(s => refsUse(s.header_rule_refs)).length;
     const body = builtin
       ? `<span class="seed-ed-hint">Built-in fallback (light on → accent icon+text; off → muted). Read-only — duplicate it to customize.</span>`
       : `
@@ -7836,12 +7826,16 @@ class SEEDCardEditor extends HTMLElement {
          <ha-icon class="seed-ed-icon-btn hdr-duplicate" data-hdr-slug="${slug}" icon="mdi:content-copy" title="Duplicate"></ha-icon>
          <ha-icon class="seed-ed-icon-btn hdr-delete" data-hdr-slug="${slug}" icon="mdi:trash-can-outline" title="Delete from the shared library"></ha-icon>`;
     const dirty = !builtin && !!(this._headerDrafts[slug] && this._headerDrafts[slug].dirty);
+    // Muted subtitle: rule count + bound default entity (Color-card style).
+    const nRules = rules.length;
+    const subtitle = [builtin ? 'built-in (read-only)' : '', `${nRules} rule${nRules === 1 ? '' : 's'}`, set.default_entity ? '🔗 ' + set.default_entity : ''].filter(Boolean).join(' · ');
     return `
-      <details class="seed-ed-substyle" data-panel="hdrset-${slug}">
+      <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-lib-row" data-panel="hdrset-${slug}">
         <summary class="seed-ed-substyle-sum">
-          ${builtin ? '<span class="seed-ed-loc-badge seed-ed-loc-card"><ha-icon icon="mdi:lock"></ha-icon>Built-In</span>' : '<span class="seed-ed-loc-badge seed-ed-loc-lib"><ha-icon icon="mdi:cloud-check-outline"></ha-icon>System</span>'}
+          ${builtin ? '<ha-icon icon="mdi:lock" class="seed-ed-rs-sum-icon" title="Built-in — read-only. Duplicate to customize."></ha-icon>' : ''}
+          <span class="seed-ed-lib-name" style="flex:1;">${escapeHtml(set.name || slug)}${dirty ? ' <span class="seed-ed-hint" title="Unsaved changes">•</span>' : ''}<span class="seed-ed-lib-sub">${escapeHtml(subtitle)}</span></span>
           ${builtin ? '' : `<ha-icon class="seed-ed-hdr-bound ${set.default_entity ? 'seed-ed-hdr-bound-on' : 'seed-ed-hdr-bound-off'}" icon="${set.default_entity ? 'mdi:link-variant' : 'mdi:link-variant-off'}" title="${set.default_entity ? 'Default entity: ' + escapeHtml(set.default_entity) : 'No default entity bound'}"></ha-icon>`}
-          <span class="seed-ed-substyle-name" style="flex:1;">${escapeHtml(set.name || slug)}${dirty ? ' <span class="seed-ed-hint" title="Unsaved changes">•</span>' : ''}</span>
+          <span class="seed-ed-hint">${usedBy} use${usedBy === 1 ? '' : 's'}</span>
         </summary>
         <div class="seed-ed-substyle-body">
           <div class="seed-ed-fx-actions">${actions}</div>
@@ -7885,12 +7879,12 @@ class SEEDCardEditor extends HTMLElement {
         <summary class="seed-ed-panel-summary">
           <div class="seed-ed-sections-panel-title"><ha-icon icon="mdi:format-list-checks" class="seed-ed-panel-title-icon"></ha-icon>Header Rules</div>
         </summary>
-        <span class="seed-ed-hint">Named sets of state-driven header rules. Each rule sets any/all of: icon color, MDI icon, text color, icon/text size, and a secondary line. Optionally <b>bind a default entity</b> here so the set works as soon as it's applied. Apply a set to the <b>Card Header</b> (Card Appearance) or any <b>Section Header</b> under its <b>Header Rules</b>. <b>Entity precedence:</b> an entity chosen on the card/section <b>overrides</b> the default entity bound here; if neither is set, the section's own first entity is used. Shared system-wide; Built-In is read-only — duplicate to customize.</span>
+        <span class="seed-ed-hint">Rules create dynamic card and section headers. A shared system-wide library; Built-In is read-only — duplicate to customize.<br><br>Bind a default entity in the library, or apply a set to the <b>Card Header</b> (Card Appearance) or any <b>Section Header</b> under its individual <b>Header Rules</b> location. <b>Entity precedence:</b> an entity chosen on the card/section overrides the default entity bound here; if neither is set, the rule will not apply.</span>
         <div class="seed-ed-add-row">
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-add"><ha-icon icon="mdi:plus"></ha-icon>Add Header Rule</div>
-          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-import"><ha-icon icon="mdi:import"></ha-icon>Import from text</div>
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-import"><ha-icon icon="mdi:import"></ha-icon>Import Rule</div>
         </div>
-        ${blocks}
+        <div class="seed-ed-lib-list">${blocks}</div>
 
         <div id="hdr-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
           <div class="seed-ed-hint" id="hdr-portal-label"></div>
@@ -8537,29 +8531,28 @@ class SEEDCardEditor extends HTMLElement {
         input[type="color"]::-webkit-color-swatch { border: none; border-radius: 3px; }
         .seed-ed-color input[type="color"] { width: 44px; height: 32px; }
         .seed-ed-style-field input[type="color"] { width: 100%; height: 30px; }
-        .seed-ed-section {
+        /* ONE section-box rule (mirrors the Color card's .cpce-order-entry): a
+           plain block — NOT flex-column — so the collapsed summary row's own
+           padding fully determines its height. (A prior duplicate rule left a
+           flex-column layout with row-gap on the box, which threw off the row's
+           vertical balance.) */
+        .seed-ed-section, details.seed-ed-section {
+          display: block;
+          padding: 0;
           border: 1px solid var(--ltek-c-border);
           border-radius: var(--ltek-r-card);
-          padding: 12px;
-          display: flex;
-          flex-direction: column;
-          gap:var(--ltek-sp-4);
+          overflow: hidden;
           background: var(--ltek-c-surface-raised);
+          margin-bottom: 8px;   /* vertical gap between section rows (matches Color's .cpce-order-list gap) */
         }
         /* Hidden sections stay in the list but read as dimmed so it's obvious. */
         .seed-ed-section.seed-ed-section-hidden > summary { opacity: 0.5; }
         /* Expanded section rows get an accent border around the whole block. */
-        details.seed-ed-section[open] { border-color: var(--primary-color, #2196F3) !important; }
-        details.seed-ed-section {
-          background: transparent !important;
-          padding: 0;
-          border: 1px solid var(--ltek-c-border);
-          border-radius: var(--ltek-r-card);
-          margin-bottom: 8px;   /* vertical gap between section rows (matches Color's .cpce-order-list gap) */
-        }
+        details.seed-ed-section[open] { border-color: var(--primary-color, #2196F3); }
         details.seed-ed-section > summary {
           list-style: none;
           cursor: pointer;
+          /* Match the Color card's .cpce-order-item row height (6px 8px). */
           padding: 6px 8px;
           user-select: none;
           display: flex;
@@ -8575,6 +8568,14 @@ class SEEDCardEditor extends HTMLElement {
           gap:var(--ltek-sp-4);
         }
         .seed-ed-section-head { display: flex; align-items: center; gap:var(--ltek-sp-3); flex: 1; }
+        /* Section header/type icon + name label sized to match the action icons
+           (20px) and vertically centered, so the collapsed row has no excess
+           space below the text/icon line. */
+        .seed-ed-section-head > .ed-section-icon-preview { --mdc-icon-size: 20px; width: 20px; height: 20px; flex: none; color: var(--ltek-c-accent); }
+        /* Name label sized to the Color card's row (--ltek-fs-label, 13px) so the
+           symmetric 6px summary padding reads balanced — a larger inherited font
+           made the row top-heavy. line-height:1 + flex centering keeps it even. */
+        .seed-ed-section-name-label { font-size: var(--ltek-fs-label); font-weight: var(--ltek-fw-normal); line-height: 1; color: var(--ltek-c-text); }
         /* Section-name field: compact like the Color card's .cpce-order-rename
            (control padding + label font) so rows aren't taller than needed. */
         .seed-ed-section-head input[type="text"] { flex: 1; min-width: 60px; padding: var(--ltek-ctrl-pad); background: var(--secondary-background-color, #1c1c1c); border: 1px solid var(--ltek-c-border); border-radius: var(--ltek-r-ctrl); color: var(--ltek-c-text); font-size: var(--ltek-fs-label); box-sizing: border-box; }
@@ -8586,6 +8587,8 @@ class SEEDCardEditor extends HTMLElement {
           align-items: center;
         }
         .seed-ed-icon-btn:hover { color: var(--ltek-c-icon-hover); }
+        /* Section-row delete → red on hover (Color-card style). */
+        .seed-ed-icon-btn.ed-remove-section:hover { color: var(--ltek-c-error); }
         .seed-ed-icon-btn.disabled { opacity: 0.25; pointer-events: none; }
         .seed-ed-checkbox-row { display: flex; align-items: center; gap:var(--ltek-sp-2); font-size: var(--ltek-fs-body); color: var(--ltek-c-label); }
         .seed-ed-style-block {
@@ -8734,7 +8737,7 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-hdr-rule-chip ha-icon { --mdc-icon-size: 14px; width: 14px; height: 14px; }
         .seed-ed-hdr-rule-swatch { width: 10px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,0.35); display: inline-block; }
         /* Header-rule entity binding: bound-state icon, reveal checkbox, warning. */
-        .seed-ed-hdr-bound { flex: none; margin-right: 4px; --mdc-icon-size: 18px; }
+        .seed-ed-hdr-bound { flex: none; --mdc-icon-size: 20px; width: 20px; height: 20px; align-self: center; }
         .seed-ed-hdr-bound-on { color: var(--ltek-c-accent); }
         .seed-ed-hdr-bound-off { color: var(--ltek-c-muted); opacity: 0.7; }
         /* Bound-entity badge shown on a collapsed Header-rule ref summary. */
@@ -8796,7 +8799,6 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-sections-panel {
           border: 1px solid var(--ltek-c-panel-border);
           border-radius: var(--ltek-r-panel);
-          margin-top: 8px;
           background: var(--ltek-c-surface);
           display: flex;
           flex-direction: column;
@@ -8812,7 +8814,7 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-sections-panel-title { font-size: var(--ltek-fs-panel-title); font-weight: var(--ltek-fw-bold); color: var(--ltek-c-text); display: flex; align-items: center; gap:var(--ltek-sp-3); }
         /* Full-width section divider that groups the reusable-definition panels
            (matches the Color card's Libraries divider). */
-        .seed-ed-lib-divider { display: flex; align-items: center; gap: 10px; margin: 18px 2px 10px; color: var(--ltek-c-accent); font-size: var(--ltek-fs-label); font-weight: var(--ltek-fw-bold); letter-spacing: 0.02em; text-transform: uppercase; }
+        .seed-ed-lib-divider { display: flex; align-items: center; gap: 10px; margin: 8px 2px; color: var(--ltek-c-accent); font-size: var(--ltek-fs-label); font-weight: var(--ltek-fw-bold); letter-spacing: 0.02em; text-transform: uppercase; }
         .seed-ed-lib-divider::before, .seed-ed-lib-divider::after { content: ''; flex: 1; height: 2px; background: linear-gradient(to right, transparent, var(--ltek-c-accent)); opacity: 0.5; }
         .seed-ed-lib-divider::before { background: linear-gradient(to left, transparent, var(--ltek-c-accent)); }
         .seed-ed-lib-divider ha-icon { --mdc-icon-size: 18px; }
@@ -8870,6 +8872,9 @@ class SEEDCardEditor extends HTMLElement {
           border-radius: var(--ltek-r-panel);
           background: var(--ltek-c-surface);
         }
+        /* Expanded bordered subpanel → theme-color border (matches the top-level
+           panels + section rows on open). Flush variant uses a left accent instead. */
+        .seed-ed-substyle:not(.seed-ed-substyle-flush)[open] { border-color: var(--primary-color, #2196F3); }
         /* Bordered subpanel rows (e.g. Frame Style presets) get vertical gap
            between them — matches the section rows. Flush variant is exempt
            (it uses top-dividers, no boxes). */
@@ -8903,15 +8908,10 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-substyle-sum { list-style: none; }
         .seed-ed-substyle-sum::-webkit-details-marker { display: none; }
         .seed-ed-rs-sum-icon { color: var(--ltek-c-accent); --mdc-icon-size: 18px; width: 18px; height: 18px; flex-shrink: 0; }
-        /* Storage-location badge on a preset's collapsed summary. */
-        .seed-ed-loc-badge {
-          display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
-          font-size: var(--ltek-fs-tiny); font-weight: var(--ltek-fw-semibold); text-transform: uppercase; letter-spacing: 0.03em;
-          padding: 2px 7px; border-radius: var(--ltek-r-card); line-height: 1.4;
-        }
-        .seed-ed-loc-badge ha-icon { --mdc-icon-size: 13px; width: 13px; height: 13px; }
-        .seed-ed-loc-card { color: #cfcfcf; background: rgba(255,255,255,0.08); }
-        .seed-ed-loc-lib { color: var(--ltek-c-accent-lib); background: rgba(76,175,80,0.15); }
+        /* Conditional-style marker: right-justified (just left of the "uses"
+           count), flex-centered on the row, and in the theme's state-icon color
+           so it stands out. */
+        .seed-ed-rs-cond-icon { color: var(--state-icon-color, var(--ltek-c-accent)); --mdc-icon-size: 20px; width: 20px; height: 20px; flex-shrink: 0; align-self: center; }
         /* Actions row lives INSIDE the expanded body so nothing is clickable
            while collapsed (prevents accidental delete/export). */
         .seed-ed-fx-actions { display: flex; align-items: center; gap:var(--ltek-sp-2); }
@@ -8944,8 +8944,27 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-substyle-frame > summary .seed-ed-substyle-name { color: var(--ltek-c-accent-lib); }
         /* Flush subpanel: no box border/radius/bg — just a top divider line
            between siblings (Color-card style, image 4). First one has no line. */
+        /* Library rows (Frame Styles / Header Rules) — the Color-card "flat list"
+           look: a two-line summary (name + muted subtitle) and a subtle hover. */
+        .seed-ed-lib-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; text-transform: none; letter-spacing: normal; }
+        .seed-ed-lib-sub { font-size: var(--ltek-fs-small); font-weight: var(--ltek-fw-normal); color: var(--ltek-c-muted); text-transform: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .seed-ed-lib-row > summary:hover { background: var(--ltek-c-surface-raised); }
+        /* Wrapper turning consecutive flat library rows into one bordered list. */
+        .seed-ed-lib-list { border: 1px solid var(--ltek-c-panel-border); border-radius: var(--ltek-r-ctrl); overflow: hidden; margin-bottom: 8px; }
+        /* Inside the list wrapper (a plain block, not a flex-gap parent), don't
+           apply the flex-gap cancel margin; give rows comfortable, symmetric
+           padding and keep the divider between rows. */
+        .seed-ed-lib-list > .seed-ed-substyle-flush + .seed-ed-substyle-flush { margin-top: 0; }
+        .seed-ed-lib-list > .seed-ed-lib-row > summary { padding: 10px 14px; }
+        .seed-ed-lib-list > .seed-ed-lib-row > .seed-ed-substyle-body { padding: 0 14px 12px; }
+        /* Expanded flat library row → theme-color accent (left bar + tint), the
+           flat-list analog of the bordered panels' theme-color border. */
+        .seed-ed-lib-list > .seed-ed-lib-row[open] { background: var(--ltek-c-surface); box-shadow: inset 3px 0 0 var(--primary-color, #2196F3); }
         .seed-ed-substyle-flush { border: none; border-radius: 0; background: none; border-top: 1px solid var(--ltek-c-panel-border); }
         .seed-ed-substyle-flush:first-of-type { border-top: none; }
+        /* Any expanded flat (flush) subpanel gets the theme-color left accent —
+           the flat analog of the bordered panels' theme-color border on open. */
+        .seed-ed-substyle-flush[open] { box-shadow: inset 3px 0 0 var(--primary-color, #2196F3); }
         .seed-ed-substyle-flush > summary { padding: 10px 2px 4px; }
         .seed-ed-substyle-flush > .seed-ed-substyle-body { padding: 0 2px 10px; }
         /* When flush subpanels sit inside a flex container with a gap (e.g. the
@@ -9526,9 +9545,9 @@ class SEEDCardEditor extends HTMLElement {
     html += `<span class="seed-ed-hint">Select and Order the card sections. Click the section icon to edit the section settings.</span>`;
     // Add buttons at the TOP of the panel, sharing one row.
     html += `<div class="seed-ed-add-row">
-      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-table-menu"><ha-icon icon="mdi:table-plus"></ha-icon>Add Entity Table</div>
-      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-section"><ha-icon icon="mdi:plus"></ha-icon>Add Entity Group</div>
-      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-divider"><ha-icon icon="mdi:minus"></ha-icon>Add Divider</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-table-menu"><ha-icon icon="mdi:table-plus"></ha-icon>Entity Table</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-section"><ha-icon icon="mdi:plus"></ha-icon>Entity Group</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-divider"><ha-icon icon="mdi:minus"></ha-icon>Divider</div>
     </div>`;
     html += `<div id="ed-table-preset-menu" style="display:none; flex-direction:column; gap:4px; margin-top:6px;">
       ${getActivityPresets().map(p => `<div class="seed-ed-add-btn seed-ed-add-btn-sm ed-add-table-preset" data-preset="${p.key}"><ha-icon icon="mdi:plus"></ha-icon>${p.label}</div>`).join('')}
@@ -9579,7 +9598,10 @@ class SEEDCardEditor extends HTMLElement {
 
       const showEntityList = true;
 
-      const headerIcon = section.icon || 'mdi:folder-outline';
+      // Section-row type icon: the user's own icon if set, else a per-type glyph
+      // (mirrors the Color card's typeIcon map). Colored with the theme accent
+      // (Color-card style) rather than the card's configured icon color.
+      const headerIcon = section.icon || (section.type === 'activity_table' ? 'mdi:table' : 'mdi:folder-outline');
 
       // ---- Entity Display Rules editor markup ----
       const rules = Array.isArray(section.entity_rules) ? section.entity_rules : [];
@@ -9670,8 +9692,8 @@ class SEEDCardEditor extends HTMLElement {
         <details class="seed-ed-section${section.hidden ? ' seed-ed-section-hidden' : ''}" data-section-id="${section.id}">
           <summary>
             <span class="seed-ed-section-head">
-              <ha-icon class="ed-section-icon-preview" data-section-id="${section.id}" icon="${headerIcon}" style="color: ${section.icon_color || colors.icon || '#2196F3'};"></ha-icon>
-              <input type="text" class="ed-section-name" data-section-id="${section.id}" value="${section.name}" placeholder="Section Name" style="flex:1;" />
+              <ha-icon class="ed-section-icon-preview" data-section-id="${section.id}" icon="${headerIcon}"></ha-icon>
+              <span class="seed-ed-section-name-label" style="flex:1;">${escapeHtml(section.name || 'Section')}</span>
               <span class="seed-ed-section-type-badge">${section.type === 'activity_table' ? 'Table' : 'Entities'}</span>
               <ha-icon class="seed-ed-icon-btn ed-move-up ${idx === 0 ? 'disabled' : ''}" icon="mdi:arrow-up-bold" data-section-id="${section.id}"></ha-icon>
               <ha-icon class="seed-ed-icon-btn ed-move-down ${idx === sections.length - 1 ? 'disabled' : ''}" icon="mdi:arrow-down-bold" data-section-id="${section.id}"></ha-icon>
@@ -9681,6 +9703,7 @@ class SEEDCardEditor extends HTMLElement {
             </span>
           </summary>
           <div class="seed-ed-section-body">
+            <div class="seed-ed-font-row"><label style="flex:1;">Section Name<input type="text" class="ed-section-name" data-section-id="${section.id}" value="${escapeHtml(section.name || '')}" placeholder="Section Name" style="width:100%;" /></label></div>
             <div class="seed-ed-checkbox-row">
               <input type="checkbox" class="ed-section-show-title" data-section-id="${section.id}" ${section.show_title !== false ? 'checked' : ''} />
               <label>Show Section's Title Row</label>
@@ -10195,11 +10218,7 @@ class SEEDCardEditor extends HTMLElement {
     this.querySelectorAll('.at-input[data-at-path="name"][data-at-sid]').forEach(el => {
       el.addEventListener('input', () => {
         const panel = this.querySelector(`[data-panel="effect-${el.dataset.atSid}"] .seed-ed-substyle-name`);
-<<<<<<< HEAD
         if (panel) panel.textContent = el.value || 'Frame Style';
-=======
-        if (panel) panel.textContent = el.value || 'Frame Preset';
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       });
     });
 
@@ -10273,11 +10292,7 @@ class SEEDCardEditor extends HTMLElement {
         const defaults = {
           glow: { color: '#2196F3', intensity: 1.0, borders_only: false },
           shadow: { color: '#000000', x: 0, y: 4, blur: 12, spread: 0, opacity: 0.35 },
-<<<<<<< HEAD
           border: { color: '#2196F3', width: 1, radius: 12, corners: [true, true, true, true], follow_icon: false, sides: ['top', 'bottom', 'left', 'right'] },
-=======
-          border: { color: '#2196F3', width: 1, radius: 12, follow_icon: false, sides: ['top', 'bottom', 'left', 'right'] },
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
           background: { mode: 'custom', color: '#1c1c1c' }
         };
         this._atApply(sid, fx => {
@@ -10335,7 +10350,6 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-<<<<<<< HEAD
     // Gradient-border pattern picker (per side): applies a preset's stops to
     // that edge and records the pattern name. '' = Custom (leave stops as-is).
     this.querySelectorAll('.fx-edge-pattern').forEach(el => {
@@ -10426,8 +10440,6 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-=======
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
     // Effect border side toggles: maintain the border.sides array.
     this.querySelectorAll('.fx-border-side').forEach(el => {
       el.addEventListener('change', () => {
@@ -10657,15 +10669,10 @@ class SEEDCardEditor extends HTMLElement {
     const portalStatus = (msg) => { const s = this.querySelector('#fx-portal-status'); if (s) s.textContent = msg || ''; };
     const nowISO = () => { try { return new Date().toISOString().slice(0, 10); } catch (e) { return ''; } };
 
-<<<<<<< HEAD
     // Resolve any preset id (Built-In, lib:<slug>, or legacy local fx_*) to its
     // object.
     const presetById = (id) => {
       if (id === BUILTIN_FRAME_ID) return builtinFramePreset();
-=======
-    // Resolve any preset id (local fx_* or lib:<slug>) to its object.
-    const presetById = (id) => {
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
       if (typeof id === 'string' && id.startsWith('lib:')) {
         return frameLibraryMap(this._config.frame_library_scope)[id.slice(4)] || null;
       }
@@ -10730,7 +10737,6 @@ class SEEDCardEditor extends HTMLElement {
         const scope = this._config.frame_library_scope || 'system';
         const usesLib = fr => fr && (fr.presets || []).some(id => id === 'lib:' + slug);
         const usedHere = usesLib(this._config.card_frame) || (this._config.sections || []).some(s => usesLib(s.frame));
-<<<<<<< HEAD
         const msg = usedHere
           ? 'This card references this System Frame Style. Deleting it from the shared library will leave those spots with no frame.\n\nDelete it anyway?'
           : 'Delete this System Frame Style from the shared library? This affects every card that uses it. This cannot be undone.';
@@ -10738,14 +10744,6 @@ class SEEDCardEditor extends HTMLElement {
         const map = { ...frameLibraryMap(scope) };
         delete map[slug];
         delete this._frameDrafts[slug];   // drop any open draft for the deleted preset
-=======
-        if (usedHere) {
-          const ok = (() => { try { return window.confirm(`This card references this System preset. Deleting it from the shared library will leave those spots with no frame.\n\nDelete it anyway?`); } catch (e) { return true; } })();
-          if (!ok) return;
-        }
-        const map = { ...frameLibraryMap(scope) };
-        delete map[slug];
->>>>>>> d65989548fdbf203a804606d75440bca7a95012c
         this._libEchoJSON = null;
         saveFrameLibrary(this._hass, scope, map)
           .then(() => this.renderEditor())
@@ -11147,8 +11145,14 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-    // Rule-set name field must not toggle its summary <details>.
-    this.querySelectorAll('.rs-name').forEach(el => el.addEventListener('click', e => e.stopPropagation()));
+    // Rule-set name (now in the expanded body): reflect edits in the collapsed
+    // summary title live, so the panel name updates without a re-render. (The
+    // value persists via the generic at-input scalar bind.)
+    this.querySelectorAll('.rs-name[data-at-sid]').forEach(el => el.addEventListener('input', () => {
+      const nm = this.querySelector(`[data-panel="ruleset-${el.dataset.atSid}"] .seed-ed-lib-name`);
+      // Update only the leading text node so the .seed-ed-lib-sub child survives.
+      if (nm && nm.firstChild && nm.firstChild.nodeType === 3) nm.firstChild.nodeValue = el.value || 'Rule Set';
+    }));
 
     // --- Per-section membership (assign rule sets) ---
     // Preview dropdown: transient (not saved) - just re-render to refresh the
@@ -11672,8 +11676,10 @@ class SEEDCardEditor extends HTMLElement {
       if (!this._confirmDelete('Remove this applied frame from here? (The Frame Style itself is kept in the library.)')) return;
       const fr = frameRefFor(el.dataset.frSid); if (!fr) return;
       const removed = fr.presets.splice(Number(el.dataset.frIdx), 1)[0];
-      // Keep `disabled` in sync when a preset is removed.
+      // Keep `disabled` / `ignore_conditions` / `overrides` in sync on removal.
       if (Array.isArray(fr.disabled)) fr.disabled = fr.disabled.filter(id => id !== removed);
+      if (Array.isArray(fr.ignore_conditions)) { fr.ignore_conditions = fr.ignore_conditions.filter(id => id !== removed); if (!fr.ignore_conditions.length) delete fr.ignore_conditions; }
+      if (fr.overrides && typeof fr.overrides === 'object') { delete fr.overrides[removed]; if (!Object.keys(fr.overrides).length) delete fr.overrides; }
       pruneFrame(el.dataset.frSid);
       this._fireConfigChanged(); this.renderEditor();
     }));
@@ -11703,6 +11709,50 @@ class SEEDCardEditor extends HTMLElement {
       if (el.checked) set.add(id); else set.delete(id);
       fr.ignore_conditions = [...set].filter(x => (fr.presets || []).includes(x));
       if (!fr.ignore_conditions.length) delete fr.ignore_conditions;
+      this._fireConfigChanged(); this.renderEditor();
+    }));
+    // Per-location full condition override: rebind the entity AND/OR change the
+    // operator/value a preset's condition tests HERE. `field` is 'entity' | 'op'
+    // | 'value'. Blank fields inherit the library preset's own condition. Live
+    // value edits keep focus (no re-render); op changes + clear re-render so the
+    // reset button / inheriting-hint update. Stored under fr.overrides[id],
+    // pruned/omitted when empty (byte-stable).
+    const frSetOverride = (sid, id, field, value, rerender) => {
+      const fr = frameRefFor(sid); if (!fr) return;
+      fr.overrides = (fr.overrides && typeof fr.overrides === 'object') ? fr.overrides : {};
+      const o = fr.overrides[id] || {};
+      if (field === 'entity') {
+        if (value) o.when_entity = value; else delete o.when_entity;
+      } else {   // 'op' | 'value' live in o.when
+        const w = (o.when && typeof o.when === 'object') ? o.when : {};
+        if (field === 'op') { if (value) w.op = value; else delete w.op; }
+        if (field === 'value') { if (value !== '') w.value = value; else delete w.value; }
+        // A value with no op is meaningless — keep `when` only when it has an op.
+        if (w.op) o.when = w; else delete o.when;
+      }
+      if (Object.keys(o).length) fr.overrides[id] = o; else delete fr.overrides[id];
+      // Prune to ids still applied; drop the map entirely when empty (byte-stable).
+      Object.keys(fr.overrides).forEach(k => { if (!(fr.presets || []).includes(k)) delete fr.overrides[k]; });
+      if (!Object.keys(fr.overrides).length) delete fr.overrides;
+      this._fireConfigChanged();
+      if (rerender) this.renderEditor();
+    };
+    this.querySelectorAll('.fr-override-entity').forEach(el => {
+      const apply = (rerender) => frSetOverride(el.dataset.frSid, el.dataset.frId, 'entity', el.value.trim(), rerender);
+      el.addEventListener('input', () => apply(false));
+      el.addEventListener('change', () => apply(true));   // re-render on commit → shows the reset button
+    });
+    this.querySelectorAll('.fr-override-op').forEach(el => el.addEventListener('change', () => {
+      frSetOverride(el.dataset.frSid, el.dataset.frId, 'op', el.value, true);
+    }));
+    this.querySelectorAll('.fr-override-value').forEach(el => {
+      const apply = (rerender) => frSetOverride(el.dataset.frSid, el.dataset.frId, 'value', el.value, rerender);
+      el.addEventListener('input', () => apply(false));
+      el.addEventListener('change', () => apply(true));
+    });
+    this.querySelectorAll('.fr-override-clear').forEach(el => el.addEventListener('click', () => {
+      const fr = frameRefFor(el.dataset.frSid); if (!fr) return;
+      if (fr.overrides) { delete fr.overrides[el.dataset.frId]; if (!Object.keys(fr.overrides).length) delete fr.overrides; }
       this._fireConfigChanged(); this.renderEditor();
     }));
 
@@ -12041,6 +12091,9 @@ class SEEDCardEditor extends HTMLElement {
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (section) {
           section.name = el.value;
+          // Reflect in the collapsed summary label live (no re-render → keeps focus).
+          const lbl = this.querySelector(`details.seed-ed-section[data-section-id="${el.dataset.sectionId}"] > summary .seed-ed-section-name-label`);
+          if (lbl) lbl.textContent = el.value || 'Section';
           this._fireConfigChanged();
         }
       });
@@ -12191,8 +12244,8 @@ class SEEDCardEditor extends HTMLElement {
         const section = this._config.sections.find(s => s.id === el.dataset.sectionId);
         if (section) {
           section.icon_color = el.value;
-          const preview = this.querySelector(`.ed-section-icon-preview[data-section-id="${el.dataset.sectionId}"]`);
-          if (preview) preview.style.color = el.value;
+          // The section-ROW type icon stays theme-accent (Color-card style); the
+          // icon_color drives the CARD FACE, not this editor row's leading glyph.
           this._fireConfigChanged();
         }
       });
