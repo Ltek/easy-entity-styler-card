@@ -8,7 +8,24 @@ A highly customizable Home Assistant Dashboard card that organizes and displays 
 
 https://github.com/Ltek/easy-entity-styler-card
 
-Current build: **v2026.08.29.186**
+Current build: **v2026.09.07.205**
+
+---
+
+## What's new (2026-09-07)
+
+- **Conditional Visibility** — show the whole **card** or any individual **section** only when your rules pass (entity + operator + value, chained with AND/OR). Editor-safe: hidden cards/sections stay visible while editing or previewing the dashboard.
+- **Copy sections between cards** — export any section (with its referenced rule sets) as JSON and import it into another card.
+
+---
+
+## What's new (2026-08-31)
+
+- **Per-location Frame Style condition override** — a card/section can override an applied conditional Frame Style's condition (entity + operator + value) without changing the shared library style.
+- **Auto-migrate local Frame Styles** — any leftover card-local frame presets are published to the shared System library on edit (collision-safe, one-time).
+- **Library UI refresh** — Frame Styles, Header Rules, and Entity Filter Rules now use a cleaner flat list (two-line rows, muted subtitle, lock icon on Built-In, theme-color accent when expanded).
+- **Section Layout & Config polish** — even row height/spacing, accent icons, and lighter labels.
+- **Fixes** — Frame Style live preview now updates on slider/color edits.
 
 ---
 
@@ -19,7 +36,8 @@ Every option below is fully point-and-click in the visual editor.
 ### Sections & layout
 - **Collapsible sections and card** — sections expand/collapse individually; the whole card can collapse to just its title bar (or run with no title bar); sections can auto-stay-open when they hold entities.
 - **Two section types** — *Entities* (rows and/or chips) and *Entity Tables* (rich multi-column tables).
-- **Conditional display** — show a section, entity, or the whole card only when your rules pass; auto-hide a section when it has nothing to show.
+- **Conditional visibility** — show the whole card, a section, or an entity only when your rules pass (entity + operator + value, chained AND/OR); auto-hide a section when it has nothing to show. Hidden cards/sections still appear while editing the dashboard.
+- **Copy sections between cards** — export a section (with its rule sets) as JSON and import it elsewhere.
 
 ### Entity selection
 - **Rules engine** — build named, reusable rule sets with point-and-click include/exclude groups (match ALL or ANY); match on id, name, state, attribute, domain, area, label, group helper, integration, or device class, with operators like equals / contains / in / regex / numeric compare. Live dropdowns pull real values from your system.
@@ -74,10 +92,6 @@ Named, reusable, state-driven header styling. A rule set is an ordered list of r
 4. Clear your browser cache and hard-refresh.
 
 ---
-
-## Version
-
-Build number format: `v<year>.<month>.<day>.<increment>` — the trailing increment is a monotonic counter that never resets. It's defined once at the top of `easy-entity-styler-card.js` (`BUILD_NUMBER`) and shown in the editor header and browser console on load.
 
 ## Screenshots
 

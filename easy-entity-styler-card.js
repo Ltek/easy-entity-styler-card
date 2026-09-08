@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.08.31.201
+// Version: v2026.09.07.205
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.08.31.201';
+const BUILD_NUMBER = 'v2026.09.07.205';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -270,6 +270,51 @@ function entityPassesRules(entityId, rules, hass) {
     }
   }
   return result === null ? true : result;
+}
+
+// Conditional Visibility for the whole CARD or a SECTION. Same rule engine as
+// Entity Display Rules, but each rule names the entity it tests (a card/section
+// has no "own" entity). Rule shape: { entity, operator:'eq'|'ne',
+// compare_type:'value'|'entity', value|compare_entity, join:'and'|'or' }.
+// Empty list → visible. Left-to-right join, matching entityPassesRules.
+function passesVisibilityRules(rules, hass) {
+  if (!Array.isArray(rules) || rules.length === 0) return true;
+  let result = null;
+  for (const rule of rules) {
+    const st = (rule.entity && hass && hass.states) ? hass.states[rule.entity] : null;
+    const entityVal = st ? st.state : '';
+    let target;
+    if (rule.compare_type === 'entity') {
+      const cmp = rule.compare_entity && hass && hass.states ? hass.states[rule.compare_entity] : null;
+      target = cmp ? cmp.state : '';
+    } else {
+      target = rule.value != null ? String(rule.value) : '';
+    }
+    const a = String(entityVal).trim().toLowerCase();
+    const b = String(target).trim().toLowerCase();
+    const pass = rule.operator === 'ne' ? a !== b : a === b;
+    if (result === null) result = pass;
+    else if (rule.join === 'or') result = result || pass;
+    else result = result && pass;
+  }
+  return result === null ? true : result;
+}
+
+// Normalize one visibility rule (byte-stable: only emit keys in use).
+function normalizeVisibilityRule(r) {
+  r = r || {};
+  const out = {
+    entity: r.entity ? String(r.entity) : '',
+    operator: r.operator === 'ne' ? 'ne' : 'eq',
+    compare_type: r.compare_type === 'entity' ? 'entity' : 'value',
+  };
+  if (out.compare_type === 'entity') out.compare_entity = r.compare_entity ? String(r.compare_entity) : '';
+  else out.value = r.value != null ? String(r.value) : '';
+  if (r.join === 'or') out.join = 'or';
+  return out;
+}
+function normalizeVisibilityRules(list) {
+  return Array.isArray(list) ? list.map(normalizeVisibilityRule) : [];
 }
 
 // ===========================================================================
@@ -1366,6 +1411,68 @@ function frameLibSlug(name) {
 }
 
 // ---------------------------------------------------------------------------
+// Section export / import (portable, versioned text envelope).
+//
+// A section is mostly self-contained, but an Entity-Table / Entity-Group
+// section can REFERENCE card-level rule sets (config.rule_sets) by id via
+// section.rule_sets[].ref. Those definitions don't live in any shared library,
+// so — like the Color card bundles a Buttons section's buttons — a section
+// export bundles the rule-set definitions it points at. On import they're
+// re-added to config.rule_sets (with fresh ids, refs repointed) so the section
+// filters exactly as it did on the source card. Frame/Header library refs
+// (`lib:<slug>`) and entity ids ride along as-is: they resolve on this instance
+// and degrade gracefully (fall back / show unavailable) if absent.
+// ---------------------------------------------------------------------------
+const SEED_SECTION_EXPORT_VERSION = 1;
+
+// Serialize a section + the card-level rule-set defs it references into the
+// versioned envelope. `ruleSets` is the full config.rule_sets list (caller
+// passes it; only the referenced ones are bundled). `exportedIso` is an ISO
+// date string supplied by the caller (Date.now() is unavailable in some
+// contexts).
+function serializeSection(section, ruleSets, exportedIso) {
+  const refIds = new Set(
+    (Array.isArray(section && section.rule_sets) ? section.rule_sets : [])
+      .map(r => r && r.ref).filter(Boolean).map(String)
+  );
+  const bundled = (Array.isArray(ruleSets) ? ruleSets : [])
+    .filter(rs => rs && refIds.has(String(rs.id)))
+    .map(rs => JSON.parse(JSON.stringify(rs)));
+  const env = {
+    seed_section: SEED_SECTION_EXPORT_VERSION,
+    section: JSON.parse(JSON.stringify(section)),
+    rule_sets: bundled,
+  };
+  if (exportedIso) env.exported = String(exportedIso);
+  return JSON.stringify(env, null, 2);
+}
+
+// Parse + validate a pasted section envelope. Returns { ok, section, rule_sets, error }.
+// The returned section/rule-sets keep their stored fields; id re-keying + ref
+// repointing is left to the caller (_importSection) so ids never collide.
+function parseSectionBlob(text) {
+  let raw;
+  try { raw = JSON.parse(text); }
+  catch (e) { return { ok: false, error: 'Not valid JSON.' }; }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw) || !('seed_section' in raw)) {
+    return { ok: false, error: 'Unrecognized format — expected an exported Section.' };
+  }
+  if (Number(raw.seed_section) > SEED_SECTION_EXPORT_VERSION) {
+    return { ok: false, error: 'Made by a newer version of the card. Update the card first.' };
+  }
+  const section = raw.section;
+  if (!section || typeof section !== 'object' || Array.isArray(section)) {
+    return { ok: false, error: 'Envelope has no valid section.' };
+  }
+  const ruleSets = Array.isArray(raw.rule_sets) ? raw.rule_sets.filter(rs => rs && typeof rs === 'object') : [];
+  return {
+    ok: true,
+    section: JSON.parse(JSON.stringify(section)),
+    rule_sets: ruleSets.map(rs => JSON.parse(JSON.stringify(rs))),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Frame Style LIBRARY (live, shared, install-free store).
 //
 // Backed by Home Assistant's built-in frontend key-value store — the same WS
@@ -2384,6 +2491,11 @@ function normalizeSection(s) {
     // legacy sections stay byte-stable.
     ...((Array.isArray(s.header_rule_refs) && s.header_rule_refs.length)
       ? { header_rule_refs: normalizeHeaderRuleRefs(s.header_rule_refs) } : {}),
+    // Conditional Visibility: ordered rules (same engine as Entity Display Rules,
+    // each naming its own entity) — the whole section is hidden unless they pass.
+    // Emitted only when non-empty (byte-stable).
+    ...((Array.isArray(s.visibility_rules) && s.visibility_rules.length)
+      ? { visibility_rules: normalizeVisibilityRules(s.visibility_rules) } : {}),
     // Format-chip style, per section (blank color = inherit the card's global chip colors)
     chip_bg: s.chip_bg || '',
     chip_border_color: s.chip_border_color || '',
@@ -3146,6 +3258,10 @@ class SEEDCard extends HTMLElement {
       // entity). Emitted only when non-empty (byte-stable).
       ...((Array.isArray(config.header_rule_refs) && config.header_rule_refs.length)
         ? { header_rule_refs: normalizeHeaderRuleRefs(config.header_rule_refs) } : {}),
+      // Conditional Visibility for the WHOLE CARD — hidden unless the rules pass.
+      // Emitted only when non-empty (byte-stable).
+      ...((Array.isArray(config.visibility_rules) && config.visibility_rules.length)
+        ? { visibility_rules: normalizeVisibilityRules(config.visibility_rules) } : {}),
       rule_sets,
       sections
     };
@@ -4095,7 +4211,8 @@ class SEEDCard extends HTMLElement {
       if (section.hidden === true) continue;
       // Standalone Divider section: just the divider line, no frame/title/body.
       if (section.type === 'divider') {
-        sectionsHtml += `<div class="seed-section seed-divider-section" data-section-id="${section.id}">${dividerLineHtml(section, { scale: this._config.scale || 1.0, divider_color: (this.getColors().section_divider) })}</div>`;
+        const dvHidden = (!this._editMode && !passesVisibilityRules(section.visibility_rules, this._hass)) ? ' display:none;' : '';
+        sectionsHtml += `<div class="seed-section seed-divider-section" data-section-id="${section.id}" style="${dvHidden}">${dividerLineHtml(section, { scale: this._config.scale || 1.0, divider_color: (this.getColors().section_divider) })}</div>`;
         continue;
       }
 
@@ -4283,7 +4400,11 @@ class SEEDCard extends HTMLElement {
       // updateStates() can reveal it again when an entity's state changes.
       const hideEmpty = section.section_display === 'hide_when_empty' ||
         (section.type === 'activity_table' && section.hide_when_empty === true);
-      const sectionHidden = hideEmpty && count === 0;
+      // Conditional Visibility: the section is hidden unless its rules pass
+      // (empty rules = always visible). Re-evaluated live in updateStates().
+      // In edit mode, always show (like the built-in Conditional card).
+      const failsVisibility = !this._editMode && !passesVisibilityRules(section.visibility_rules, this._hass);
+      const sectionHidden = (hideEmpty && count === 0) || failsVisibility;
       const sectionHiddenStyle = sectionHidden ? ' display:none;' : '';
 
       if (!sectionShowTitle) {
@@ -4359,6 +4480,39 @@ class SEEDCard extends HTMLElement {
     this.attachEventListeners();
     this.updateGlow();
     this.updateCardGlow();
+    this.applyCardVisibility();
+  }
+
+  // HA sets `editMode` on a card element while the dashboard is being edited
+  // (its hui-card wrapper does `if ('editMode' in el) el.editMode = …`). We
+  // expose it so Conditional Visibility can SHOW everything in edit/preview mode
+  // — matching the built-in Conditional card, so hidden cards/sections stay
+  // reachable in the editor instead of collapsing to a blank area.
+  set editMode(v) {
+    this._edit = !!v;
+    this._editMode = this._edit || this._prev;
+    if (this._rendered) { try { this.applyCardVisibility(); this.updateStates(); } catch (e) {} }
+  }
+  get editMode() { return this._edit === true; }
+  // HA sets `preview` on the card in the card-picker / config-dialog preview.
+  // Treat it like edit mode (show everything) so a conditionally-hidden card
+  // isn't a blank preview.
+  set preview(v) {
+    this._prev = !!v;
+    this._editMode = this._edit || this._prev;
+    if (this._rendered) { try { this.applyCardVisibility(); this.updateStates(); } catch (e) {} }
+  }
+  get preview() { return this._prev === true; }
+
+  // Conditional Visibility for the WHOLE CARD: hide the card element when the
+  // card-level rules fail (empty rules = always visible). Re-run at render and
+  // live in updateStates(). Hides the card's own host element so it takes no
+  // layout space in the dashboard grid — EXCEPT in edit mode, where it always
+  // shows (like the built-in Conditional card).
+  applyCardVisibility() {
+    const rules = this._config && this._config.visibility_rules;
+    if (this._editMode || !Array.isArray(rules) || !rules.length) { this.style.display = ''; return; }
+    this.style.display = passesVisibilityRules(rules, this._hass) ? '' : 'none';
   }
 
   // Builds the <span class="seed-chip">...</span> markup for one entity,
@@ -5433,6 +5587,9 @@ class SEEDCard extends HTMLElement {
   updateStates() {
     if (!this._hass) return;
 
+    // Card-level Conditional Visibility — re-evaluate as its rules' entities change.
+    this.applyCardVisibility();
+
     if (this._config.show_last_changed) {
       const lastChangedEl = this.querySelector('.seed-title-last-changed');
       const text = this._getLastChangedText();
@@ -5527,6 +5684,18 @@ class SEEDCard extends HTMLElement {
     (this._config.sections || []).forEach(section => {
       const sectionEl = this.querySelector(`.seed-section[data-section-id="${section.id}"]`);
       if (!sectionEl) return;
+
+      // Conditional Visibility: hide/show the whole section as its rules' entities
+      // change. When it fails, hide and skip the rest (nothing else to update).
+      // Edit mode always shows (like the built-in Conditional card).
+      if (Array.isArray(section.visibility_rules) && section.visibility_rules.length) {
+        if (!this._editMode && !passesVisibilityRules(section.visibility_rules, this._hass)) {
+          sectionEl.style.display = 'none';
+          return;
+        }
+        // Passes: clear the visibility hide (hide-when-empty below may re-hide).
+        if (sectionEl.style.display === 'none') sectionEl.style.display = '';
+      }
 
       // Section-header Header Rule Sets are state-driven — re-apply live so the
       // header icon/name recolor without a reload. Tables apply theirs inside
@@ -5699,6 +5868,8 @@ class SEEDCardEditor extends HTMLElement {
       header_library_scope: 'system',
       ...((Array.isArray(cfg.header_rule_refs) && cfg.header_rule_refs.length)
         ? { header_rule_refs: normalizeHeaderRuleRefs(cfg.header_rule_refs) } : {}),
+      ...((Array.isArray(cfg.visibility_rules) && cfg.visibility_rules.length)
+        ? { visibility_rules: normalizeVisibilityRules(cfg.visibility_rules) } : {}),
       rule_sets,
       sections
     };
@@ -6828,6 +6999,7 @@ class SEEDCardEditor extends HTMLElement {
             <span class="seed-ed-section-type-badge">Divider</span>
             <ha-icon class="seed-ed-icon-btn ed-move-up ${idx === 0 ? 'disabled' : ''}" icon="mdi:arrow-up-bold" data-section-id="${sid}"></ha-icon>
             <ha-icon class="seed-ed-icon-btn ed-move-down ${idx === total - 1 ? 'disabled' : ''}" icon="mdi:arrow-down-bold" data-section-id="${sid}"></ha-icon>
+            <ha-icon class="seed-ed-icon-btn ed-export-section" icon="mdi:download" data-section-id="${sid}" title="Export this divider as JSON"></ha-icon>
             <ha-icon class="seed-ed-icon-btn ed-duplicate-section" icon="mdi:content-copy" data-section-id="${sid}" title="Duplicate this divider"></ha-icon>
             <ha-icon class="seed-ed-icon-btn ed-hide-section" icon="${section.hidden ? 'mdi:eye-off' : 'mdi:eye'}" data-section-id="${sid}" title="${section.hidden ? 'Hidden — click to show on card' : 'Shown — click to hide from card'}"></ha-icon>
             <ha-icon class="seed-ed-icon-btn ed-remove-section" icon="mdi:trash-can-outline" data-section-id="${sid}"></ha-icon>
@@ -6909,6 +7081,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
             ${im === 'fixed' ? `<div class="seed-ed-colors"><div class="seed-ed-color"><label>Icon color:</label><input type="color" class="ed-div-input" data-div-sid="${sid}" data-div-key="icon_color" value="${/^#[0-9a-f]{6}$/i.test(section.icon_color || '') ? section.icon_color : '#ffffff'}" /></div></div>` : ''}`; })()}
           `)}
+          ${this._edDivSub(sid, 'Conditional Visibility', this._visibilityRulesHtml(sid, section.visibility_rules))}
         </div>
       </details>`;
   }
@@ -6947,6 +7120,41 @@ class SEEDCardEditor extends HTMLElement {
         <div class="seed-ed-substyle-body">${bodyHtml}</div>
       </details>`;
   }
+  // Conditional Visibility rules editor — the whole card or a section is shown
+  // only if the rules pass (same engine/UX as Entity Display Rules, but each rule
+  // names its own entity). `scope` is 'card' or a section id; wiring reads it from
+  // data-vis-scope. `rules` is the current list.
+  _visibilityRulesHtml(scope, rules) {
+    rules = Array.isArray(rules) ? rules : [];
+    const rowsHtml = rules.map((rule, i) => `
+      <div class="seed-ed-rule" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}">
+        ${i > 0 ? `
+        <select class="vis-rule-join" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}" title="How this rule combines with the ones above">
+          <option value="and" ${rule.join !== 'or' ? 'selected' : ''}>AND</option>
+          <option value="or" ${rule.join === 'or' ? 'selected' : ''}>OR</option>
+        </select>` : `<span class="seed-ed-rule-when">When</span>`}
+        <span class="seed-ed-rule-line">
+          <input type="text" class="vis-rule-entity" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}" list="ees-all-entities" value="${escapeHtml(rule.entity || '')}" placeholder="entity_id" />
+          <select class="vis-rule-operator" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}">
+            <option value="eq" ${rule.operator !== 'ne' ? 'selected' : ''}>is equal to</option>
+            <option value="ne" ${rule.operator === 'ne' ? 'selected' : ''}>is not equal to</option>
+          </select>
+          <select class="vis-rule-compare-type" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}">
+            <option value="value" ${rule.compare_type !== 'entity' ? 'selected' : ''}>a value</option>
+            <option value="entity" ${rule.compare_type === 'entity' ? 'selected' : ''}>an entity's value</option>
+          </select>
+          ${rule.compare_type === 'entity'
+            ? `<input type="text" class="vis-rule-compare-entity" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}" list="ees-all-entities" value="${escapeHtml(rule.compare_entity || '')}" placeholder="entity_id" />`
+            : `<input type="text" class="vis-rule-value" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}" value="${(rule.value || '').replace(/"/g, '&quot;')}" placeholder="e.g. on" />`}
+          <ha-icon class="seed-ed-icon-btn vis-rule-remove" icon="mdi:close" data-vis-scope="${escapeHtml(scope)}" data-rule-index="${i}" title="Remove rule"></ha-icon>
+        </span>
+      </div>`).join('');
+    return `
+      <span class="seed-ed-hint">Show this ${scope === 'card' ? 'card' : 'section'} only when these rules pass (checked top to bottom; each joins the running result with AND / OR). No rules = always shown.</span>
+      <div class="seed-ed-rules" data-vis-scope="${escapeHtml(scope)}">${rowsHtml || '<span class="seed-ed-hint">No rules — always shown.</span>'}</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm vis-rule-add" data-vis-scope="${escapeHtml(scope)}"><ha-icon icon="mdi:plus"></ha-icon>Add Rule</div>`;
+  }
+
   _edDivSlider(sid, key, label, cur, min, max, step, zeroLabel) {
     const v = Number.isFinite(Number(cur)) ? Number(cur) : min;
     const unit = key === 'length' ? '%' : (/size|thickness|indent/.test(key) ? 'px' : '');
@@ -7162,6 +7370,176 @@ class SEEDCardEditor extends HTMLElement {
   _friendly(id) {
     const st = this._hass ? this._hass.states[id] : null;
     return st ? (st.attributes.friendly_name || id) : id;
+  }
+
+  // ---- JSON transfer via an over-the-editor modal (shared with the Color card) ----
+  // A native <dialog> + showModal() renders in the browser TOP LAYER, above HA's own <ha-dialog>
+  // config editor. JSON moves through a VISIBLE textarea (Copy button on export, Paste button on
+  // import); the textarea is always the reliable path when clipboard access is blocked.
+  _showModal(contentEl) {
+    const dlg = document.createElement('dialog');
+    dlg.style.cssText = 'padding:0;border:none;background:transparent;max-width:none;max-height:none;';
+    const st = document.createElement('style');
+    st.textContent = 'dialog::backdrop{background:rgba(0,0,0,0.55);}';
+    dlg.appendChild(st);
+    const box = document.createElement('div');
+    box.style.cssText = 'background:var(--ha-card-background,var(--card-background-color,#1c1c1c));color:var(--primary-text-color,#e1e1e1);border:1px solid var(--divider-color,#444);border-radius:12px;max-width:640px;width:min(640px,92vw);max-height:85vh;overflow:auto;padding:16px;box-sizing:border-box;box-shadow:0 8px 40px rgba(0,0,0,0.5);';
+    box.appendChild(contentEl);
+    dlg.appendChild(box);
+    const close = () => { try { dlg.close(); } catch (e) {} if (dlg.parentNode) dlg.parentNode.removeChild(dlg); };
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) close(); });
+    dlg.addEventListener('cancel', (e) => { e.preventDefault(); close(); });
+    document.body.appendChild(dlg);
+    try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
+    return { close, box };
+  }
+  _tryCopyTextarea(ta) {
+    try { ta.focus(); ta.select(); ta.setSelectionRange(0, ta.value.length); return document.execCommand('copy'); }
+    catch (e) { return false; }
+  }
+  // Export: modal with the JSON in a selectable textarea + a Copy button.
+  _exportJson(text, note) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Export</div>
+      <div style="font-size:12px;color:var(--secondary-text-color,#888);margin-bottom:10px;">${escapeHtml(note || 'Copy this JSON.')}</div>
+      <textarea readonly style="width:100%;box-sizing:border-box;height:220px;font-family:var(--code-font-family,monospace);font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--divider-color,#444);background:var(--secondary-background-color,#2a2a2a);color:var(--primary-text-color,#e1e1e1);resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+        <button class="seed-modal-copy" style="padding:8px 14px;border:none;border-radius:6px;background:var(--primary-color,#2196F3);color:#fff;cursor:pointer;font-size:13px;">Copy to clipboard</button>
+        <button class="seed-modal-close" style="padding:8px 14px;border:1px solid var(--divider-color,#444);border-radius:6px;background:transparent;color:var(--primary-text-color,#e1e1e1);cursor:pointer;font-size:13px;">Close</button>
+      </div>`;
+    const ta = wrap.querySelector('textarea');
+    ta.value = text;
+    const modal = this._showModal(wrap);
+    setTimeout(() => { ta.focus(); ta.select(); }, 50);
+    const copyBtn = wrap.querySelector('.seed-modal-copy');
+    copyBtn.onclick = () => {
+      const ok = this._tryCopyTextarea(ta) || (navigator.clipboard && navigator.clipboard.writeText && (navigator.clipboard.writeText(ta.value), true));
+      copyBtn.textContent = ok ? 'Copied ✓' : 'Press Ctrl/Cmd+C';
+      setTimeout(() => { copyBtn.textContent = 'Copy to clipboard'; }, 1500);
+    };
+    wrap.querySelector('.seed-modal-close').onclick = () => modal.close();
+  }
+  // Import: modal with an empty paste textarea + Paste + Import buttons. Calls onText(raw); blank → no-op.
+  _importJson(promptLabel, onText) {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Import</div>
+      <div style="font-size:12px;color:var(--secondary-text-color,#888);margin-bottom:10px;">${escapeHtml(promptLabel || 'Paste the exported JSON below.')}</div>
+      <textarea placeholder="Paste JSON here…" style="width:100%;box-sizing:border-box;height:220px;font-family:var(--code-font-family,monospace);font-size:12px;padding:8px;border-radius:6px;border:1px solid var(--divider-color,#444);background:var(--secondary-background-color,#2a2a2a);color:var(--primary-text-color,#e1e1e1);resize:vertical;"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">
+        <button class="seed-modal-paste" style="padding:8px 14px;border:1px solid var(--divider-color,#444);border-radius:6px;background:transparent;color:var(--primary-text-color,#e1e1e1);cursor:pointer;font-size:13px;margin-right:auto;">Paste from clipboard</button>
+        <button class="seed-modal-import" style="padding:8px 14px;border:none;border-radius:6px;background:var(--primary-color,#2196F3);color:#fff;cursor:pointer;font-size:13px;">Import</button>
+        <button class="seed-modal-close" style="padding:8px 14px;border:1px solid var(--divider-color,#444);border-radius:6px;background:transparent;color:var(--primary-text-color,#e1e1e1);cursor:pointer;font-size:13px;">Cancel</button>
+      </div>`;
+    const ta = wrap.querySelector('textarea');
+    const modal = this._showModal(wrap);
+    setTimeout(() => ta.focus(), 50);
+    const pasteBtn = wrap.querySelector('.seed-modal-paste');
+    pasteBtn.onclick = () => {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        navigator.clipboard.readText()
+          .then(txt => { if (txt) { ta.value = txt; ta.focus(); } else { pasteBtn.textContent = 'Press Ctrl/Cmd+V'; setTimeout(() => { pasteBtn.textContent = 'Paste from clipboard'; }, 1500); } })
+          .catch(() => { ta.focus(); pasteBtn.textContent = 'Press Ctrl/Cmd+V'; setTimeout(() => { pasteBtn.textContent = 'Paste from clipboard'; }, 1500); });
+      } else { ta.focus(); pasteBtn.textContent = 'Press Ctrl/Cmd+V'; setTimeout(() => { pasteBtn.textContent = 'Paste from clipboard'; }, 1500); }
+    };
+    wrap.querySelector('.seed-modal-import').onclick = () => { const txt = ta.value; modal.close(); if (txt && txt.trim()) onText(txt); };
+    wrap.querySelector('.seed-modal-close').onclick = () => modal.close();
+  }
+
+  _nowIso() { try { return new Date().toISOString().slice(0, 10); } catch (e) { return ''; } }
+
+  // Export one section (+ the card-level rule-set defs it references) as portable
+  // JSON through the shared modal. Rule sets are bundled because they live at
+  // card level (config.rule_sets), not in a shared library, so the payload must
+  // carry them to reproduce the section's filtering elsewhere.
+  _exportSection(id) {
+    const section = (this._config.sections || []).find(s => s.id === id);
+    if (!section) return;
+    const json = serializeSection(section, this._config.rule_sets || [], this._nowIso());
+    const n = (Array.isArray(section.rule_sets) ? section.rule_sets.filter(r => r && r.ref).length : 0);
+    this._exportJson(json, `Section JSON${n ? ` (${n} rule set${n === 1 ? '' : 's'} bundled)` : ''}. Import it into another card via “Import Section…”.`);
+  }
+
+  // Import a section (+ its bundled rule-set defs) from a parsed envelope. Re-IDs
+  // the section and every bundled rule set, repoints the section's rule_sets[].ref
+  // to the new ids, appends the section to the layout, and merges the rule sets
+  // into config.rule_sets. Frame/Header library refs (lib:<slug>) + entity ids
+  // ride along as-is (resolve on this instance, degrade gracefully if absent).
+  _importSection(section, ruleSets) {
+    const copy = JSON.parse(JSON.stringify(section));
+    const isDivider = copy.type === 'divider';
+    copy.id = uid();
+    if (!isDivider) copy.name = `${copy.name || 'Section'} (imported)`;
+
+    // Re-key the bundled rule sets and build an old-id → new-id map.
+    const idMap = {};
+    const newRuleSets = (this._config.rule_sets || []).slice();
+    (Array.isArray(ruleSets) ? ruleSets : []).forEach(rs => {
+      const clone = JSON.parse(JSON.stringify(rs));
+      const oldId = String(clone.id || '');
+      clone.id = _rsId();
+      if (oldId) idMap[oldId] = clone.id;
+      newRuleSets.push(normalizeRuleSetDef(clone));
+    });
+    // Repoint the section's rule-set refs to the freshly-added defs. A ref whose
+    // def wasn't bundled (shouldn't happen from our own export) is left as-is.
+    if (Array.isArray(copy.rule_sets)) {
+      copy.rule_sets = copy.rule_sets.map(r => {
+        if (r && r.ref && idMap[String(r.ref)]) return { ...r, ref: idMap[String(r.ref)] };
+        return r;
+      });
+      // static_entities is keyed by ref id too — re-key those alongside.
+      if (copy.static_entities && typeof copy.static_entities === 'object') {
+        const rekeyed = {};
+        Object.keys(copy.static_entities).forEach(k => {
+          rekeyed[idMap[k] || k] = copy.static_entities[k];
+        });
+        copy.static_entities = rekeyed;
+      }
+    }
+
+    const norm = isDivider ? normalizeDividerSection(copy) : normalizeSection(copy);
+    const sections = (this._config.sections || []).slice();
+    sections.push(norm);
+    this._config = { ...this._config, sections, rule_sets: newRuleSets };
+    this._fireConfigChanged();
+    this.renderEditor();
+
+    // Honest post-import note: flag referenced Frame/Header library styles this
+    // instance lacks (they'll fall back until authored/imported here).
+    const missing = this._missingRefsFor(norm);
+    let msg = `Imported “${isDivider ? (norm.label || 'Divider') : (norm.name || 'Section')}”`;
+    const nRs = Object.keys(idMap).length;
+    if (nRs) msg += ` with ${nRs} rule set${nRs === 1 ? '' : 's'}`;
+    msg += '.';
+    if (missing.length) msg += `\n\nNot present on this system (they'll fall back until fixed):\n• ${missing.join('\n• ')}`;
+    try { window.alert(msg); } catch (e) {}
+  }
+
+  // Collect library refs an imported section points at that DON'T exist on this
+  // instance — for an honest "these will fall back" note. Checks the shared,
+  // possibly-missing Frame Styles + Header Rule Sets (referenced by lib:<slug>).
+  // Entity ids are left to HA to resolve.
+  _missingRefsFor(section) {
+    const missing = [];
+    const frameLib = frameLibraryMap(this._config.frame_library_scope);
+    const headerLib = headerLibraryMap(this._config.header_library_scope);
+    const framePresets = (section.frame && Array.isArray(section.frame.presets)) ? section.frame.presets : [];
+    framePresets.forEach(id => {
+      if (typeof id === 'string' && id.startsWith('lib:')) {
+        const slug = id.slice(4);
+        if (!frameLib[slug]) missing.push(`Frame Style “${slug}”`);
+      }
+    });
+    (Array.isArray(section.header_rule_refs) ? section.header_rule_refs : []).forEach(r => {
+      const ref = r && r.ref;
+      if (typeof ref === 'string' && ref.startsWith('lib:')) {
+        const slug = ref.slice(4);
+        if (!headerLib[slug]) missing.push(`Header Rule Set “${slug}”`);
+      }
+    });
+    return missing;
   }
 
   // Confirmation gate for destructive editor actions. Returns true to proceed.
@@ -8957,16 +9335,18 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-lib-list > .seed-ed-substyle-flush + .seed-ed-substyle-flush { margin-top: 0; }
         .seed-ed-lib-list > .seed-ed-lib-row > summary { padding: 10px 14px; }
         .seed-ed-lib-list > .seed-ed-lib-row > .seed-ed-substyle-body { padding: 0 14px 12px; }
-        /* Expanded flat library row → theme-color accent (left bar + tint), the
-           flat-list analog of the bordered panels' theme-color border. */
-        .seed-ed-lib-list > .seed-ed-lib-row[open] { background: var(--ltek-c-surface); box-shadow: inset 3px 0 0 var(--primary-color, #2196F3); }
+        /* Expanded flat library row → subtle background tint + accent summary
+           title (see below). No left bar — a bar overlaps the content. */
+        .seed-ed-lib-list > .seed-ed-lib-row[open] { background: var(--ltek-c-surface); }
         .seed-ed-substyle-flush { border: none; border-radius: 0; background: none; border-top: 1px solid var(--ltek-c-panel-border); }
         .seed-ed-substyle-flush:first-of-type { border-top: none; }
-        /* Any expanded flat (flush) subpanel gets the theme-color left accent —
-           the flat analog of the bordered panels' theme-color border on open. */
-        .seed-ed-substyle-flush[open] { box-shadow: inset 3px 0 0 var(--primary-color, #2196F3); }
         .seed-ed-substyle-flush > summary { padding: 10px 2px 4px; }
         .seed-ed-substyle-flush > .seed-ed-substyle-body { padding: 0 2px 10px; }
+        /* Open indicator for flat (flush) subpanels: a soft full-width background
+           tint (NOT a left bar — a bar overlapped the content/controls). The
+           rotating summary chevron remains the primary open/closed cue. */
+        .seed-ed-substyle-flush[open] { background: var(--ltek-c-accent-fade-soft); border-radius: var(--ltek-r-ctrl); }
+        .seed-ed-substyle-flush[open] > summary { color: var(--ltek-c-accent); }
         /* When flush subpanels sit inside a flex container with a gap (e.g. the
            section-body), cancel the gap between consecutive flush items so they
            touch — separated only by the top-divider line, not empty space. */
@@ -9416,6 +9796,7 @@ class SEEDCardEditor extends HTMLElement {
         <span class="seed-ed-hint">The card's frame (border / glow / shadow / background / edges) comes from Frame Styles, layered here — independent of the per-section frames.</span>
         ${this._atFrameRefEditor('__card_frame__', this._config.card_frame)}
         `)}
+        ${this._edCardSub('visibility', 'Conditional Visibility', this._visibilityRulesHtml('card', this._config.visibility_rules))}
         </div>
       </details>
     `;
@@ -9548,6 +9929,7 @@ class SEEDCardEditor extends HTMLElement {
       <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-table-menu"><ha-icon icon="mdi:table-plus"></ha-icon>Entity Table</div>
       <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-section"><ha-icon icon="mdi:plus"></ha-icon>Entity Group</div>
       <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-add-divider"><ha-icon icon="mdi:minus"></ha-icon>Divider</div>
+      <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-import-section"><ha-icon icon="mdi:import"></ha-icon>Import Section…</div>
     </div>`;
     html += `<div id="ed-table-preset-menu" style="display:none; flex-direction:column; gap:4px; margin-top:6px;">
       ${getActivityPresets().map(p => `<div class="seed-ed-add-btn seed-ed-add-btn-sm ed-add-table-preset" data-preset="${p.key}"><ha-icon icon="mdi:plus"></ha-icon>${p.label}</div>`).join('')}
@@ -9697,6 +10079,7 @@ class SEEDCardEditor extends HTMLElement {
               <span class="seed-ed-section-type-badge">${section.type === 'activity_table' ? 'Table' : 'Entities'}</span>
               <ha-icon class="seed-ed-icon-btn ed-move-up ${idx === 0 ? 'disabled' : ''}" icon="mdi:arrow-up-bold" data-section-id="${section.id}"></ha-icon>
               <ha-icon class="seed-ed-icon-btn ed-move-down ${idx === sections.length - 1 ? 'disabled' : ''}" icon="mdi:arrow-down-bold" data-section-id="${section.id}"></ha-icon>
+              <ha-icon class="seed-ed-icon-btn ed-export-section" icon="mdi:download" data-section-id="${section.id}" title="Export this section as JSON"></ha-icon>
               <ha-icon class="seed-ed-icon-btn ed-duplicate-section" icon="mdi:content-copy" data-section-id="${section.id}" title="Duplicate this section"></ha-icon>
               <ha-icon class="seed-ed-icon-btn ed-hide-section" icon="${section.hidden ? 'mdi:eye-off' : 'mdi:eye'}" data-section-id="${section.id}" title="${section.hidden ? 'Hidden — click to show on card' : 'Shown — click to hide from card'}"></ha-icon>
               <ha-icon class="seed-ed-icon-btn ed-remove-section" icon="mdi:trash-can-outline" data-section-id="${section.id}"></ha-icon>
@@ -10095,6 +10478,12 @@ class SEEDCardEditor extends HTMLElement {
               </div>
             </details>
             `}
+            <details class="seed-ed-substyle seed-ed-substyle-flush" data-panel="se-visibility-${section.id}">
+              <summary class="seed-ed-substyle-sum"><ha-icon icon="mdi:eye-outline" class="seed-ed-rs-sum-icon"></ha-icon><span class="seed-ed-substyle-name">Conditional Visibility</span></summary>
+              <div class="seed-ed-substyle-body">
+                ${this._visibilityRulesHtml(section.id, section.visibility_rules)}
+              </div>
+            </details>
           </div>
         </details>
       `;
@@ -10514,16 +10903,6 @@ class SEEDCardEditor extends HTMLElement {
     // ---- Header Rule Set portability: export / import ----
     const hdrPortalStatus = (msg) => { const s = this.querySelector('#hdr-portal-status'); if (s) s.textContent = msg || ''; };
     const hdrNowISO = () => { try { return new Date().toISOString().slice(0, 10); } catch (e) { return ''; } };
-    const hdrCopyText = (text) => {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
-      }
-      try {
-        const ta = this.querySelector('#hdr-portal-text');
-        if (ta) { ta.select(); document.execCommand('copy'); return Promise.resolve(true); }
-      } catch (e) {}
-      return Promise.resolve(false);
-    };
     // Resolve any header-set slug to its current (draft-aware) object.
     const hdrSetBySlug = (slug) => slug === BUILTIN_HEADER_SLUG
       ? builtinHeaderRuleSet()
@@ -10536,46 +10915,34 @@ class SEEDCardEditor extends HTMLElement {
       ev.stopPropagation();
       const src = hdrSetBySlug(el.dataset.hdrSlug);
       if (!src) return;
-      this._hdrPortal('export', serializeHeaderRuleSets([src], { exported: hdrNowISO(), keepBindings: true }),
+      this._exportJson(serializeHeaderRuleSets([src], { exported: hdrNowISO(), keepBindings: true }),
         `Exported "${src.name || 'Header Rules'}". Copy this text — paste it into another card's Import, or share it (with your card YAML) to debug why a rule isn't applying.`);
     }));
 
-    // Open the import portal.
+    // Import via the over-the-editor modal (paste box + Paste button).
     const hdrImport = this.querySelector('#hdr-import');
     if (hdrImport) hdrImport.addEventListener('click', () => {
-      this._hdrPortal('import', '', 'Paste exported Header Rule text below, then Import. Imported sets are added to the shared System library with fresh names.');
-    });
-
-    // Portal primary: Copy (export) or Import (import).
-    const hdrPortalPrimary = this.querySelector('#hdr-portal-primary');
-    if (hdrPortalPrimary) hdrPortalPrimary.addEventListener('click', () => {
-      const mode = hdrPortalPrimary.dataset.mode;
-      const ta = this.querySelector('#hdr-portal-text');
-      if (mode === 'export') {
-        hdrCopyText(ta ? ta.value : '').then(okc => hdrPortalStatus(okc ? 'Copied to clipboard.' : 'Copy failed — select the text and copy manually.'));
-        return;
-      }
-      // import: parse, then add each set to the shared library under a fresh
-      // slug/name (dedupe byte-identical sets by content key).
-      const res = parseHeaderRuleSetBlob(ta ? ta.value : '');
-      if (!res.ok) { hdrPortalStatus('Import failed: ' + res.error); return; }
-      const scope = hdrScope();
-      const map = { ...headerLibraryMap(scope) };
-      const seen = new Set(Object.keys(map).map(s => headerRuleSetContentKey(map[s])));
-      let added = 0, skipped = 0;
-      res.sets.forEach(s => {
-        const key = headerRuleSetContentKey(s);
-        if (seen.has(key)) { skipped += 1; return; }
-        seen.add(key);
-        const base = s.name || 'Imported Header Rules';
-        let slug = headerLibSlug(base), n = 2;
-        while (map[slug]) { slug = headerLibSlug(base + ' ' + n); n++; }
-        const store = normalizeHeaderRuleSet(s); store.id = 'lib:' + slug;
-        map[slug] = store; added += 1;
+      this._importJson('Paste exported Header Rule text below, then Import. Imported sets are added to the shared System library with fresh names.', (txt) => {
+        const res = parseHeaderRuleSetBlob(txt);
+        if (!res.ok) { window.alert('Import failed: ' + res.error); return; }
+        const scope = hdrScope();
+        const map = { ...headerLibraryMap(scope) };
+        const seen = new Set(Object.keys(map).map(s => headerRuleSetContentKey(map[s])));
+        let added = 0, skipped = 0;
+        res.sets.forEach(s => {
+          const key = headerRuleSetContentKey(s);
+          if (seen.has(key)) { skipped += 1; return; }
+          seen.add(key);
+          const base = s.name || 'Imported Header Rules';
+          let slug = headerLibSlug(base), n = 2;
+          while (map[slug]) { slug = headerLibSlug(base + ' ' + n); n++; }
+          const store = normalizeHeaderRuleSet(s); store.id = 'lib:' + slug;
+          map[slug] = store; added += 1;
+        });
+        hdrEcho(scope, map);
+        this._hdrPendingStatus = `Imported ${added} rule set${added === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? '' : 's'}` : ''}.`;
+        saveHeaderLibrary(this._hass, scope, map).then(() => this.renderEditor()).catch(() => this.renderEditor());
       });
-      hdrEcho(scope, map);
-      this._hdrPendingStatus = `Imported ${added} rule set${added === 1 ? '' : 's'}${skipped ? `, skipped ${skipped} duplicate${skipped === 1 ? '' : 's'}` : ''}.`;
-      saveHeaderLibrary(this._hass, scope, map).then(() => this.renderEditor()).catch(() => this.renderEditor());
     });
 
     // Close the portal.
@@ -10685,7 +11052,7 @@ class SEEDCardEditor extends HTMLElement {
         ev.stopPropagation();
         const src = presetById(el.dataset.fxId);
         if (!src) return;
-        this._fxPortal('export', serializeFramePresets([src], { exported: nowISO() }),
+        this._exportJson(serializeFramePresets([src], { exported: nowISO() }),
           `Exported "${src.name || 'preset'}". Copy this text and paste it into another card's Import.`);
       });
     });
@@ -10793,32 +11160,25 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-    // Open the import portal.
+    // Import via the over-the-editor modal (paste box + Paste button).
     const fxImport = this.querySelector('#fx-import');
     if (fxImport) fxImport.addEventListener('click', () => {
-      this._fxPortal('import', '', 'Paste exported Frame Style text below, then Import.');
+      this._importJson('Paste exported Frame Style text below, then Import.', (txt) => {
+        const res = parseFramePresetBlob(txt);
+        if (!res.ok) { window.alert('Import failed: ' + res.error); return; }
+        const merged = mergeFramePresets(this._config.frame_presets || [], res.presets);
+        this._config.frame_presets = merged.list;
+        this._fireConfigChanged();
+        this._fxPendingStatus = `Imported ${merged.added} preset${merged.added === 1 ? '' : 's'}${merged.skipped ? `, skipped ${merged.skipped} duplicate${merged.skipped === 1 ? '' : 's'}` : ''}.`;
+        this.renderEditor();
+      });
     });
 
-    // Portal primary button: Copy (export mode) or Import (import mode).
+    // Portal primary button: still used by Save-to-Library's status flow (export mode Copy).
     const portalPrimary = this.querySelector('#fx-portal-primary');
     if (portalPrimary) portalPrimary.addEventListener('click', () => {
-      const mode = portalPrimary.dataset.mode;
       const ta = this.querySelector('#fx-portal-text');
-      if (mode === 'export') {
-        copyText(ta ? ta.value : '').then(okc => portalStatus(okc ? 'Copied to clipboard.' : 'Copy failed — select the text and copy manually.'));
-        return;
-      }
-      // import
-      const res = parseFramePresetBlob(ta ? ta.value : '');
-      if (!res.ok) { portalStatus('Import failed: ' + res.error); return; }
-      const merged = mergeFramePresets(this._config.frame_presets || [], res.presets);
-      this._config.frame_presets = merged.list;
-      this._fireConfigChanged();
-      // Stash a status message to re-show after the re-render (which rebuilds
-      // the portal DOM and would otherwise clear it), so the user sees the
-      // import summary alongside the freshly-added presets.
-      this._fxPendingStatus = `Imported ${merged.added} preset${merged.added === 1 ? '' : 's'}${merged.skipped ? `, skipped ${merged.skipped} duplicate${merged.skipped === 1 ? '' : 's'}` : ''}.`;
-      this.renderEditor();
+      copyText(ta ? ta.value : '').then(okc => portalStatus(okc ? 'Copied to clipboard.' : 'Copy failed — select the text and copy manually.'));
     });
 
     // Close the portal.
@@ -11846,6 +12206,20 @@ class SEEDCardEditor extends HTMLElement {
       });
     }
 
+    // Import Section — paste an exported section envelope, re-key + append it.
+    const importSectionBtn = this.querySelector('#ed-import-section');
+    if (importSectionBtn) {
+      importSectionBtn.addEventListener('click', () => this._importJson('Paste exported Section JSON:', (txt) => {
+        const res = parseSectionBlob(txt);
+        if (!res.ok) { try { window.alert(`Could not import: ${res.error}`); } catch (e) {} return; }
+        this._importSection(res.section, res.rule_sets);
+      }));
+    }
+    // Per-section Export — bundle the section + its referenced rule sets as JSON.
+    this.querySelectorAll('.ed-export-section').forEach(el => {
+      el.addEventListener('click', (e) => { e.stopPropagation(); e.preventDefault(); this._exportSection(el.dataset.sectionId); });
+    });
+
     // Divider section config. `_dividerPatch` mutates the section in place then
     // re-normalizes it (keeps the divider shape clean). Text/number/color/select
     // apply live (no re-render); checkboxes that reveal fields re-render.
@@ -12721,6 +13095,59 @@ class SEEDCardEditor extends HTMLElement {
         if (ctx) { ctx.rule.compare_entity = el.value; this._fireConfigChanged(); }
       });
     });
+
+    // ---- Conditional Visibility rules (card + per-section) ----
+    // Resolve/attach the visibility_rules array for a scope ('card' or a section id).
+    const visListFor = (scope, create) => {
+      if (scope === 'card') {
+        if (!Array.isArray(this._config.visibility_rules)) { if (!create) return null; this._config.visibility_rules = []; }
+        return this._config.visibility_rules;
+      }
+      const section = this._config.sections.find(s => s.id === scope);
+      if (!section) return null;
+      if (!Array.isArray(section.visibility_rules)) { if (!create) return null; section.visibility_rules = []; }
+      return section.visibility_rules;
+    };
+    const visRuleOf = (el) => {
+      const list = visListFor(el.dataset.visScope, false);
+      const rule = list && list[parseInt(el.dataset.ruleIndex, 10)];
+      return rule || null;
+    };
+    // Drop an empty array so the key isn't emitted (byte-stable).
+    const visPrune = (scope) => {
+      if (scope === 'card') { if (this._config.visibility_rules && !this._config.visibility_rules.length) delete this._config.visibility_rules; }
+      else { const s = this._config.sections.find(x => x.id === scope); if (s && s.visibility_rules && !s.visibility_rules.length) delete s.visibility_rules; }
+    };
+    this.querySelectorAll('.vis-rule-add').forEach(el => el.addEventListener('click', () => {
+      const list = visListFor(el.dataset.visScope, true); if (!list) return;
+      list.push(normalizeVisibilityRule({}));
+      this._fireConfigChanged(); this.renderEditor();
+    }));
+    this.querySelectorAll('.vis-rule-remove').forEach(el => el.addEventListener('click', () => {
+      if (!this._confirmDelete('Delete this visibility rule?')) return;
+      const list = visListFor(el.dataset.visScope, false); if (!list) return;
+      list.splice(parseInt(el.dataset.ruleIndex, 10), 1);
+      visPrune(el.dataset.visScope);
+      this._fireConfigChanged(); this.renderEditor();
+    }));
+    this.querySelectorAll('.vis-rule-join').forEach(el => el.addEventListener('change', () => {
+      const r = visRuleOf(el); if (r) { if (el.value === 'or') r.join = 'or'; else delete r.join; this._fireConfigChanged(); }
+    }));
+    this.querySelectorAll('.vis-rule-entity').forEach(el => el.addEventListener('input', () => {
+      const r = visRuleOf(el); if (r) { r.entity = el.value; this._fireConfigChanged(); }
+    }));
+    this.querySelectorAll('.vis-rule-operator').forEach(el => el.addEventListener('change', () => {
+      const r = visRuleOf(el); if (r) { r.operator = el.value === 'ne' ? 'ne' : 'eq'; this._fireConfigChanged(); }
+    }));
+    this.querySelectorAll('.vis-rule-compare-type').forEach(el => el.addEventListener('change', () => {
+      const r = visRuleOf(el); if (r) { r.compare_type = el.value === 'entity' ? 'entity' : 'value'; this._fireConfigChanged(); this.renderEditor(); }
+    }));
+    this.querySelectorAll('.vis-rule-value').forEach(el => el.addEventListener('input', () => {
+      const r = visRuleOf(el); if (r) { r.value = el.value; this._fireConfigChanged(); }
+    }));
+    this.querySelectorAll('.vis-rule-compare-entity').forEach(el => el.addEventListener('input', () => {
+      const r = visRuleOf(el); if (r) { r.compare_entity = el.value; this._fireConfigChanged(); }
+    }));
 
     // ---- Section Display Condition ----
     this.querySelectorAll('.ed-section-display').forEach(el => {
