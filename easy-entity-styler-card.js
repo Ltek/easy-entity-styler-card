@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.09.20.227
+// Version: v2026.09.20.228
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.09.20.227';
+const BUILD_NUMBER = 'v2026.09.20.228';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -6948,6 +6948,42 @@ class SEEDCardEditor extends HTMLElement {
     return arr ? arr.find(s => s && s.id === id) : null;
   }
 
+  // Every section, flattened to include GROUP children — the editor mirror of
+  // SEEDCard._allSectionsFlat, used by usage counts / ref cleanup so a section
+  // nested in a group is counted like a top-level one.
+  _allSectionsFlatEd() {
+    const out = [];
+    (this._config.sections || []).forEach(s => {
+      if (!s) return;
+      out.push(s);
+      if (s.type === 'group' && Array.isArray(s.children)) out.push(...s.children.filter(Boolean));
+    });
+    return out;
+  }
+
+  // How many SECTIONS use a rule set for their MEMBERSHIP (`rule_sets[].ref`),
+  // flattened over groups so a table nested in a group is counted. A header count
+  // badge that references the set is NOT membership, so it does NOT count here
+  // (a badge-only set correctly reads "0 sections") — but deleting the set still
+  // cleans badge refs (see the rs-delete handler). This is the "N sections" label.
+  _ruleSetUsedBy(rid) {
+    return this._allSectionsFlatEd().filter(s =>
+      Array.isArray(s.rule_sets) && s.rule_sets.some(r => r && r.ref === rid)
+    ).length;
+  }
+
+  // How many HEADER COUNT BADGES reference a rule set (across all sections,
+  // flattened over groups). Shown in the rule-set row's sub-line so a badge-only
+  // set reads as "in use" (not "unused"), and used by the delete confirm.
+  _ruleSetUsedByBadge(rid) {
+    let n = 0;
+    this._allSectionsFlatEd().forEach(s => {
+      const bs = s.title_row && s.title_row.parts && s.title_row.parts.badges;
+      if (Array.isArray(bs)) n += bs.filter(b => b && b.source === 'rule_set' && b.ref === rid).length;
+    });
+    return n;
+  }
+
   // Re-normalize a section IN PLACE within whatever array holds it (a child is
   // normalized by its own type; a group re-normalizes recursively).
   _replaceSectionDeep(id, nextRaw) {
@@ -7841,15 +7877,21 @@ class SEEDCardEditor extends HTMLElement {
     const sets = this._config.rule_sets || [];
     const setBlocks = sets.map((rs, i) => {
       const rid = rs.id;
-      const usedBy = (this._config.sections || []).filter(s =>
-        Array.isArray(s.rule_sets) && s.rule_sets.some(r => r.ref === rid)).length;
+      const usedBy = this._ruleSetUsedBy(rid);
+      const badgeUse = this._ruleSetUsedByBadge(rid);
       const nGroups = (rs.filter && Array.isArray(rs.filter.groups)) ? rs.filter.groups.length : 0;
-      const rsSub = `${nGroups} group${nGroups === 1 ? '' : 's'}`;
+      // One comma-separated sub-line under the name: how it's built (groups) and
+      // what uses it (sections / header badges). Surfacing badge use here warns
+      // against deleting a set a badge still needs. "Unused" when nothing refs it.
+      const rsSubParts = [`${nGroups} group${nGroups === 1 ? '' : 's'}`];
+      if (usedBy) rsSubParts.push(`${usedBy} section${usedBy === 1 ? '' : 's'}`);
+      if (badgeUse) rsSubParts.push(`${badgeUse} badge${badgeUse === 1 ? '' : 's'}`);
+      if (!usedBy && !badgeUse) rsSubParts.push('unused');
+      const rsSub = rsSubParts.join(', ');
       return `
         <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-lib-row" data-panel="ruleset-${rid}">
           <summary class="seed-ed-substyle-sum">
             <span class="seed-ed-lib-name" style="flex:1;">${escapeHtml(rs.name || 'Rule Set')}<span class="seed-ed-lib-sub">${escapeHtml(rsSub)}</span></span>
-            <span class="seed-ed-hint">${usedBy} section${usedBy === 1 ? '' : 's'}</span>
             <ha-icon class="seed-ed-icon-btn rs-duplicate" icon="mdi:content-copy" data-rs-id="${rid}" title="Duplicate rule set"></ha-icon>
             <ha-icon class="seed-ed-icon-btn rs-delete" icon="mdi:trash-can-outline" data-rs-id="${rid}" title="Delete rule set"></ha-icon>
           </summary>
@@ -13898,17 +13940,24 @@ class SEEDCardEditor extends HTMLElement {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
         const id = el.dataset.rsId;
-        const usedBy = (this._config.sections || []).filter(s =>
-          Array.isArray(s.rule_sets) && s.rule_sets.some(r => r.ref === id)).length;
-        const msg = usedBy
-          ? `Delete this filter rule? It's used by ${usedBy} section(s) — those references will be removed too. This cannot be undone.`
+        const usedBy = this._ruleSetUsedBy(id);
+        // Header-badge refs aren't "sections" but ARE cleaned on delete — warn.
+        const badgeUse = this._ruleSetUsedByBadge(id);
+        const parts = [];
+        if (usedBy) parts.push(`${usedBy} section${usedBy === 1 ? '' : 's'}`);
+        if (badgeUse) parts.push(`${badgeUse} header count badge${badgeUse === 1 ? '' : 's'}`);
+        const msg = parts.length
+          ? `Delete this filter rule? It's used by ${parts.join(' and ')} — those references will be removed too. This cannot be undone.`
           : 'Delete this filter rule? This cannot be undone.';
         if (!this._confirmDelete(msg)) return;
         this._config.rule_sets = (this._config.rule_sets || []).filter(r => r.id !== id);
-        // Drop refs to it from every section.
-        (this._config.sections || []).forEach(s => {
+        // Drop refs to it from every section (flattened, so group children are
+        // cleaned too) — both membership refs and header-badge refs.
+        this._allSectionsFlatEd().forEach(s => {
           if (Array.isArray(s.rule_sets)) s.rule_sets = s.rule_sets.filter(r => r.ref !== id);
           if (s.static_entities) delete s.static_entities[id];
+          const badges = s.title_row && s.title_row.parts && s.title_row.parts.badges;
+          if (Array.isArray(badges)) badges.forEach(b => { if (b && b.source === 'rule_set' && b.ref === id) b.ref = ''; });
         });
         this._fireConfigChanged();
         this.renderEditor();
