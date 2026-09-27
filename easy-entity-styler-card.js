@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.09.20.228
+// Version: v2026.09.27.230
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.09.20.228';
+const BUILD_NUMBER = 'v2026.09.27.230';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1480,6 +1480,39 @@ const SEED_SECTION_EXPORT_VERSION = 1;
 // passes it; only the referenced ones are bundled). `exportedIso` is an ISO
 // date string supplied by the caller (Date.now() is unavailable in some
 // contexts).
+// Every `lib:<slug>` reference inside a section, whatever key it sits under — the shape of a section
+// changes over time, so walk it rather than naming fields and silently missing one later.
+function collectLibRefs(node, out) {
+  if (!node) return out;
+  if (typeof node === 'string') {
+    if (node.startsWith('lib:')) out.add(node.slice(4));
+    return out;
+  }
+  if (Array.isArray(node)) { node.forEach((v) => collectLibRefs(v, out)); return out; }
+  if (typeof node === 'object') { Object.keys(node).forEach((k) => collectLibRefs(node[k], out)); }
+  return out;
+}
+// Resolve those refs against the Frame and Header libraries. A slug that is a built-in, or simply not
+// found, is skipped: built-ins ship in code, and a missing one cannot be bundled anyway.
+function collectSectionLibraryDeps(section) {
+  const slugs = collectLibRefs(section, new Set());
+  if (!slugs.size) return {};
+  const out = {};
+  const grab = (map, key) => {
+    slugs.forEach((sl) => {
+      if (!map || !map[sl]) return;
+      out[key] = out[key] || {};
+      if (!out[key][sl]) out[key][sl] = JSON.parse(JSON.stringify(map[sl]));   // first scope wins
+    });
+  };
+  // A ref does not record which scope it came from, so look in both (user first, then system).
+  ['user', 'system'].forEach((sc) => {
+    try { grab(frameLibraryMap(sc), 'frame_styles'); } catch (e) {}
+    try { grab(headerLibraryMap(sc), 'header_styles'); } catch (e) {}
+  });
+  return out;
+}
+
 function serializeSection(section, ruleSets, exportedIso) {
   const refIds = new Set(
     (Array.isArray(section && section.rule_sets) ? section.rule_sets : [])
@@ -1488,11 +1521,17 @@ function serializeSection(section, ruleSets, exportedIso) {
   const bundled = (Array.isArray(ruleSets) ? ruleSets : [])
     .filter(rs => rs && refIds.has(String(rs.id)))
     .map(rs => JSON.parse(JSON.stringify(rs)));
+  // v2026.09.27: also bundle the FRAME/HEADER library entries this section points at. Rule sets were
+  // already carried; library refs were left to "resolve on this instance, degrade gracefully if
+  // absent", which meant an exported section silently lost its frame/header on another install.
+  // Built-ins are NOT bundled — they ship in the card.
   const env = {
     seed_section: SEED_SECTION_EXPORT_VERSION,
     section: JSON.parse(JSON.stringify(section)),
     rule_sets: bundled,
   };
+  const requires = collectSectionLibraryDeps(section);
+  if (Object.keys(requires).length) env.requires = requires;
   if (exportedIso) env.exported = String(exportedIso);
   return JSON.stringify(env, null, 2);
 }
@@ -1519,6 +1558,9 @@ function parseSectionBlob(text) {
     ok: true,
     section: JSON.parse(JSON.stringify(section)),
     rule_sets: ruleSets.map(rs => JSON.parse(JSON.stringify(rs))),
+    // v2026.09.27: bundled frame/header library entries, installed by _importSection so an imported
+    // section keeps the look it was exported with. Absent in envelopes written before this.
+    requires: (raw && raw.requires && typeof raw.requires === 'object') ? raw.requires : {},
   };
 }
 
@@ -1587,7 +1629,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
       // Only adopt if the new key is still empty (don't clobber newer data).
       if (st.map && Object.keys(st.map).length) return;
       st.map = legacy;
-      if (typeof onChange === 'function') { try { onChange(); } catch (e) {} }
+      _notifyLibListeners(st);
       // Persist forward into the new key (best-effort).
       saveFrameLibrary(hass, scope, legacy).catch(() => {});
     })
@@ -1596,9 +1638,20 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 
 // Fetch (once) + subscribe to a library scope. onChange fires on initial load
 // AND on every live update, so callers re-render. Safe to call repeatedly.
+// v2026.09.27: notify EVERY registered listener. Libraries used to capture only the first caller's
+// callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
+// registered second was never told the library changed. Symptom: editing a style did not refresh the
+// card beside it. Tolerates a missing set so any call site is safe.
+function _notifyLibListeners(st) {
+  const ls = st && st.listeners;
+  if (!ls) return;
+  ls.forEach((fn) => { try { fn(); } catch (e) {} });
+}
 function ensureFrameLibrary(hass, scope, onChange) {
   scope = scope === 'system' ? 'system' : 'user';
   const st = SEED_FRAME_LIBRARY[scope];
+  st.listeners = st.listeners || new Set();
+  if (typeof onChange === 'function') st.listeners.add(onChange);
   if (!hass || !hass.connection) return;
   const conn = hass.connection;
   if (st.subscribed) return;         // subscription drives all future updates
@@ -1609,7 +1662,7 @@ function ensureFrameLibrary(hass, scope, onChange) {
         (ev) => {
           st.map = _frameLibParseValue(ev && ev.value);
           st.loaded = true; st.loading = false;
-          if (typeof onChange === 'function') { try { onChange(); } catch (e) {} }
+          _notifyLibListeners(st);
           // If the new key came back empty, try adopting legacy frames once.
           if (!Object.keys(st.map).length) _migrateLegacyFrameLibrary(hass, scope, st, onChange);
         },
@@ -1626,7 +1679,7 @@ function ensureFrameLibrary(hass, scope, onChange) {
     .then(res => {
       st.map = _frameLibParseValue(res && res.value);
       st.loaded = true; st.loading = false;
-      if (typeof onChange === 'function') { try { onChange(); } catch (e) {} }
+      _notifyLibListeners(st);
       if (!Object.keys(st.map).length) _migrateLegacyFrameLibrary(hass, scope, st, onChange);
     })
     .catch(() => { st.loading = false; st.loaded = true; st.map = {}; });
@@ -1822,6 +1875,8 @@ function _headerLibParseValue(value) {
 function ensureHeaderLibrary(hass, scope, onChange) {
   scope = scope === 'system' ? 'system' : 'user';
   const st = SEED_HEADER_LIBRARY[scope];
+  st.listeners = st.listeners || new Set();
+  if (typeof onChange === 'function') st.listeners.add(onChange);
   if (!hass || !hass.connection) return;
   const conn = hass.connection;
   if (st.subscribed) return;
@@ -1829,7 +1884,7 @@ function ensureHeaderLibrary(hass, scope, onChange) {
     st.subscribed = true; st.loading = true;
     try {
       conn.subscribeMessage(
-        (ev) => { st.map = _headerLibParseValue(ev && ev.value); st.loaded = true; st.loading = false; if (typeof onChange === 'function') { try { onChange(); } catch (e) {} } },
+        (ev) => { st.map = _headerLibParseValue(ev && ev.value); st.loaded = true; st.loading = false; _notifyLibListeners(st); },
         { type: _headerLibWs(scope, 'subscribe'), key: SEED_HEADER_LIB_KEY }
       );
     } catch (e) { st.subscribed = false; st.loading = false; }
@@ -1839,7 +1894,7 @@ function ensureHeaderLibrary(hass, scope, onChange) {
   if (typeof conn.sendMessagePromise !== 'function') return;
   st.loading = true;
   conn.sendMessagePromise({ type: _headerLibWs(scope, 'get'), key: SEED_HEADER_LIB_KEY })
-    .then(res => { st.map = _headerLibParseValue(res && res.value); st.loaded = true; st.loading = false; if (typeof onChange === 'function') { try { onChange(); } catch (e) {} } })
+    .then(res => { st.map = _headerLibParseValue(res && res.value); st.loaded = true; st.loading = false; _notifyLibListeners(st); })
     .catch(() => { st.loading = false; st.loaded = true; st.map = {}; });
 }
 function headerLibraryMap(scope) {
@@ -7567,7 +7622,7 @@ class SEEDCardEditor extends HTMLElement {
     if (mode === 'custom') valField = swatchHtml;
     else if (mode === 'theme') valField = `<select class="ed-color-theme" ${d} title="Follows the HA theme">${this._atOpts(this._AT_THEME_COLORS, themeVal)}</select>`;
     else if (mode === 'css') valField = `<input type="text" class="ed-color-css" ${d} value="${escapeHtml(cur)}" placeholder="e.g. tomato" title="Any CSS color" />`;
-    return `<div class="seed-ed-style-field">
+    return `<div class="seed-ed-style-field seed-ed-color-row">
       ${label ? `<label>${label}</label>` : ''}
       <select class="ed-color-mode" ${d} data-ed-hex="${hex}" data-ed-theme="${escapeHtml(themeVal)}" data-ed-css="${escapeHtml(cssVal)}">${this._atOpts(modes, mode)}</select>
       ${valField}
@@ -9125,7 +9180,27 @@ class SEEDCardEditor extends HTMLElement {
   // to the new ids, appends the section to the layout, and merges the rule sets
   // into config.rule_sets. Frame/Header library refs (lib:<slug>) + entity ids
   // ride along as-is (resolve on this instance, degrade gracefully if absent).
-  _importSection(section, ruleSets) {
+  // Install any library entries the envelope carried, so the imported section's frame/header resolve
+  // here too. Never overwrites an existing entry of the same slug — a local style of that name wins.
+  _installSectionLibraryDeps(requires) {
+    const added = [];
+    const put = (getMap, saver, incoming, label) => {
+      if (!incoming || typeof incoming !== 'object' || !Object.keys(incoming).length) return;
+      let map = {};
+      try { map = { ...(getMap('user') || {}) }; } catch (e) { map = {}; }
+      let n = 0;
+      Object.keys(incoming).forEach((k) => { if (!map[k]) { map[k] = incoming[k]; n++; } });
+      if (!n) return;
+      try { saver(this.hass, 'user', map); added.push(`${n} ${label}`); }
+      catch (e) { try { saver(this.hass, map); added.push(`${n} ${label}`); } catch (e2) {} }
+    };
+    put(frameLibraryMap, saveFrameLibrary, requires.frame_styles, 'frame style(s)');
+    put(headerLibraryMap, saveHeaderLibrary, requires.header_styles, 'header style(s)');
+    return added;
+  }
+  _importSection(section, ruleSets, requires) {
+    const deps = this._installSectionLibraryDeps(requires || {});
+    if (deps.length) console.info(`[easy-entity-styler-card] imported library styles: ${deps.join(', ')}`);
     const copy = JSON.parse(JSON.stringify(section));
     const isDivider = copy.type === 'divider';
     copy.id = uid();
@@ -11091,7 +11166,10 @@ class SEEDCardEditor extends HTMLElement {
         .at-ent-pick-sel { background: var(--ltek-c-accent-fade); }
         .seed-ed-ent-selicon { flex: none; color: var(--ltek-c-accent); }
         /* Colour-mode field: label + mode dropdown + (custom picker | theme select). */
-        .seed-ed-color-field { display: flex; align-items: center; gap: var(--ltek-sp-2); flex-wrap: wrap; }
+        .seed-ed-color-field { display: flex; align-items: center; gap: var(--ltek-sp-2);
+          flex-wrap: nowrap; min-width: 0; }
+        .seed-ed-color-field > select { min-width: 0; }
+        .seed-ed-color-field .at-color-mode { flex: 0 0 auto; min-width: 120px; }
         .seed-ed-color-field > label { display: flex; align-items: center; gap: var(--ltek-sp-2); }
         .seed-ed-color-field input[type="color"] { width: 44px; height: 26px; padding: 0; border: none; background: none; cursor: pointer; }
         /* Theme / CSS value controls added by _edColorField — match the height
@@ -11099,6 +11177,18 @@ class SEEDCardEditor extends HTMLElement {
            changes. */
         .seed-ed-style-field .ed-color-theme,
         .seed-ed-style-field .ed-color-css { width: 100%; height: 30px; box-sizing: border-box; }
+        /* v2026.09.27: the four-mode colour control is a ROW, matching the Color card. The generic
+           .seed-ed-style-field is a COLUMN with width:100% children (right for a labelled swatch in a
+           grid cell), which stacked the mode select above the theme select and squeezed both into a
+           narrow right-hand column. Scoped to .seed-ed-color-row so other style fields are untouched. */
+        .seed-ed-color-row { flex-direction: row; align-items: center; gap: var(--ltek-sp-2);
+          flex-wrap: nowrap; min-width: 0; }
+        .seed-ed-color-row > label { flex: 0 0 auto; font-size: var(--ltek-fs-body);
+          color: var(--ltek-c-label); white-space: nowrap; }
+        .seed-ed-color-row .ed-color-mode { flex: 0 0 auto; min-width: 120px; width: auto; }
+        .seed-ed-color-row .ed-color-theme,
+        .seed-ed-color-row .ed-color-css { flex: 1 1 auto; width: auto; min-width: 90px; height: 30px; }
+        .seed-ed-color-row input[type="color"] { flex: 0 0 auto; width: 44px; height: 30px; }
         /* Header-rule preview box — a stand-in header row with the rule's look. */
         .seed-ed-hdr-prev { display: flex; align-items: center; gap: var(--ltek-sp-3); padding: 8px 10px; margin: 4px 0 8px; border: 1px dashed var(--ltek-c-panel-border); border-radius: var(--ltek-r-md); background: rgba(255,255,255,0.03); }
         .seed-ed-hdr-prev-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
@@ -11599,8 +11689,12 @@ class SEEDCardEditor extends HTMLElement {
         }
         .seed-ed-pair > .seed-ed-slider-row,
         .seed-ed-pair > .seed-ed-font-row { padding: 0; flex: 1 1 200px; min-width: 150px; }
+        /* v2026.09.27: was flex:0 0 auto, which pinned the colour control to a narrow right-hand
+           column — in Theme mode it holds TWO selects and had nowhere to go but downward. Give it a
+           real basis so it shares the row when there is room and wraps to its own full-width line
+           when there is not. */
         .seed-ed-pair > .seed-ed-color,
-        .seed-ed-pair > .seed-ed-colors { padding: 0; flex: 0 0 auto; }
+        .seed-ed-pair > .seed-ed-colors { padding: 0; flex: 1 1 260px; min-width: 240px; }
       </style>
     `;
 
@@ -14785,7 +14879,7 @@ class SEEDCardEditor extends HTMLElement {
       importSectionBtn.addEventListener('click', () => this._importJson('Paste exported Section JSON:', (txt) => {
         const res = parseSectionBlob(txt);
         if (!res.ok) { try { window.alert(`Could not import: ${res.error}`); } catch (e) {} return; }
-        this._importSection(res.section, res.rule_sets);
+        this._importSection(res.section, res.rule_sets, res.requires);
       }));
     }
     // Per-section Export — bundle the section + its referenced rule sets as JSON.

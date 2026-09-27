@@ -5,6 +5,56 @@ resets. Newest first.
 
 ---
 
+## v2026.09.27.230
+
+- **Fixed: the four-mode colour control was cramped and stacked.** Its wrapper used
+  the generic `.seed-ed-style-field`, which is a **column** with `width:100%`
+  children — correct for a labelled swatch in a grid cell, wrong for this control.
+  The result was the mode select rendering *above* the theme select, both squeezed
+  into a narrow right-hand column. It now lays out as a row matching the Color
+  Manager card: fixed-width mode select, value field flexing beside it. Scoped to a
+  new `.seed-ed-color-row` class so every other style field is untouched.
+- **Colour control no longer compresses inside a size/weight pair.** The pair gave it
+  `flex: 0 0 auto`, pinning it to a narrow column — and in Theme mode it holds *two*
+  selects, so it had nowhere to go but downward. It now has a real flex basis, so it
+  shares the row when there is space and wraps to its own full-width line when there
+  is not.
+- Confirmed all three cards offer the **same ten theme colour options**, in the same
+  order (they already did — no change needed).
+
+## v2026.09.27.229
+
+- **Fixed: a style library could only ever notify ONE listener.** Both
+  `ensureFrameLibrary` and `ensureHeaderLibrary` subscribed once and captured only the
+  *first* caller's callback, so whichever of the card or the editor registered second
+  was never told an entry had changed. The visible symptom: editing a Frame or Header
+  style did not refresh the card sitting beside the editor — it only picked the change
+  up when the element was recreated. They now keep a listener set and notify every
+  one; the subscription itself still happens only once.
+- **Section exports now carry their dependencies.** A section already bundled its rule
+  sets; it now also bundles the **Frame and Header library entries it references**, so
+  an imported section keeps the look it was exported with instead of silently falling
+  back to defaults on an install that lacks them. Refs are collected by walking the
+  payload rather than by naming fields, so a ref stored under a new key is still
+  found. Import adds anything missing and **never overwrites** an existing entry of
+  the same slug — a local style of that name wins. Envelopes written before this have
+  no `requires` block and still import fine.
+- **`hacs.json` added**, and the shipped file is now the unversioned
+  `easy-entity-styler-card.js`. Without a `hacs.json` HACS looks for
+  `<repo-name>.js`, which never existed while the file carried a version — so
+  installing from the HACS button would have failed. This also matches what the
+  README's manual-install section already documented.
+
+## v2026.09.20.228
+
+- **Entity Filter Rules usage line.** Each rule set now shows one comma-separated
+  sub-line under its name — groups, sections, and **header count badges** that use
+  it (or "unused") — so you can see at a glance what a set feeds before deleting
+  it. The section count is group-aware (previously ignored sections nested in a
+  group) and reflects genuine membership; badge use is shown separately (a
+  badge-only set is "N groups, 1 badge", not a phantom section). Deleting a rule
+  set cleans its header-badge references and the confirm names them.
+
 ## v2026.09.20.227
 
 - **Divider spacing, per side.** A divider's vertical padding is now independent

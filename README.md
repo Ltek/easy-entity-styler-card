@@ -10,58 +10,7 @@ https://github.com/Ltek/easy-entity-styler-card
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=easy-entity-styler-card&category=dashboard)
 
-Current build: **v2026.09.20.227** · full history in [CHANGELOG.md](CHANGELOG.md)
-
----
-
-## What's new (2026-09-20)
-
-- **Group sections** — a new **Group** section that acts as a **container**: put other sections inside it and they collapse together under one header and one frame. Add one with the **Group** button, then add member sections to it or move existing sections in/out — members are listed indented under the group in the editor. **Use Header From** mirrors a member's header as the group's own — including a table's live count and per-domain badges — so a group can show a rich summary header while its own table body lives inside (the member's own header is hidden so it isn't shown twice). A group is a real section with its own frame, visibility rules and collapse state; collapsing it hides everything inside, and an embedded card nested in a collapsed group still defers its build until the group is opened. A **Member gap** slider sets the space between its members.
-- **Divider spacing** — a divider now has independent **Space above** and **Space below** sliders (default 8px each, so existing dividers are unchanged) — take them to 0 for a divider that hugs its neighbors.
-- **Count badge spacing** — each header count badge has a **Space before badge** setting, so you can spread the per-domain badges apart.
-- **Editor tidy-up** — the *Entity Group* section is now called **Entity List** (which is what it is). *Section Layout Defaults* is renamed **Global Settings** and the **Global Entity Name Cleaner** moved inside it, so all card-wide settings live in one place. Redundant descriptions on that panel were trimmed — each sub-panel now explains only itself. No card output changed.
-- **Header count badges** — a section's header can now show one or more **icon + live count** badges that hide themselves when their count is 0. Each badge counts a **Rule Set** (independent of the section's own rows) or reads a number straight off an entity, so a single header can break its total out by category — e.g. a window / door / lock / garage icon each with its own count, appearing only when that category is non-zero. Add them under **Section Header → Add Count Badge**; set the icon, count source, color, size and label. This replaces the hand-rolled `button-card` JavaScript templates people used for the same effect.
-- **Filter by visibility (shown / hidden)** — a new **Visibility** field for rule sets, table filters and value/color rules, matching `shown` or `hidden` (an entity marked *not visible* in **Settings → Entities**). Add a rule like *Visibility ≠ hidden* to drop hidden entities from a section — useful when two entities share a device class and name (e.g. a raw sensor and a hidden mirror of it) and only the visible one should list. Because it's a normal filter field, it applies to the header count badges too, so the counts stay in sync with the rows.
-
----
-
-## What's new (2026-09-19)
-
-- **Put other cards inside a section** — a new section type, **Other Cards**, holds any Home Assistant cards you like (a graph, a thermostat, a media player, a custom card) and renders them inside this card's collapsible section, with its header and its frame. They behave exactly as they would on a dashboard: fully interactive, updating live, and a collapsed section doesn't build its cards at all until you open it, so a heavy graph or camera costs nothing while closed. Each card's own options are edited as YAML right in the section — paste it straight from the card's **Show code editor** on any dashboard — because those options belong to that card, not to this one. Reorder, duplicate or remove any of them, and set the gap between them. A card with a broken config says so in place instead of taking the whole card down with it.
-- **Section header padding is now adjustable** — the space above and below a section's title text was fixed at 8px and the *only* way to shrink it was the overall **Scale** slider, which also shrinks your text. Set it card-wide under **Section Header Defaults → Header padding**, or override it on any individual section in its own **Section Header** settings. Combined with **Card Padding** you can now take a collapsed section from 16px of space above its title down to none at all. Defaults are unchanged, so existing cards render exactly as before.
-- **Fixed: extra blank space above a card with no title bar.** A card with both its title text and title icon hidden was still reserving room for the title row that never rendered — 8px of padding stacked on the card's own 8px, which on a collapsed single-section card was most of the gap you saw above it. The space is simply gone; a card that *does* show a title is unchanged.
-- **Card Padding** — two new sliders under **Spacing & Scaling** set the space around the **outside** edge of the card (top/bottom and left/right), so you can sit a card tight against its neighbors. It deliberately doesn't touch anything inside, so your section headers, rows and tables keep their spacing — unlike the overall **Scale** slider, which shrinks the text too. **Reset card padding to default** restores the original 8px. Untouched cards render exactly as before.
-- **Hide the whole card when it has nothing to show** — a new checkbox under **Conditional Visibility**. Previously *hide when empty* was only a per-**section** setting: the section vanished, but the card itself stayed on the dashboard as an empty box taking up a grid slot — most obvious on a card with no title bar and one section, which looked completely blank. Tick the new card-level box and the card removes itself entirely (no blank space) once every section set to *hide when empty* has come up empty, then reappears the moment an entity matches again. Off by default, so nothing changes unless you turn it on; a section left on **always show** keeps the card visible, since it still draws its header. Always shown while editing.
-- **Fixed: two cards on one dashboard no longer style each other.** A card's **title font weight, size, color and icon size** (and its row, chip and spacing defaults) could be silently replaced by those of *another* EES card on the same dashboard — whichever one happened to render last won for every card. It looked correct while editing, because the config dialog's preview renders last, and then changed the moment you saved. Each card now carries its own values privately, so a card only ever shows its own styling no matter how many are on the page. Nothing to change in your config; a lone card looks exactly as it did.
-- **Clearer "defaults" wording in the editor** — **Section Layout Defaults** now spells out that its two panels behave differently: **Entity Group Row Defaults** apply *live* to existing group sections, while **Entity Table Defaults** are only a starting point copied into **newly added** tables and never restyle a table you already have. The header hint inside a table now says "this table", and the one under the defaults says "newly added" — no behavior changed, only the help text.
-- **Unified column-header styling** — **color, size, weight and italic** now all exist at *both* levels and work the same way: set the look once for the whole table in **Table Styles**, and override any of the four on an individual column in **Columns → Layout & header**. Previously size was table-only and weight/italic didn't exist at all. A column left alone follows the table; a column's italic can be explicitly turned *off* to override a table that's italic.
-- **Every color option offers a theme color** — each color control is now a mode picker plus a value field: **Default** (inherit), **Theme color** (pick from your theme's Primary / Accent / text / State active / Error / Warning / Success / Info variables, so the color follows your theme), **Custom color** (the native swatch), or **Custom CSS…** (any CSS color, e.g. `tomato`). This replaces the bare text box that color rules used — a theme color no longer has to be typed as `var(--primary-color)` from memory. A color you'd already typed by hand is kept as-is under **Custom CSS…**.
-- **Fixed:** a theme-colored drop shadow rendered black; the divider's **Theme** text/icon mode was locked to one variable instead of letting you choose.
-- **Never list unavailable / unknown entities** — two checkboxes per section (**Row Limits** on Entity Tables, **Never list an entity** on Entity Groups). The row is dropped before the row cap and the recency window, so a dead entity can't take a slot from a live one.
-- **Replace a zero value** — a value column can show **Leave blank** or **custom text** (e.g. "Closed") when its value is 0, instead of printing `0`. Color rules still see the real 0, so your rule colors don't change.
-- **Icon Rules** — an icon column's rules now pick from a short list instead of a raw token field: **This icon…** (a named MDI glyph, with a live preview), **Entity's own icon**, or **No icon (hidden)**.
-- **Row Limits** — a new per-section panel with **Maximum rows** and **Only include recent rows** (a number plus **minutes / hours / days**). Rows that are currently active always show.
-- **Duplicate column** — copy any Entity Table column, with all of its rules, via the copy icon in its header.
-- **Rules can test an attribute** — a condition can now target **an attribute** or the **entity state** directly, not just the column's own value. This is what text columns (e.g. a clock or "last changed" column) need in order to be colored by a number like `current_position`.
-- **Unset colors look unset** — a color swatch with no color set is dashed and faded instead of showing mid-grey, so a rule that changes nothing is obvious. New color rules start from a real color.
-- **Fixed:** a title part's **font size** (and color, weight, italic) no longer reverted moments after being set.
-
----
-
-## What's new (2026-09-07)
-
-- **Conditional Visibility** — show the whole **card** or any individual **section** only when your rules pass (entity + operator + value, chained with AND/OR). Editor-safe: hidden cards/sections stay visible while editing or previewing the dashboard.
-- **Copy sections between cards** — export any section (with its referenced rule sets) as JSON and import it into another card.
-
----
-
-## What's new (2026-08-31)
-
-- **Per-location Frame Style condition override** — a card/section can override an applied conditional Frame Style's condition (entity + operator + value) without changing the shared library style.
-- **Auto-migrate local Frame Styles** — any leftover card-local frame presets are published to the shared System library on edit (collision-safe, one-time).
-- **Library UI refresh** — Frame Styles, Header Rules, and Entity Filter Rules now use a cleaner flat list (two-line rows, muted subtitle, lock icon on Built-In, theme-color accent when expanded).
-- **Section Layout & Config polish** — even row height/spacing, accent icons, and lighter labels.
-- **Fixes** — Frame Style live preview now updates on slider/color edits.
+Current build: **v2026.09.27.230** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -184,4 +133,34 @@ ACTIVITY_TABLE_DESIGN.md        Entity Table subsystem design notes
 ## Screenshots
 
 <!-- SCREENSHOTS:START -->
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="screenshots/editor-frame.jpg" width="100%" alt="editor frame">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/editor1.jpg" width="100%" alt="editor1">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-bypass.JPG" width="100%" alt="example bypass">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-climate.JPG" width="100%" alt="example climate">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" valign="top">
+      <img src="screenshots/example-lux.JPG" width="100%" alt="example lux">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-modes.JPG" width="100%" alt="example modes">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-stormaudio.jpg" width="100%" alt="example stormaudio">
+    </td>
+    <td align="center" valign="top">
+      <img src="screenshots/example-styles.jpg" width="100%" alt="example styles">
+    </td>
+  </tr>
+</table>
 <!-- SCREENSHOTS:END -->
