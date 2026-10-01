@@ -1,0 +1,297 @@
+# Lights On — Easy Entity Styler Card recreation of light-card.yaml
+#
+# Replaces this stack:
+#   type: conditional (sensor.active_lights_count > 0)
+#     └─ custom:expander-card  (+ card_mod)
+#          ├─ title-card: custom:button-card  (icon + "Lights On - N")
+#          └─ custom:mod-card → custom:html-template-card
+#               └─ sensor.active_lights_recent_table  attribute table_html
+#
+# ...with ONE card and NO templates. The filtering, the 120-minute recency
+# window, the grey decay colours, the sort and the name cleanup that used to
+# live in templates.yaml are all config here, so you can edit them in the UI.
+#
+# Template sensors this card makes unnecessary:
+#   - sensor.active_lights_recent_table  (the whole table_html attribute)
+#   - sensor.active_lights_count         (the count in the header + the
+#                                         conditional wrapper — replaced by the
+#                                         title-row count and hide_when_empty)
+# Nothing here reads a template sensor.
+type: custom:easy-entity-styler-card
+show_title: false
+show_title_icon: false
+# The expander-card was `expanded: false`; the section below is the collapsible.
+card_collapsible: false
+min_refresh_seconds: 0
+colors:
+  icon: '#2196F3'
+  text: '#e1e1e1'
+  row_border: '#333333'
+  section_divider: '#333333'
+# card_mod gave the expander a bottom-only blue rule and no border/shadow.
+# Same thing as a frame style, applied to the section.
+frame_presets:
+  - id: fx_lights_bottom_rule
+    name: Bottom blue rule
+    border:
+      color: '#2196F3'
+      width: 1
+      radius: 12
+      follow_icon: false
+      sides:
+        - bottom
+    background:
+      mode: transparent
+card_frame: null
+frame_library_scope: system
+rule_sets:
+  # The include/exclude logic transcribed from the Jinja in templates.yaml.
+  # Each `{% if ... %}{% set include_entity = false %}` became one exclude rule.
+  - id: rs_active_lights
+    name: Active lights (template filter)
+    filter:
+      groups:
+        # {% set ents = states.light | rejectattr('entity_id','search','group') %}
+        - mode: include
+          match: all
+          rules:
+            - field: domain
+              op: eq
+              value: light
+        - mode: exclude
+          match: any
+          rules:
+            # rejectattr('entity_id','search','group') + 'browser_mod' in e
+            - field: entity_id
+              op: contains
+              values:
+                - group
+                - browser_mod
+            # 'screen'/'fan' in name, plus "super"/"lv"/"group" not in name
+            - field: name
+              op: contains
+              values:
+                - screen
+                - fan
+                - super
+                - lv
+                - group
+            # {% if entity_area and "RGB" in entity_area %}
+            - field: area
+              op: contains
+              value: RGB
+            # (e in rgb_lights or e in rgb_lighting) and e not in rgb_groups
+            - all_of:
+                - any_of:
+                    - field: label
+                      op: eq
+                      value: RGB Light
+                    - field: label
+                      op: eq
+                      value: RGB Group
+                - field: label
+                  op: ne
+                  value: RGB Control Group
+sections:
+  - id: sec_lights_on
+    name: Lights On
+    type: activity_table
+    # expander-card: expanded: false
+    collapsible: true
+    default_state: collapsed
+    show_title: true
+    keep_expanded_when_entities: false
+    entities: []
+    chips_only: false
+    frame:
+      presets:
+        - fx_lights_bottom_rule
+    rule_sets:
+      - ref: rs_active_lights
+        mode: dynamic
+    filter:
+      groups: []
+    # {% if last_changed >= now() - timedelta(minutes=120) or state == 'on' %}
+    # A light that is ON always shows; an OFF light shows for 120 minutes after
+    # it changed. That is exactly what window_minutes + active_when mean.
+    window_minutes: 120
+    active_when:
+      op: is_on
+    # Replaces the outer `type: conditional` on sensor.active_lights_count > 0:
+    # with the count below set to "lights that are on", an all-off house hides
+    # the section instead of needing the template sensor.
+    hide_when_empty: true
+    max_rows: 0
+    columns:
+      # 8% — the bulb. On: yellow lightbulb-on. Off but changed in the last 5
+      # minutes: a grey lightbulb-off. Older than that the template printed no
+      # icon at all, hence the empty default.
+      - id: col_icon
+        kind: icon
+        header: ''
+        show_header: true
+        align: center
+        width: 8%
+        value:
+          source: state
+        color: null
+        icon:
+          rules:
+            - when:
+                op: is_on
+              result: mdi:lightbulb-on
+            - when:
+                all:
+                  - op: is_off
+                  - ref:
+                      source: last_changed_ago
+                    op: le
+                    value: 300
+              result: mdi:lightbulb-off
+          default: ''
+          size: 12
+          color:
+            rules:
+              - when:
+                  op: is_on
+                result: '#eab308'
+              - when:
+                  op: is_off
+                  ref:
+                    source: last_changed_ago
+                result: '#D3D3D3'
+            default: '#505050'
+      # 32% — the name, minus the word "Light(s)". Clicking it opens more-info,
+      # which is what the hand-rolled <a onclick=...hass-more-info> did.
+      - id: col_name
+        kind: name
+        header: ''
+        show_header: true
+        align: left
+        width: 32%
+        value:
+          source: name
+        color: &decay
+          # {% set row_color = ... %} — white while on, then fading grey by age.
+          rules:
+            - when:
+                op: is_on
+              result: white
+            - when:
+                ref:
+                  source: last_changed_ago
+                op: le
+                value: 300
+              result: '#D3D3D3'
+            - when:
+                ref:
+                  source: last_changed_ago
+                op: le
+                value: 900
+              result: '#B0B0B0'
+          default: '#505050'
+      # 10% — brightness as a percentage. The template printed nothing at all
+      # for an off light, so a missing/zero brightness blanks the cell rather
+      # than showing "—" or "0%".
+      - id: col_brightness
+        kind: value
+        header: ''
+        show_header: true
+        align: right
+        width: 10%
+        empty_text: ''
+        zero_mode: replace
+        zero_text: ''
+        value:
+          source: attribute
+          attribute: brightness
+          transform: pct_of_255
+          unit: '%'
+        color: *decay
+      # 25% — "3 m" / "1 h 20 m" / "45 s", the elapsed-time string the Jinja
+      # built by hand out of hours/minutes/seconds.
+      - id: col_lastchange
+        kind: value
+        header: Last Change
+        show_header: true
+        align: right
+        width: 25%
+        value:
+          source: last_changed_ago
+        color: *decay
+      # 25% — the clock time of the change, e.g. "6:04 PM".
+      - id: col_time
+        kind: value
+        header: Time
+        show_header: true
+        align: right
+        width: 25%
+        value:
+          source: last_changed_time
+        color: *decay
+    # | sort(attribute='timestamp', reverse=true) | sort(attribute='sort_priority')
+    # On lights first (weight 0), then everything else, most-recent first.
+    sort:
+      rules:
+        - when:
+            op: is_on
+          weight: 0
+      default_weight: 100
+      then_by:
+        ref:
+          source: last_changed_ago
+        dir: asc
+      pin_top: []
+    # <font color='#90EE90'> on the two labelled header cells.
+    headers:
+      show: true
+      color: '#90EE90'
+      font_size: 13
+    row_style:
+      font_size: 14
+      padding_v: 4
+      padding_h: 6
+      indent: 0
+      hover_highlight: true
+      name_link: true
+      # | replace(" Lights","") | replace(" Light","") ...
+      strip_strings:
+        - ' Lights'
+        - ' Light'
+        - 'Lights '
+        - 'Light '
+    # The button-card title: lightbulb icon + "Lights On - N", where N counted
+    # only the lights actually ON (the off-but-recent rows below don't count).
+    # The icon went blue above zero and grey at zero.
+    title_row:
+      show: true
+      icon: mdi:lightbulb-on
+      icon_size: 30
+      count:
+        mode: condition
+        when:
+          op: is_on
+      parts:
+        icon:
+          show: true
+          align: left
+          size: 30
+          color_rules:
+            rules:
+              - when:
+                  op: gt
+                  value: 0
+                result: '#2196F3'
+            default: gray
+        title:
+          show: true
+          align: left
+          template: '{name} -'
+          size: 16
+          weight: 400
+        count:
+          show: true
+          align: left
+          template: '{count}'
+          size: 16
+          weight: 400

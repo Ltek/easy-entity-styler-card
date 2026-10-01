@@ -1,0 +1,401 @@
+title: Alert Bypasses
+entity_filter_texts:
+  - input_boolean.bypass
+entity_filter_types:
+  - text
+  - label
+entity_filter_labels: []
+entity_filter_groups: []
+sections:
+  - id: sec_bsbcy54h
+    name: Active
+    collapsible: true
+    show_title: false
+    entities:
+      - input_boolean.bypass_alarm_zones
+      - input_boolean.bypass_door_front
+      - input_boolean.bypass_door_garage
+      - input_boolean.bypass_door_large_deck
+      - input_boolean.bypass_door_mudroom
+      - input_boolean.bypass_door_patio
+      - input_boolean.bypass_door_small_deck
+      - input_boolean.bypass_light_large_deck
+      - input_boolean.bypass_office_light
+      - input_boolean.bypass_lock_front_door
+      - input_boolean.bypass_motion_large_deck
+      - input_boolean.bypass_motion_small_deck
+      - input_boolean.bypass_motion_driveway
+      - input_boolean.bypass_motion_entry
+      - input_boolean.bypass_motion_garage
+      - input_boolean.bypass_motion_patio
+      - input_boolean.bypass_playroom_light
+      - input_boolean.bypass_weather_windy
+      - input_boolean.bypass_windows
+      - input_boolean.bypass_office_scene
+    type: entities
+    icon: mdi:sync
+    icon_color: ''
+    icon_size: 16
+    title_color: ''
+    title_font_size: 14
+    title_font_weight: 400
+    title_font_style: normal
+    title_indent: 0
+    keep_expanded_when_entities: false
+    default_state: collapsed
+    entity_icon_color: ''
+    entity_icon_size: 20
+    entity_text_color: ''
+    entity_font_size: 13
+    entity_font_weight: 400
+    entity_font_style: normal
+    chip_bg: ''
+    chip_border_color: ''
+    chip_text_color: '#64b5f6'
+    chip_scale: 1
+    chip_show_icon: false
+    chip_icon_source: entity
+    chip_show_name: true
+    chip_hide_off: false
+    chip_hide_unknown: false
+    chip_hide_unavailable: false
+    chip_hide_state: true
+    chip_tap_action:
+      action: toggle
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_hold_action:
+      action: more-info
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_layout: wrap
+    chip_shape: rounded
+    chip_radius: 8
+    chips_only: true
+    frame:
+      presets: []
+    row_visuals_mode: global
+    row_indent: 16
+    row_border_enabled: false
+    row_border_width: 3
+    row_border_radius: 4
+    row_border_top: true
+    row_border_bottom: true
+    row_border_left: true
+    row_border_right: true
+    row_border_corners:
+      - true
+      - true
+      - true
+      - true
+    row_border_color: ''
+    entity_rules:
+      - operator: eq
+        compare_type: value
+        value: 'on'
+        compare_entity: ''
+        join: and
+    section_display: hide_when_empty
+    count_mode: title
+    count_prefix: ' - '
+    count_color: ''
+    count_font_size: 16
+    count_font_weight: 400
+    count_font_style: normal
+  - id: sec_svvo4ksa
+    name: Inactive
+    collapsible: true
+    show_title: true
+    entities:
+      - input_boolean.bypass_weather_windy
+      - input_boolean.bypass_alarm_zones
+      - input_boolean.bypass_door_front
+      - input_boolean.bypass_door_garage
+      - input_boolean.bypass_door_large_deck
+      - input_boolean.bypass_door_mudroom
+      - input_boolean.bypass_door_patio
+      - input_boolean.bypass_door_small_deck
+      - input_boolean.bypass_light_large_deck
+      - input_boolean.bypass_office_light
+      - input_boolean.bypass_lock_front_door
+      - input_boolean.bypass_motion_large_deck
+      - input_boolean.bypass_motion_small_deck
+      - input_boolean.bypass_motion_driveway
+      - input_boolean.bypass_motion_entry
+      - input_boolean.bypass_motion_garage
+      - input_boolean.bypass_motion_patio
+      - input_boolean.bypass_playroom_light
+      - input_boolean.bypass_windows
+      - input_boolean.bypass_office_scene
+    type: entities
+    icon: mdi:sync-off
+    icon_color: ''
+    icon_size: 16
+    title_color: ''
+    title_font_size: 14
+    title_font_weight: 400
+    title_font_style: normal
+    title_indent: 12
+    keep_expanded_when_entities: false
+    default_state: collapsed
+    entity_icon_color: ''
+    entity_icon_size: 16
+    entity_text_color: ''
+    entity_font_size: 13
+    entity_font_weight: 400
+    entity_font_style: normal
+    chip_bg: ''
+    chip_border_color: '#1107a2'
+    chip_text_color: ''
+    chip_scale: 1
+    chip_show_icon: false
+    chip_icon_source: entity
+    chip_show_name: true
+    chip_hide_off: false
+    chip_hide_unknown: false
+    chip_hide_unavailable: false
+    chip_hide_state: true
+    chip_tap_action:
+      action: toggle
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_hold_action:
+      action: more-info
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_layout: grid
+    chip_shape: rounded
+    chip_radius: 8
+    chips_only: true
+    frame:
+      presets: []
+    row_visuals_mode: global
+    row_indent: 8
+    row_border_enabled: false
+    row_border_width: 1
+    row_border_radius: 4
+    row_border_top: true
+    row_border_bottom: true
+    row_border_left: true
+    row_border_right: true
+    row_border_corners:
+      - true
+      - true
+      - true
+      - true
+    row_border_color: ''
+    entity_rules:
+      - operator: eq
+        compare_type: value
+        value: 'off'
+        compare_entity: ''
+        join: and
+    section_display: hide_when_empty
+    count_mode: title
+    count_prefix: ' - '
+    count_color: ''
+    count_font_size: 13
+    count_font_weight: 400
+    count_font_style: normal
+colors:
+  border: '#2196F3'
+  glow: '#2196F3'
+  icon: '#2196F3'
+  text: '#e1e1e1'
+  secondary_text: '#808080'
+  chip_bg: rgba(33, 150, 243, 0.14)
+  chip_border: '#07a235'
+  chip_text: '#64b5f6'
+  badge_on: '#4CAF50'
+  badge_off: '#555555'
+  row_border: '#1259b5'
+  section_divider: '#333333'
+  card_border: '#2196F3'
+  card_glow: '#2196F3'
+scale: 1
+icon_scale: 1.45
+title_icon_scale: 1.65
+title_text_scale: 1.1
+entity_text_scale: 1.2
+card_bg_color: ''
+show_title: true
+show_title_icon: true
+title_icon: mdi:motion-pause-outline
+title_icon_color: '#2196F3'
+title_text_color: '#e1e1e1'
+title_font_size: 16
+title_font_weight: 400
+title_font_style: normal
+title_icon_size: 40
+show_section_count: false
+auto_close_sections: true
+row_indent: 8
+slider_max_width: 240
+show_row_border: true
+row_border_width: 1
+row_border_radius: 4
+row_border_top: false
+row_border_bottom: false
+row_border_left: false
+row_border_right: false
+row_border_corners:
+  - false
+  - false
+  - false
+  - false
+row_first_border_top: false
+row_last_border_bottom: false
+strip_entity_strings:
+  - bypass
+card_collapsible: true
+show_card_chevron: false
+card_default_state: collapsed
+# v233: open the card when Active has entries, and show its count in the title ("Alert Bypasses - 2")
+card_expand_when_section: sec_bsbcy54h
+card_count_section: sec_bsbcy54h
+show_last_changed: true
+gray_icons_when_off: true
+min_refresh_seconds: 0
+frame_presets:
+  - id: fp_card
+    name: Card Frame
+    border:
+      color: '#2196F3'
+      width: 1
+      radius: 12
+      corners:
+        - true
+        - true
+        - true
+        - true
+      follow_icon: false
+      sides:
+        - bottom
+  - id: fp_card_glow
+    name: Card Glow
+    glow:
+      color: '#2196F3'
+      intensity: 1.7
+      borders_only: true
+    edges:
+      top:
+        enabled: false
+        thickness: 1
+        gradient: false
+        color: match
+        stops: []
+      bottom:
+        enabled: true
+        thickness: 1
+        gradient: true
+        color: match
+        stops:
+          - pos: 20
+            color: '#2196F3'
+      left:
+        enabled: false
+        thickness: 1
+        gradient: false
+        color: match
+        stops: []
+      right:
+        enabled: false
+        thickness: 1
+        gradient: false
+        color: match
+        stops: []
+    when_kind: section_has_entities
+    when_section: sec_bsbcy54h
+card_frame:
+  presets:
+    - fp_card
+    - fp_card_glow
+frame_library_scope: system
+table_defaults:
+  headers:
+    show: true
+    color: '#90EE90'
+    font_size: 11
+  row_style:
+    font_size: 14
+    padding_v: 6
+    padding_h: 6
+    indent: 0
+    text_color: ''
+    divider:
+      show: false
+      color: '#333333'
+      width: 1
+    zebra: false
+    hover_highlight: true
+    name_link: true
+    strip_strings: []
+section_bg_color: ''
+section_shadow_enabled: false
+section_shadow_color: '#000000'
+section_shadow_x: 0
+section_shadow_y: 4
+section_shadow_blur: 12
+section_shadow_spread: 0
+section_shadow_opacity: 0.35
+card_shadow_enabled: false
+card_shadow_color: '#000000'
+card_shadow_x: 0
+card_shadow_y: 4
+card_shadow_blur: 16
+card_shadow_spread: 0
+card_shadow_opacity: 0.35
+show_section_border: true
+section_border_width: 1
+section_border_radius: 12
+section_border_top: true
+section_border_bottom: true
+section_border_left: true
+section_border_right: true
+section_border_corners:
+  - true
+  - true
+  - true
+  - true
+glow_condition: always
+glow_borders_only: true
+glow_intensity: 1
+show_section_divider: true
+section_divider_width: 1
+section_divider_length: 50
+show_section_divider_bottom: false
+section_divider_bottom_width: 1
+section_divider_bottom_length: 100
+card_border_enabled: false
+card_border_width: 1
+card_border_radius: 12
+card_border_top: true
+card_border_bottom: true
+card_border_left: true
+card_border_right: true
+card_border_corners:
+  - true
+  - true
+  - true
+  - true
+card_glow_condition: never
+card_glow_entity: ''
+card_glow_section: ''
+card_glow_intensity: 1
+card_glow_borders_only: true
+type: custom:easy-entity-styler-card
+enable_channel_meters: true
+rule_sets: []
+header_library_scope: system

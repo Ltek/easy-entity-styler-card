@@ -1,0 +1,567 @@
+title: Entities
+entity_filter_texts: []
+entity_filter_types:
+  - text
+entity_filter_labels: []
+entity_filter_groups: []
+sections:
+  - id: sec_vc7f84pr
+    name: Shades
+    collapsible: false
+    show_title: true
+    entities: []
+    type: activity_table
+    icon: ''
+    icon_color: ''
+    icon_size: 20
+    title_color: ''
+    title_font_size: 14
+    title_font_weight: 600
+    title_font_style: normal
+    title_indent: 0
+    keep_expanded_when_entities: false
+    default_state: collapsed
+    entity_icon_color: ''
+    entity_icon_size: 20
+    entity_text_color: ''
+    entity_font_size: 13
+    entity_font_weight: 400
+    entity_font_style: normal
+    chip_bg: ''
+    chip_border_color: ''
+    chip_text_color: ''
+    chip_scale: 1
+    chip_show_icon: true
+    chip_icon_source: entity
+    chip_show_name: false
+    chip_hide_off: false
+    chip_hide_unknown: false
+    chip_hide_unavailable: false
+    chip_hide_state: false
+    chip_tap_action:
+      action: more-info
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_hold_action:
+      action: none
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_layout: wrap
+    chip_shape: pill
+    chip_radius: 8
+    chips_only: false
+    frame:
+      presets:
+        - lib:open_entries_frame_l1
+        - lib:theme_bottom_blue_border_minimal
+      disabled:
+        - lib:open_entries_frame_l1
+    row_visuals_mode: global
+    row_indent: 16
+    row_border_enabled: false
+    row_border_width: 1
+    row_border_radius: 4
+    row_border_top: true
+    row_border_bottom: true
+    row_border_left: true
+    row_border_right: true
+    row_border_corners:
+      - true
+      - true
+      - true
+      - true
+    row_border_color: ''
+    entity_rules: []
+    section_display: always
+    count_mode: 'off'
+    count_prefix: ' - '
+    count_color: ''
+    count_font_size: 13
+    count_font_weight: 400
+    count_font_style: normal
+    rule_sets:
+      - ref: rs_gen_sec
+        mode: dynamic
+    filter:
+      groups: []
+    columns:
+      - id: col_m179oj
+        kind: icon
+        header: ''
+        show_header: false
+        header_color: ''
+        align: center
+        header_align: ''
+        width: 40
+        value:
+          source: state
+          attribute: ''
+          transform: none
+          unit: ''
+        color: null
+        icon:
+          rules:
+            - when:
+                op: eq
+                ref:
+                  source: attribute
+                  attribute: current_position
+                  transform: none
+                  unit: ''
+                value: 0
+              result: ''
+          default: __default__
+          color:
+            rules: []
+            default: gray
+          size: 24
+          show: null
+          use_native_icon: true
+      - id: col_7stddo
+        kind: name
+        header: ''
+        show_header: true
+        header_color: ''
+        align: left
+        header_align: ''
+        width: 40%
+        value:
+          source: name
+          attribute: ''
+          transform: none
+          unit: ''
+        color:
+          rules:
+            - when:
+                op: gt
+                ref:
+                  source: attribute
+                  attribute: current_position
+                  transform: none
+                  unit: ''
+                value: 0
+              result: white
+          default: '#707070'
+      - id: col_x4bn4v
+        kind: value
+        header: ''
+        show_header: true
+        header_color: ''
+        align: right
+        header_align: ''
+        width: 15%
+        value:
+          source: attribute
+          attribute: current_position
+          transform: none
+          unit: '%'
+        zero_mode: replace
+        zero_text: ''
+        color:
+          rules:
+            - when:
+                op: gt
+                ref:
+                  source: attribute
+                  attribute: current_position
+                  transform: none
+                  unit: ''
+                value: 0
+              result: white
+          default: '#707070'
+      - id: col_7p67ww
+        kind: value
+        header: Last Changed
+        show_header: true
+        header_color: ''
+        align: right
+        header_align: ''
+        width: 20%
+        value:
+          source: last_changed_ago
+          attribute: ''
+          transform: none
+          unit: ''
+        color:
+          rules:
+            - when:
+                op: gt
+                ref:
+                  source: attribute
+                  attribute: current_position
+                  transform: none
+                  unit: ''
+                value: 0
+              result: white
+          default: '#707070'
+      - id: col_pl17n7
+        kind: value
+        header: Time
+        show_header: true
+        header_color: ''
+        align: right
+        header_align: ''
+        width: 20%
+        value:
+          source: last_changed_time
+          attribute: ''
+          transform: none
+          unit: ''
+        color:
+          rules:
+            - when:
+                op: gt
+                ref:
+                  source: attribute
+                  attribute: current_position
+                  transform: none
+                  unit: ''
+                value: 0
+              result: white
+          default: '#707070'
+    sort:
+      rules:
+        - when:
+            op: gt
+            ref:
+              source: attribute
+              attribute: current_position
+              transform: none
+              unit: ''
+            value: 0
+          weight: 0
+      default_weight: 100
+      then_by:
+        ref:
+          source: last_changed_ago
+          attribute: ''
+          transform: none
+          unit: ''
+        dir: asc
+      pin_top: []
+    headers:
+      show: true
+      color: '#90EE90'
+      font_size: 11
+    title_row:
+      show: true
+      icon: mdi:window-shutter-open
+      icon_color:
+        rules:
+          - when:
+              op: gt
+              value: 0
+            result: '#2196F3'
+        default: gray
+      icon_size: 30
+      text:
+        template: Open Shades - {count}
+        font_size: 16
+        weight: 700
+        color: ''
+        align: start
+      count:
+        mode: condition
+        when:
+          op: gt
+          ref:
+            source: attribute
+            attribute: current_position
+            transform: none
+            unit: ''
+          value: 0
+      parts:
+        icon:
+          show: true
+          template: ''
+          align: left
+          color: ''
+          size: 30
+          weight: 400
+          italic: false
+          color_rules:
+            rules:
+              - when:
+                  op: gt
+                  value: 0
+                result: '#2196F3'
+            default: gray
+        title:
+          show: true
+          template: Open Shades - {count}
+          align: left
+          color: ''
+          size: 18
+          weight: 400
+          italic: false
+        count:
+          show: false
+          template: '{count}'
+          align: right
+          color: ''
+          size: 14
+          weight: 400
+          italic: false
+        extra: []
+      glow: null
+    row_style:
+      font_size: 14
+      padding_v: 4
+      padding_h: 6
+      indent: 16
+      text_color: ''
+      divider:
+        show: false
+        color: '#333333'
+        width: 1
+      zebra: false
+      hover_highlight: true
+      name_link: true
+      strip_strings:
+        - ' Shades'
+        - ' Shade'
+        - 'Shades '
+        - 'Shade '
+        - ' Cover'
+        - 'Cover '
+    tap_action:
+      action: more-info
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    hold_action:
+      action: none
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    window_minutes: 1440
+    active_when: null
+    hide_when_empty: false
+    max_rows: 0
+    hide_unavailable: true
+    hide_unknown: true
+colors:
+  border: '#2196F3'
+  glow: '#2196F3'
+  icon: '#2196F3'
+  text: '#e1e1e1'
+  secondary_text: '#808080'
+  chip_bg: rgba(33, 150, 243, 0.14)
+  chip_border: '#2196F3'
+  chip_text: '#64b5f6'
+  badge_on: '#4CAF50'
+  badge_off: '#555555'
+  row_border: '#333333'
+  section_divider: '#333333'
+  card_border: '#2196F3'
+  card_glow: '#2196F3'
+scale: 1
+icon_scale: 1
+title_icon_scale: 1
+title_text_scale: 1
+entity_text_scale: 1
+card_bg_color: ''
+show_title: false
+show_title_icon: false
+title_icon: mdi:view-list
+title_icon_color: '#2196F3'
+title_text_color: '#e1e1e1'
+title_font_size: 16
+title_font_weight: 700
+title_font_style: normal
+title_icon_size: 22
+show_section_count: true
+auto_close_sections: false
+row_indent: 16
+slider_max_width: 240
+show_row_border: false
+row_border_width: 1
+row_border_radius: 4
+row_border_top: true
+row_border_bottom: true
+row_border_left: true
+row_border_right: true
+row_border_corners:
+  - true
+  - true
+  - true
+  - true
+row_first_border_top: true
+row_last_border_bottom: true
+strip_entity_strings: []
+card_collapsible: false
+show_card_chevron: true
+card_default_state: expanded
+show_last_changed: false
+gray_icons_when_off: false
+min_refresh_seconds: 0
+frame_presets: []
+card_frame: null
+frame_library_scope: system
+table_defaults:
+  headers:
+    show: true
+    color: '#90EE90'
+    font_size: 11
+  row_style:
+    font_size: 14
+    padding_v: 6
+    padding_h: 6
+    indent: 0
+    text_color: ''
+    divider:
+      show: false
+      color: '#333333'
+      width: 1
+    zebra: false
+    hover_highlight: true
+    name_link: true
+    strip_strings: []
+section_bg_color: ''
+section_shadow_enabled: false
+section_shadow_color: '#000000'
+section_shadow_x: 0
+section_shadow_y: 4
+section_shadow_blur: 12
+section_shadow_spread: 0
+section_shadow_opacity: 0.35
+card_shadow_enabled: false
+card_shadow_color: '#000000'
+card_shadow_x: 0
+card_shadow_y: 4
+card_shadow_blur: 16
+card_shadow_spread: 0
+card_shadow_opacity: 0.35
+show_section_border: true
+section_border_width: 1
+section_border_radius: 12
+section_border_top: true
+section_border_bottom: true
+section_border_left: true
+section_border_right: true
+section_border_corners:
+  - true
+  - true
+  - true
+  - true
+glow_condition: always
+glow_borders_only: true
+glow_intensity: 1
+show_section_divider: false
+section_divider_width: 1
+section_divider_length: 100
+show_section_divider_bottom: false
+section_divider_bottom_width: 1
+section_divider_bottom_length: 100
+card_border_enabled: false
+card_border_width: 1
+card_border_radius: 12
+card_border_top: true
+card_border_bottom: true
+card_border_left: true
+card_border_right: true
+card_border_corners:
+  - true
+  - true
+  - true
+  - true
+card_glow_condition: never
+card_glow_entity: ''
+card_glow_section: ''
+card_glow_intensity: 1
+card_glow_borders_only: true
+effect_presets:
+  - id: fx_blue_glow
+    name: Blue Glow
+    glow:
+      color: '#2196F3'
+      intensity: 1
+      borders_only: false
+    shadow:
+      color: '#000000'
+      x: 0
+      'y': 4
+      blur: 12
+      spread: 0
+      opacity: 0.35
+    border:
+      color: '#2196F3'
+      width: 1
+      radius: 12
+      follow_icon: false
+      sides:
+        - bottom
+    edges:
+      top:
+        enabled: true
+        thickness: 1
+        stops:
+          - pos: 0
+            color: transparent
+          - pos: 50
+            color: '#2196F3'
+          - pos: 100
+            color: transparent
+      bottom:
+        enabled: true
+        thickness: 1
+        stops:
+          - pos: 0
+            color: transparent
+          - pos: 50
+            color: '#2196F3'
+          - pos: 100
+            color: transparent
+      left:
+        enabled: true
+        thickness: 1
+        stops: []
+      right:
+        enabled: true
+        thickness: 1
+        stops: []
+card_effect: ''
+type: custom:easy-entity-styler-card
+rule_sets:
+  - id: rs_gen_sec
+    name: Shades — filter
+    filter:
+      groups:
+        - mode: include
+          match: all
+          rules:
+            - field: domain
+              op: eq
+              value: cover
+        - mode: exclude
+          match: any
+          rules:
+            - field: entity_id
+              op: contains
+              values:
+                - group
+                - garage
+            - field: name
+              op: contains
+              values:
+                - group
+                - garage
+            - field: device_class
+              op: eq
+              value: garage
+header_library_scope: system
+visibility_rules:
+  - entity: ''
+    operator: eq
+    compare_type: value
+    value: ''

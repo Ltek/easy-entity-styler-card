@@ -5,6 +5,119 @@ resets. Newest first.
 
 ---
 
+## v2026.10.01.236
+
+Docs and examples only; the card code is unchanged from v235.
+
+- **`examples/ees-bypass.yaml`** now uses the v233 card-level settings:
+  `card_expand_when_section` (the collapsed card opens on load when anything is bypassed) and
+  `card_count_section` (the title shows "Alert Bypasses - 2"), both pointing at the Active section.
+- **README:** the *Example configs* table describes those two settings in the bypass row, and lists
+  `open-entries-recent.yaml`, which was in `examples/` but missing from the table.
+
+## v2026.10.01.235
+
+- **Fixed: subtitles and open sub-panel borders now use the theme's accent colour.** v234 used the
+  theme's *primary* colour (`--primary-color`) for them, the same blue as everything else. They now
+  use the HA theme **accent** (`--accent-color`), falling back to the primary colour when the theme
+  defines no accent. That applies to group subtitles ("Header style", "Entity count in header"…),
+  the top-level group titles, and the border of an open sub-panel. The uppercase sub-panel titles,
+  chevrons, slider thumbs and buttons stay on the primary colour.
+- **Icon and font sizes are sliders.** Icon size, Title font size, the count's Font size, the entity
+  row Icon size and Font size, and the secondary line's Font size and Indent were number boxes. Each
+  is now a slider row: label, range, bold px readout. That covers the section header, group header
+  and entity row panels. The readout follows the thumb as you drag, and the value is saved on
+  release, as before.
+- **Single-row field layout.** Style fields were a multi-column grid with small labels stacked over
+  each control. Colour selects were squeezed into narrow cells, and "Card default" overflowed its
+  box. Each field is now one row: the label at content width, the control beside it. Slider rows
+  no longer wrap their readout onto a second line.
+- `CARD_DESIGN_SYSTEM.md` §2: theme accent for subtitles, titles and open borders; primary for
+  interactive chrome; sizes are sliders; single-row fields.
+- `entity-card-editor-style.test.mjs` extended (10 checks).
+
+## v2026.10.01.234
+
+- **Editor sub-panels follow the design guide more closely.**
+  - **No shaded backgrounds.** An open sub-panel (Section Header, Entity Rows, Chip Style, Frame,
+    library rows…) no longer gets a tinted background. It gets a 1px border in the theme accent
+    colour instead, with its content inset so nothing touches the border. Boxed sub-panels lost their
+    surface fill as well.
+  - **Group subtitles are real subtitles.** "Header style", "Entity count in header", "Section
+    display" and the rest used to render as plain white text at body size with no separator. They
+    are now accent-coloured, `--ltek-fs-group`, semibold, with a thin divider above. The first one
+    in a panel has no divider, since the panel title is right above it. The per-use inline margins
+    that fought this were removed. The two muted prompts ("Add a preset…", "Assign a rule set") use
+    a separate muted style.
+  - **Missing subtitles added:** *Header spacing* (indent + padding override, in both the section
+    and group header panels). Chip Style is split into *Chip colors & size* / *Chip content* /
+    *Hide the chip when the entity is* / *Layout & shape*, instead of one long run under "Chip
+    style".
+  - Top-level group titles now use the theme accent token (`--ltek-c-accent`) instead of HA's
+    `--accent-color`, which is orange in the default theme. Every heading level is now the same
+    accent.
+- `CARD_DESIGN_SYSTEM.md` §2 updated to match: sub-panels carry no fill, open = accent border, every
+  cluster gets a subtitle, and "accent" means `--ltek-c-accent`.
+- Test: `/shared/user/code/_tests/entity-card-editor-style.test.mjs` (structural: CSS rules,
+  subtitle presence, no inline overrides), now part of the publish gate. Nothing was rendered
+  visually.
+
+## v2026.10.01.233
+
+- **Card title can show a section's live count.** Card Appearance → Card Header → *Count in title*:
+  pick a section, and the title reads "Alert Bypasses - 3". It updates live, hides at zero, and takes
+  its prefix, colour, size, weight and italic from that section's *Entity count in header*
+  settings. It works for a section whose own title row is hidden. Before this, the count was drawn
+  only in the section's own title row, so a title-less section's count appeared nowhere. Key:
+  `card_count_section` (a section id).
+- **Collapsible card can open when a section has entities.** Card Appearance → *Expand when section
+  has entities*, below *Default state*, with two modes:
+  - *On load only* (default): if the section has entities when the card loads, it starts open. A
+    manual collapse after that is left alone.
+  - *Keep expanded while it has entities*: also reopens on every update while the section still has
+    entities.
+  
+  Keys: `card_expand_when_section` (a section id), `card_expand_mode: keep`. The default mode is not
+  written, and an untouched config stays byte-identical.
+- The section pickers list Entity List and Activity Table sections, the two types that have a count.
+- Why the section-level *Keep expanded* checkbox was missing for "Active": the editor shows it (and
+  *Default state*) only for a collapsible section with its title row on. A title-less section always
+  renders open, so in that layout the only thing collapsing is the card. That is what the new
+  card-level option covers.
+- Test: `/shared/user/code/_tests/entity-card-title-count.test.mjs` (17 checks), now part of the
+  publish gate.
+
+## v2026.10.01.232
+
+- **Fixed: dashboards using this card could freeze, especially on mobile.**
+  - **Cause:** `set hass` runs on every Home Assistant state update (any entity, anywhere). Each call
+    registered a new "library changed" listener with the shared Frame Style and Header Rule
+    libraries, and none were ever removed. The next time a library sent an update, each listener ran
+    a full card re-render, one after another. Libraries send updates when a style is saved, and very
+    likely when the app reconnects, for example when the phone app comes back to the foreground.
+    Measured: after 2,000 state updates one library update caused **4,000** full re-renders of the
+    card (2,000 per library), and 4,000 re-renders of an open editor.
+  - **Fix:** each card and editor registers one listener, reused on every update. It is removed when
+    the card or editor leaves the page and added back when it returns, with one catch-up render if a
+    library changed while it was away. Bursts are coalesced into one render per frame. After the same
+    2,000 updates: 4 listeners in total (card + editor, two libraries each) and 1 render per library
+    update. The editor's check that ignores the echo of its own save still runs on every update,
+    before coalescing, so typing in a Frame Style is not interrupted.
+- Checked and not a problem: no `setInterval`, no fetches or periodic requests. Every `setTimeout` is
+  one-shot (the 250 ms state debounce, hold-to-act, save debounces, clipboard button labels). There
+  are no resize or mutation observers and no page-wide listeners. Ordinary state updates still only
+  patch values in place. Activity-table rows are bound once (`_seedBound`), and only when the table
+  is replaced. There is no `this.hass = hass` anywhere in this card.
+- Regression test: `/shared/user/code/_tests/entity-card-leak.test.mjs`, now part of the publish gate.
+
+## v2026.09.30.231
+
+- **README brought up to date:** header count badges (v224), the Visibility (shown / hidden) rule
+  field (v224), the rule-set usage line and badge clean-up on delete (v228), and section exports that
+  now carry their Frame Style and Header Rule entries (v229). The *Repo layout* section still
+  described a versioned `easy-entity-styler-card-vN.js` and a `past/` folder; it now shows the fixed
+  filename and `hacs.json`. No code changes.
+
 ## v2026.09.27.230
 
 - **Fixed: the four-mode colour control was cramped and stacked.** Its wrapper used

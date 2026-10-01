@@ -1,0 +1,65 @@
+type: custom:easy-entity-styler-card
+show_title: true
+title: Windows
+title_icon: mdi:window-open-variant
+sections:
+  - id: sec_open_windows
+    name: Open Windows
+    type: activity_table
+    collapsible: true
+    row_source:
+      type: attribute_array
+      entity: sensor.open_windows_tracked
+      attribute: open_windows_list
+      reverse: false
+    columns:
+      - id: c_icon
+        kind: icon
+        show_header: false
+        width: 28px
+        icon:
+          default: mdi:window-open-variant
+          size: 14
+          color:
+            rules: []
+            default: '#2196F3'
+      - id: c_name
+        kind: name
+        show_header: false
+        value:
+          source: field
+          field: name
+        width: 1fr
+      # Last Change — pre-formatted elapsed string from the sensor (no seconds,
+      # refreshed every 30s). Plain field, no transform.
+      - id: c_lastchange
+        kind: value
+        header: Last Change
+        show_header: true
+        align: right
+        width: 90px
+        value:
+          source: field
+          field: ago
+      # Time — clock time the window opened, from the `start` epoch.
+      - id: c_time
+        kind: value
+        header: Time
+        show_header: true
+        align: right
+        width: 80px
+        value:
+          source: field
+          field: start
+          transform: ts_time
+    headers:
+      show: true
+      color: '#90EE90'
+      font_size: 11
+    title_row:
+      show: true
+      icon: mdi:window-open-variant
+      text:
+        template: 'Open Windows - {count}'
+      count:
+        mode: rows

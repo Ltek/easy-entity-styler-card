@@ -1,0 +1,213 @@
+type: custom:easy-entity-styler-card
+show_title: false
+entity_filter_texts: []
+entity_filter_types:
+  - text
+entity_filter_labels: []
+entity_filter_groups: []
+sections:
+  - id: sec_garage_climate
+    name: Garage Climate
+    collapsible: false
+    show_title: true
+    type: activity_table
+    title_indent: 2
+    title_font_size: 14
+    title_font_weight: 600
+    default_state: collapsed
+    entities: []
+    chips_only: false
+    # ---- Single row: match only the ANCHOR entity (Entry). The other two
+    #      garage temps are pulled in via `related` -> name_replace below. ----
+    rule_sets:
+      - ref: rs_garage_anchor
+        mode: dynamic
+    filter:
+      groups: []
+    columns:
+      # Col 1 — Garage 2 temp (anchor entity_id with "entry" -> "2")
+      - id: col_g2
+        kind: value
+        header: Garage 2
+        show_header: true
+        align: center
+        width: 25%
+        value:
+          source: related
+          transform: none
+          unit: ''
+          related:
+            match: name_replace
+            find: entry
+            replace: '2'
+            value:
+              source: state
+              transform: round1
+              unit: °F
+        color:
+          rules:
+            - when:
+                op: lt
+                value: 40
+                ref: &g2ref
+                  source: related
+                  transform: none
+                  unit: ''
+                  related:
+                    match: name_replace
+                    find: entry
+                    replace: '2'
+                    value:
+                      source: state
+                      transform: none
+                      unit: ''
+              result: '#3B82F6'
+            - when: { op: lt, value: 60, ref: *g2ref }
+              result: '#60A5FA'
+            - when: { op: lt, value: 70, ref: *g2ref }
+              result: '#34D399'
+            - when: { op: lt, value: 80, ref: *g2ref }
+              result: '#FBBF24'
+          default: '#F87171'
+      # Col 2 — Garage 1 temp (anchor entity_id with "entry" -> "1")
+      - id: col_g1
+        kind: value
+        header: Garage 1
+        show_header: true
+        align: center
+        width: 25%
+        value:
+          source: related
+          transform: none
+          unit: ''
+          related:
+            match: name_replace
+            find: entry
+            replace: '1'
+            value:
+              source: state
+              transform: round1
+              unit: °F
+        color:
+          rules:
+            - when:
+                op: lt
+                value: 40
+                ref: &g1ref
+                  source: related
+                  transform: none
+                  unit: ''
+                  related:
+                    match: name_replace
+                    find: entry
+                    replace: '1'
+                    value:
+                      source: state
+                      transform: none
+                      unit: ''
+              result: '#3B82F6'
+            - when: { op: lt, value: 60, ref: *g1ref }
+              result: '#60A5FA'
+            - when: { op: lt, value: 70, ref: *g1ref }
+              result: '#34D399'
+            - when: { op: lt, value: 80, ref: *g1ref }
+              result: '#FBBF24'
+          default: '#F87171'
+      # Col 3 — Entry temp (the anchor entity's own state)
+      - id: col_entry
+        kind: value
+        header: Entry
+        show_header: true
+        align: center
+        width: 25%
+        value:
+          source: state
+          transform: round1
+          unit: °F
+        color:
+          rules:
+            - when: { op: lt, value: 40 }
+              result: '#3B82F6'
+            - when: { op: lt, value: 60 }
+              result: '#60A5FA'
+            - when: { op: lt, value: 70 }
+              result: '#34D399'
+            - when: { op: lt, value: 80 }
+              result: '#FBBF24'
+          default: '#F87171'
+      # Col 4 — Last Update (the anchor entity's own last_changed_ago)
+      - id: col_lastupdate
+        kind: value
+        header: Last Update
+        show_header: true
+        align: right
+        width: 25%
+        value:
+          source: last_changed_ago
+          transform: none
+          unit: ''
+        color: null
+    sort:
+      rules: []
+      default_weight: 0
+    headers:
+      show: true
+      color: '#90EE90'
+      font_size: 11
+    title_row:
+      show: true
+      icon: mdi:thermometer
+      icon_size: 30
+      text:
+        template: Garage Climate
+        font_size: 16
+        weight: 700
+        align: start
+      count:
+        mode: 'off'
+    row_style:
+      font_size: 14
+      padding_v: 4
+      padding_h: 6
+      indent: 16
+      hover_highlight: true
+      name_link: false
+    window_minutes: 0
+    active_when: null
+    hide_when_empty: false
+    max_rows: 0
+colors:
+  border: '#2196F3'
+  glow: '#38f41f'
+  icon: '#2196F3'
+  text: '#e1e1e1'
+  secondary_text: '#808080'
+  chip_bg: rgba(33, 150, 243, 0.14)
+  chip_border: '#2196F3'
+  chip_text: '#64b5f6'
+  badge_on: '#4CAF50'
+  badge_off: '#555555'
+  row_border: '#333333'
+  section_divider: '#333333'
+  card_border: '#2196F3'
+  card_glow: '#2196F3'
+scale: 1
+icon_scale: 1
+title_icon_scale: 1
+title_text_scale: 1
+entity_text_scale: 1
+show_title_icon: false
+show_section_count: false
+auto_close_sections: false
+min_refresh_seconds: 60
+rule_sets:
+  - id: rs_garage_anchor
+    name: Garage anchor (Entry only)
+    filter:
+      groups:
+        - mode: include
+          match: all
+          rules:
+            - field: entity_id
+              op: eq
+              value: sensor.garage_motion_entry_temperature

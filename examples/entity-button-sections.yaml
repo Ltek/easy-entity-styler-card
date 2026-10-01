@@ -1,0 +1,698 @@
+# Open Entries — Easy Entity Styler Card conversion of the original
+# expander-card + button-card + html-template-card stack.
+#
+# Everything is wrapped in a GROUP section (type: group):
+#   - header_from: mirrors the Open Entries table's header (shield + per-domain
+#     count badges + title) as the group's own header.
+#   - Members (table, divider, Locks embedded cards) collapse together under it.
+#   - card_gap: 0 on the group sits the members flush; pad_v: 0 on the divider
+#     removes its default 8px top/bottom padding — together tightening the space
+#     between the embedded lock tiles and the divider.
+title: Entries
+entity_filter_texts: []
+entity_filter_types:
+- text
+entity_filter_labels: []
+entity_filter_groups: []
+sections:
+- id: sec_entries_group
+  type: group
+  name: Open Entries
+  children:
+  - id: sec_locks
+    type: cards
+    name: Locks
+    cards:
+    - type: horizontal-stack
+      cards:
+      - type: custom:button-card
+        entity: lock.mudroom_deadbolt
+        name: Mudroom
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: call-service
+          service: '[[[ return entity.state === ''locked'' ? ''lock.unlock'' : ''lock.lock''; ]]]'
+          service_data:
+            entity_id: lock.mudroom_deadbolt
+        icon: '[[[ return entity.state === ''locked'' ? ''mdi:lock'' : ''mdi:lock-open-variant''; ]]]'
+        label: "[[[\n  const lastChanged = new Date(entity.last_changed);\n  const now = new Date();\n\
+          \n  let eventHour = lastChanged.getHours();\n  const eventMinutes = lastChanged.getMinutes();\n\
+          \  const eventAmpm = eventHour >= 12 ? 'PM' : 'AM';\n  eventHour = eventHour % 12 || 12;\n \
+          \ const formattedEventTime = `${eventHour}:${eventMinutes.toString().padStart(2, '0')} ${eventAmpm}`;\n\
+          \n  const diffMs = now - lastChanged;\n  const diffMins = Math.floor(diffMs / 60000);\n  const\
+          \ diffHours = Math.floor(diffMins / 60);\n  const remainingMins = diffMins % 60;\n\n  let timeAgo;\n\
+          \  if (diffMins < 1) {\n    timeAgo = 'just now';\n  } else if (diffHours === 0) {\n    timeAgo\
+          \ = `${diffMins}m ago`;\n  } else if (remainingMins === 0) {\n    timeAgo = `${diffHours}h ago`;\n\
+          \  } else {\n    timeAgo = `${diffHours}h ${remainingMins}m ago`;\n  }\n\n  return `${formattedEventTime}\
+          \ - ${timeAgo}`;\n]]]\n"
+        styles:
+          card:
+          - height: 60px
+          - background-color: transparent
+          - box-shadow: none
+          - border: none
+          - border-radius: 12px
+          - padding: 0px
+          grid:
+          - grid-template-areas: '". i n ." ". i l ."'
+          - grid-template-columns: 1fr 30px auto 1fr
+          - grid-template-rows: 1fr 1fr
+          img_cell:
+          - justify-content: center
+          - align-items: center
+          icon:
+          - width: 32px
+          - color: '[[[ return entity.state === ''locked'' ? ''green'' : ''#eab308''; ]]]'
+          name:
+          - justify-self: start
+          - align-self: end
+          - font-size: 16px
+          - color: white
+          - margin-left: 8px
+          label:
+          - justify-self: start
+          - align-self: start
+          - font-size: 14px
+          - color: grey
+          - margin-left: 8px
+          - margin-top: 4px
+      - type: custom:button-card
+        entity: lock.front_door_deadbolt
+        name: Front Door
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        tap_action:
+          action: call-service
+          service: '[[[ return entity.state === ''locked'' ? ''lock.unlock'' : ''lock.lock''; ]]]'
+          service_data:
+            entity_id: lock.front_door_deadbolt
+        icon: '[[[ return entity.state === ''locked'' ? ''mdi:lock'' : ''mdi:lock-open-variant''; ]]]'
+        label: "[[[\n  const lastChanged = new Date(entity.last_changed);\n  const now = new Date();\n\
+          \n  let eventHour = lastChanged.getHours();\n  const eventMinutes = lastChanged.getMinutes();\n\
+          \  const eventAmpm = eventHour >= 12 ? 'PM' : 'AM';\n  eventHour = eventHour % 12 || 12;\n \
+          \ const formattedEventTime = `${eventHour}:${eventMinutes.toString().padStart(2, '0')} ${eventAmpm}`;\n\
+          \n  const diffMs = now - lastChanged;\n  const diffMins = Math.floor(diffMs / 60000);\n  const\
+          \ diffHours = Math.floor(diffMins / 60);\n  const remainingMins = diffMins % 60;\n\n  let timeAgo;\n\
+          \  if (diffMins < 1) {\n    timeAgo = 'just now';\n  } else if (diffHours === 0) {\n    timeAgo\
+          \ = `${diffMins}m ago`;\n  } else if (remainingMins === 0) {\n    timeAgo = `${diffHours}h ago`;\n\
+          \  } else {\n    timeAgo = `${diffHours}h ${remainingMins}m ago`;\n  }\n\n  return `${formattedEventTime}\
+          \ - ${timeAgo}`;\n]]]\n"
+        styles:
+          card:
+          - height: 60px
+          - background-color: transparent
+          - box-shadow: none
+          - border: none
+          - border-radius: 12px
+          - padding: 0px
+          grid:
+          - grid-template-areas: '". i n ." ". i l ."'
+          - grid-template-columns: 1fr 30px auto 1fr
+          - grid-template-rows: 1fr 1fr
+          img_cell:
+          - justify-content: center
+          - align-items: center
+          icon:
+          - width: 32px
+          - color: '[[[ return entity.state === ''locked'' ? ''green'' : ''#eab308''; ]]]'
+          name:
+          - justify-self: start
+          - align-self: end
+          - font-size: 16px
+          - color: white
+          - margin-left: 8px
+          label:
+          - justify-self: start
+          - align-self: start
+          - font-size: 13px
+          - color: grey
+          - margin-left: 8px
+          - margin-top: 4px
+    collapsible: false
+    show_title: false
+    default_state: collapsed
+    icon: ''
+    icon_color: ''
+    icon_size: 20
+    title_color: ''
+    title_font_size: 14
+    title_font_weight: 600
+    title_font_style: normal
+    title_indent: 0
+    header_pad_v: 0
+    frame:
+      presets: []
+    card_gap: 0
+  - id: sec_alji4upf
+    type: divider
+    label: ''
+    icon: ''
+    color: ''
+    thickness: 1
+    length: 70
+    line_style: solid
+    justify: center
+    text_position: 'on'
+    content_justify: center
+    indent: 0
+    text_size: 13
+    text_weight: '600'
+    text_color_mode: line
+    text_color: ''
+    icon_size: 0
+    icon_color_mode: text
+    icon_color: ''
+    hide_line: false
+    hide_text: false
+    hide_icon: false
+    mirror_center: false
+    gradient: true
+    stops:
+    - pos: 0
+      color: transparent
+    - pos: 35
+      color: '#333333'
+    - pos: 65
+      color: '#333333'
+    - pos: 100
+      color: transparent
+    gradient_pattern: 5
+    pad_v: 0
+  - id: sec_open_entries
+    name: Open Entries
+    collapsible: true
+    show_title: true
+    entities: []
+    type: activity_table
+    icon: ''
+    icon_color: ''
+    icon_size: 20
+    title_color: ''
+    title_font_size: 14
+    title_font_weight: 600
+    title_font_style: normal
+    title_indent: 0
+    keep_expanded_when_entities: false
+    default_state: collapsed
+    entity_icon_color: ''
+    entity_icon_size: 20
+    entity_text_color: ''
+    entity_font_size: 13
+    entity_font_weight: 400
+    entity_font_style: normal
+    chip_bg: ''
+    chip_border_color: ''
+    chip_text_color: ''
+    chip_scale: 1
+    chip_show_icon: true
+    chip_icon_source: entity
+    chip_show_name: false
+    chip_hide_off: false
+    chip_hide_unknown: false
+    chip_hide_unavailable: false
+    chip_hide_state: false
+    chip_tap_action:
+      action: more-info
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_hold_action:
+      action: none
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    chip_layout: wrap
+    chip_shape: pill
+    chip_radius: 8
+    chips_only: false
+    frame:
+      presets: []
+    row_visuals_mode: global
+    row_indent: 16
+    row_border_enabled: false
+    row_border_width: 1
+    row_border_radius: 4
+    row_border_top: true
+    row_border_bottom: true
+    row_border_left: true
+    row_border_right: true
+    row_border_corners:
+    - true
+    - true
+    - true
+    - true
+    row_border_color: ''
+    entity_rules: []
+    hide_unavailable: true
+    hide_unknown: true
+    section_display: always
+    count_mode: 'off'
+    count_prefix: ' - '
+    count_color: ''
+    count_font_size: 13
+    count_font_weight: 400
+    count_font_style: normal
+    rule_sets:
+    - ref: rs_open_doors
+      mode: dynamic
+    - ref: rs_open_windows
+      mode: dynamic
+    - ref: rs_open_garage
+      mode: dynamic
+    - ref: rs_unlocked_locks
+      mode: dynamic
+    filter:
+      groups: []
+    columns:
+    - id: c_icon
+      kind: icon
+      header: ''
+      show_header: false
+      header_color: ''
+      align: center
+      header_align: ''
+      width: 40
+      value:
+        source: state
+        attribute: ''
+        transform: none
+        unit: ''
+      color: null
+      icon:
+        rules: []
+        default: __default__
+        color:
+          rules: []
+          default: '#2196F3'
+        size: 26
+        show: null
+        use_native_icon: true
+    - id: c_name
+      kind: name
+      header: ''
+      show_header: false
+      header_color: ''
+      align: left
+      header_align: ''
+      width: 1fr
+      value:
+        source: state
+        attribute: ''
+        transform: none
+        unit: ''
+      color:
+        rules: []
+        default: var(--primary-text-color)
+    - id: c_ago
+      kind: value
+      header: Last Changed
+      show_header: true
+      header_color: ''
+      align: right
+      header_align: ''
+      width: 20%
+      value:
+        source: last_changed_ago
+        attribute: ''
+        transform: none
+        unit: ''
+      color:
+        rules: []
+        default: var(--secondary-text-color)
+    - id: c_time
+      kind: value
+      header: Time
+      show_header: true
+      header_color: ''
+      align: right
+      header_align: ''
+      width: 20%
+      value:
+        source: last_changed_time
+        attribute: ''
+        transform: none
+        unit: ''
+      color:
+        rules: []
+        default: var(--secondary-text-color)
+    sort:
+      rules: []
+      default_weight: 100
+      then_by:
+        ref:
+          source: last_changed_ago
+          attribute: ''
+          transform: none
+          unit: ''
+        dir: asc
+      pin_top: []
+    headers:
+      show: true
+      color: '#90EE90'
+      font_size: 12
+    title_row:
+      show: true
+      icon: mdi:security
+      icon_color: null
+      icon_size: 30
+      header_icon:
+        enabled: true
+        source: count
+        entity: ''
+        rules:
+        - when:
+            op: gt
+            value: 0
+          result: mdi:security
+        default: mdi:shield-check
+        color_rules:
+          rules:
+          - when:
+              op: gt
+              value: 0
+            result: '#2196F3'
+          default: gray
+      text:
+        template: '{name} - {count}'
+        font_size: 16
+        weight: 700
+        color: ''
+        align: start
+      count:
+        mode: rows
+        when:
+          op: is_on
+      parts:
+        icon:
+          show: true
+          template: ''
+          align: left
+          color: ''
+          size: 30
+          weight: 400
+          italic: false
+          color_rules: null
+        title:
+          show: true
+          template: Entries Open - {count}
+          align: left
+          color: ''
+          size: 16
+          weight: 700
+          italic: false
+          zero_text: All Entries Secure
+        count:
+          show: false
+          template: '{count}'
+          align: right
+          color: ''
+          size: 16
+          weight: 700
+          italic: false
+        extra: []
+        badges:
+        - id: bdg_0_m8lm
+          show: true
+          icon: mdi:window-open
+          source: rule_set
+          ref: rs_open_windows
+          entity: ''
+          attribute: ''
+          template: '{count}'
+          align: left
+          color: gray
+          size: 26
+          text_size: 0
+          weight: 400
+          hide_when_zero: true
+          gap: 4
+        - id: bdg_1_nmhx
+          show: true
+          icon: mdi:door-open
+          source: rule_set
+          ref: rs_open_doors
+          entity: ''
+          attribute: ''
+          template: '{count}'
+          align: left
+          color: gray
+          size: 26
+          text_size: 0
+          weight: 400
+          hide_when_zero: true
+          gap: 4
+        - id: bdg_2_tkak
+          show: true
+          icon: mdi:lock-open
+          source: rule_set
+          ref: rs_unlocked_locks
+          entity: ''
+          attribute: ''
+          template: '{count}'
+          align: left
+          color: gray
+          size: 26
+          text_size: 0
+          weight: 400
+          hide_when_zero: true
+          gap: 4
+        - id: bdg_3_56ug
+          show: true
+          icon: mdi:garage-open
+          source: rule_set
+          ref: rs_open_garage
+          entity: ''
+          attribute: ''
+          template: '{count}'
+          align: left
+          color: gray
+          size: 26
+          text_size: 0
+          weight: 400
+          hide_when_zero: true
+          gap: 4
+      glow: null
+    row_style:
+      font_size: 14
+      padding_v: 6
+      padding_h: 6
+      indent: 12
+      text_color: ''
+      divider:
+        show: false
+        color: '#333333'
+        width: 1
+      zebra: false
+      hover_highlight: true
+      name_link: true
+      strip_strings: []
+    tap_action:
+      action: more-info
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    hold_action:
+      action: none
+      action_entity: ''
+      navigation_path: ''
+      url_path: ''
+      service: ''
+      service_data: {}
+    window_minutes: 0
+    active_when: null
+    hide_when_empty: false
+    max_rows: 0
+  header_from: sec_open_entries
+  collapsible: true
+  show_title: true
+  default_state: expanded
+  keep_expanded_when_entities: false
+  icon: ''
+  icon_color: ''
+  icon_size: 20
+  title_color: ''
+  title_font_size: 14
+  title_font_weight: 600
+  title_font_style: normal
+  title_indent: 0
+  frame:
+    presets:
+    - lib:theme_bottom_blue_border_minimal
+  card_gap: 0
+colors:
+  border: '#2196F3'
+  glow: '#2196F3'
+  icon: '#2196F3'
+  text: '#e1e1e1'
+  secondary_text: '#808080'
+  chip_bg: rgba(33, 150, 243, 0.14)
+  chip_border: '#2196F3'
+  chip_text: '#64b5f6'
+  badge_on: '#4CAF50'
+  badge_off: '#555555'
+  row_border: '#333333'
+  section_divider: '#333333'
+  card_border: '#2196F3'
+  card_glow: '#2196F3'
+scale: 1
+icon_scale: 1
+title_icon_scale: 1
+title_text_scale: 1
+entity_text_scale: 1
+card_bg_color: ''
+show_title: false
+show_title_icon: false
+title_icon: mdi:security
+title_icon_color: '#2196F3'
+title_text_color: '#e1e1e1'
+title_font_size: 16
+title_font_weight: 700
+title_font_style: normal
+title_icon_size: 22
+show_section_count: true
+auto_close_sections: false
+row_indent: 16
+slider_max_width: 240
+show_row_border: false
+row_border_width: 1
+row_border_radius: 4
+row_border_top: true
+row_border_bottom: true
+row_border_left: true
+row_border_right: true
+row_border_corners:
+- true
+- true
+- true
+- true
+row_first_border_top: true
+row_last_border_bottom: true
+strip_entity_strings: []
+card_collapsible: false
+show_card_chevron: true
+card_default_state: collapsed
+show_last_changed: false
+gray_icons_when_off: false
+min_refresh_seconds: 0
+frame_presets:
+- id: fp_bottom_border
+  name: Bottom Border
+  border:
+    color: '#2196F3'
+    width: 1
+    radius: 0
+    corners:
+    - true
+    - true
+    - true
+    - true
+    follow_icon: false
+    sides:
+    - bottom
+card_frame: null
+frame_library_scope: system
+table_defaults:
+  headers:
+    show: true
+    color: '#90EE90'
+    font_size: 11
+  row_style:
+    font_size: 14
+    padding_v: 6
+    padding_h: 6
+    indent: 0
+    text_color: ''
+    divider:
+      show: false
+      color: '#333333'
+      width: 1
+    zebra: false
+    hover_highlight: true
+    name_link: true
+    strip_strings: []
+type: custom:easy-entity-styler-card
+rule_sets:
+- id: rs_open_doors
+  name: Open doors
+  filter:
+    groups:
+    - mode: include
+      match: all
+      rules:
+      - field: device_class
+        op: eq
+        value: door
+      - field: state
+        op: is_on
+      - field: visibility
+        op: ne
+        value: hidden
+      - field: integration
+        op: ne
+        value: ha_kia_hyundai
+- id: rs_open_windows
+  name: Open windows
+  filter:
+    groups:
+    - mode: include
+      match: all
+      rules:
+      - field: device_class
+        op: eq
+        value: window
+      - field: state
+        op: is_on
+      - field: visibility
+        op: ne
+        value: hidden
+- id: rs_open_garage
+  name: Open garage doors
+  filter:
+    groups:
+    - mode: include
+      match: all
+      rules:
+      - field: device_class
+        op: eq
+        value: garage
+      - field: state
+        op: eq
+        value: open
+      - field: visibility
+        op: ne
+        value: hidden
+- id: rs_unlocked_locks
+  name: Unlocked locks
+  filter:
+    groups:
+    - mode: include
+      match: all
+      rules:
+      - field: domain
+        op: eq
+        value: lock
+      - field: state
+        op: eq
+        value: unlocked
+      - field: visibility
+        op: ne
+        value: hidden
+      - field: name
+        op: not_contains
+        value:
+        - gdo
+      - field: integration
+        op: ne
+        value: ha_kia_hyundai
+header_library_scope: system

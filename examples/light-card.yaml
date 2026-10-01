@@ -1,0 +1,73 @@
+type: conditional
+conditions:
+  - condition: numeric_state
+    entity: sensor.active_lights_count
+    above: 0
+card:
+  type: custom:expander-card
+  expanded: false
+  child-margin-top: 1em
+  title-card-button-overlay: true
+  title-card-clickable: true
+  card_mod:
+    style: |
+      ha-icon {
+        display: none !important;
+      }
+      ha-card {
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 12px !important;
+        padding: 12px 12px 12px 2px !important;
+        margin-bottom: 0px !important;
+        background: transparent !important;
+        border-bottom: 1px solid #2196F3 !important;
+      }
+  title-card:
+    type: custom:button-card
+    entity: sensor.active_lights_count
+    layout: icon_name
+    tap_action:
+      action: none
+    name: |
+      [[[
+        const s = states['sensor.active_lights_count'];
+        return s ? `Lights On - ${s.state}` : 'Lights On - 0';
+      ]]]
+    icon: mdi:lightbulb-on
+    styles:
+      grid:
+        - grid-template-columns: min-content auto
+      card:
+        - background: transparent
+        - border: none
+        - border-radius: 0
+        - padding: 0px 0px 0px 0px
+        - box-shadow: none
+      icon:
+        - color: |-
+            [[[ 
+              const lightCount = states['sensor.active_lights_count'];
+              return lightCount && parseInt(lightCount.state) > 0 ? '#2196F3' : 'gray';
+            ]]]
+        - width: 30px
+        - margin-right: 16px
+        - margin-left: 16px
+      name:
+        - font-size: 16px
+        - justify-self: start
+  cards:
+    - type: custom:mod-card
+      card_mod:
+        style: |
+          ha-card {
+            box-shadow: none !important;
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+      card:
+        type: custom:html-template-card
+        content: '{{ state_attr(''sensor.active_lights_recent_table'', ''table_html'') }}'
+        do_not_parse: false

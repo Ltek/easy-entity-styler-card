@@ -1,0 +1,153 @@
+# =============================================================================
+# EES replacements for the "network" view's auto-entities cards.
+# Each block below is ONE Easy Entity Styler Card. Drop them into the network
+# view's sections (or merge the rule_sets + sections into an existing EES card).
+#
+# Filters — faithful to the original auto-entities:
+#   ASUS Router        -> integration = asusrouter            (targeted, 1:1)
+#   Internet Blocking  -> integration = asusrouter + domain switch + name *Block*
+#   AdGuard Controls   -> entity_id contains adguard_home + domain switch
+#                         (AdGuard cards originally filtered by entity_id, not integration)
+#   AdGuard Stats      -> entity_id contains adguard_home, exclude switch
+# =============================================================================
+
+# ----- 1) ASUS Router (was: auto-entities, integration = asusrouter) ----------
+type: custom:easy-entity-styler-card
+show_title: true
+title: ASUS Router
+title_icon: mdi:router-wireless
+rule_sets:
+  - id: rs_asus_router
+    name: ASUS Router
+    filter:
+      groups:
+        - mode: include
+          match: all
+          rules:
+            - field: integration
+              op: eq
+              value: asusrouter
+sections:
+  - id: sec_asus_router
+    name: ASUS Router
+    type: entities
+    collapsible: true
+    show_title: true
+    rule_sets:
+      - ref: rs_asus_router
+        mode: dynamic
+    strip_strings:
+      - GT-AX6000
+    gray_icons_when_off: true
+
+---
+# ----- 2) Internet Connectivity — per-device Block Internet switches ----------
+#         (was: auto-entities, integration asusrouter + domain switch + name *Block*)
+type: custom:easy-entity-styler-card
+show_title: true
+title: Internet Connectivity
+title_icon: mdi:web-off
+rule_sets:
+  - id: rs_block_internet
+    name: Block Internet
+    filter:
+      groups:
+        - mode: include
+          match: all
+          rules:
+            - field: integration
+              op: eq
+              value: asusrouter
+            - field: domain
+              op: eq
+              value: switch
+            - field: name
+              op: contains
+              value: Block
+sections:
+  - id: sec_block_internet
+    name: Block Internet
+    type: entities
+    collapsible: true
+    show_title: true
+    rule_sets:
+      - ref: rs_block_internet
+        mode: dynamic
+    strip_strings:
+      - ' Block Internet'
+    # Hide the unavailable per-device duplicates so only live blockers show.
+    entity_rules:
+      - operator: ne
+        compare_type: value
+        value: unavailable
+
+---
+# ----- 3) AdGuard Controls (was: auto-entities, *adguard* + domain switch) ----
+type: custom:easy-entity-styler-card
+show_title: true
+title: AdGuard Controls
+title_icon: mdi:shield-check
+rule_sets:
+  - id: rs_adguard_switches
+    name: AdGuard Controls
+    filter:
+      groups:
+        - mode: include
+          match: all
+          rules:
+            - field: entity_id
+              op: contains
+              value: adguard_home
+            - field: domain
+              op: eq
+              value: switch
+sections:
+  - id: sec_adguard_controls
+    name: AdGuard Controls
+    type: entities
+    collapsible: true
+    show_title: true
+    rule_sets:
+      - ref: rs_adguard_switches
+        mode: dynamic
+    strip_strings:
+      - 'AdGuard Home '
+
+---
+# ----- 4) AdGuard Stats (was: auto-entities, *adguard*, exclude switch) -------
+#   NOTE: on the current system this resolves to nothing (AdGuard exposes only
+#   switches, no sensors). Kept so it auto-populates if AdGuard stat sensors are
+#   added later.
+type: custom:easy-entity-styler-card
+show_title: true
+title: AdGuard Stats
+title_icon: mdi:chart-box
+rule_sets:
+  - id: rs_adguard_stats
+    name: AdGuard Stats
+    filter:
+      groups:
+        - mode: include
+          match: all
+          rules:
+            - field: entity_id
+              op: contains
+              value: adguard_home
+        - mode: exclude
+          match: any
+          rules:
+            - field: domain
+              op: eq
+              value: switch
+sections:
+  - id: sec_adguard_stats
+    name: AdGuard Stats
+    type: entities
+    collapsible: true
+    show_title: true
+    hide_when_empty: true
+    rule_sets:
+      - ref: rs_adguard_stats
+        mode: dynamic
+    strip_strings:
+      - 'AdGuard Home '

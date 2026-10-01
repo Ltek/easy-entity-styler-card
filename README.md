@@ -10,7 +10,7 @@ https://github.com/Ltek/easy-entity-styler-card
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=easy-entity-styler-card&category=dashboard)
 
-Current build: **v2026.09.27.230** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.01.236** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -19,16 +19,17 @@ Current build: **v2026.09.27.230** · full history in [CHANGELOG.md](CHANGELOG.m
 Every option below is fully point-and-click in the visual editor.
 
 ### Sections & layout
-- **Collapsible sections and card** — sections expand/collapse individually; the whole card can collapse to just its title bar (or run with no title bar); sections can auto-stay-open when they hold entities.
+- **Collapsible sections and card** — sections expand/collapse individually; the whole card can collapse to just its title bar (or run with no title bar); sections can auto-stay-open when they hold entities. The card itself can open when a chosen section has entities (on load only, or kept open), and its title can show that section's live count ("Alert Bypasses - 3"), which hides at zero.
 - **Five section types** — an **Entity List** (rows and/or chips), an **Entity Table** (rich multi-column table), a standalone **Divider** (a styled line with an optional label and icon — thickness, length, dashed/dotted, gradient or center-fade, text above / on / below the line, independent top/bottom spacing), an **Embed Card** section (any Home Assistant cards, see below), and a **Group** (a container that nests other sections).
 - **Group** — a container section: put other sections inside it and they collapse together under one header and one frame. **Use Header From** mirrors a member's header (including a table's live count + per-domain badges) as the group's own. A group has its own frame, visibility rules and collapse state; a collapsed group defers building any embedded cards inside it.
 - **Embed Card** — embed any Home Assistant cards inside a section, so they collapse with it, sit inside its frame, and follow its conditional visibility. Each stays fully interactive and live, and a collapsed section builds nothing until it's opened. Edit a child's own options as YAML (paste it from that card's **Show code editor**), reorder / duplicate / remove them, and set the gap between them. A child with a bad config shows an inline error rather than breaking the card.
+- **Header count badges** — a section header can show one or more **icon + live count** badges that hide at zero, each counting a rule set or reading a number off an entity (e.g. per-domain window / door / lock / garage counts), with adjustable space between badges.
 - **Conditional visibility** — show the whole card, a section, or an entity only when your rules pass (entity + operator + value, chained AND/OR); auto-hide a section when it has nothing to show, and optionally auto-hide the **whole card** once every such section is empty (no leftover empty box in the grid). Hidden cards/sections still appear while editing the dashboard.
-- **Copy sections between cards** — export a section (with its rule sets) as JSON and import it elsewhere. On import the card tells you up front which referenced **Frame Styles** or **Header Rule Sets** don't exist on this system, so a silent fallback never surprises you.
+- **Copy sections between cards** — export a section as JSON and import it elsewhere. The export carries its rule sets **and the Frame Style and Header Rule entries it uses**, so it keeps its look on another system; import adds anything missing and never overwrites an entry you already have with the same name.
 
 ### Entity selection
-- **Rules engine** — build named, reusable rule sets with point-and-click include/exclude groups (match ALL or ANY); match on id, name, state, attribute, domain, area, label, group helper, integration, or device class, with operators like equals / contains / in / regex / numeric compare. Live dropdowns pull real values from your system.
-- **Static & dynamic lists** — populate a section automatically from a rule set (dynamic re-evaluates live; static is a hand-curatable snapshot). Preview resolved entities before assigning.
+- **Rules engine** — build named, reusable rule sets with point-and-click include/exclude groups (match ALL or ANY); match on id, name, state, attribute, domain, area, label, group helper, integration, device class, or **visibility** (whether the entity is shown or hidden in Settings → Entities), with operators like equals / contains / in / regex / numeric compare. Live dropdowns pull real values from your system.
+- **Static & dynamic lists** — populate a section automatically from a rule set (dynamic re-evaluates live; static is a hand-curatable snapshot). Preview resolved entities before assigning. Each rule set shows what uses it — groups, sections and header badges — so you can see what it feeds before deleting it; deleting one also cleans up the badges that referenced it.
 
 ### Entity tables
 - Multi-column tables from your entities or from a sensor's array attribute (one row per element).
@@ -113,15 +114,16 @@ in [`examples/`](examples):
 | [`window-tracker-card.yaml`](examples/window-tracker-card.yaml) | Array-attribute table — one row per element of a tracker sensor's list |
 | [`ees-lights-on-card.yaml`](examples/ees-lights-on-card.yaml) | **Replaces a 4-card stack + 2 template sensors** — the *Lights On* table rebuilt as one card. The Jinja include/exclude logic (RGB labels, area, name/id keywords) became a rule set, the 120-minute recency window and grey decay colors became config, and the count + empty-hiding replaced the `conditional` wrapper and its counter sensor. No `html-template-card`, `button-card`, `expander-card`, `mod-card`, or `card_mod`. |
 | [`entity-button-sections.yaml`](examples/entity-button-sections.yaml) | **Replaces an `expander-card` + `button-card` + `html-template-card` stack** — the *Open Entries* summary and its recent-entries table become one native table (four rule sets union open doors / windows / garage / unlocked locks), with a live count, an "All Entries Secure" zero state, and a state-driven security/shield icon. The two interactive lock tiles keep their exact per-state lock/unlock behaviour by riding verbatim in a `type: cards` section. |
-| [`ees-bypass.yaml`](examples/ees-bypass.yaml) | Active / Inactive bypass toggles as two chip-only sections, split by an `on`/`off` entity rule, each hiding when empty; conditional card glow driven by the Active section having entities |
+| [`ees-bypass.yaml`](examples/ees-bypass.yaml) | Active / Inactive bypass toggles as two chip-only sections, split by an `on`/`off` entity rule, each hiding when empty; conditional card glow driven by the Active section having entities; the collapsed card opens on load when anything is bypassed and its title shows the live Active count ("Alert Bypasses - 2") |
+| [`open-entries-recent.yaml`](examples/open-entries-recent.yaml) | A **Group** that mirrors its table's header (`header_from`): lock tiles in a `type: cards` section, a divider, and an *Open Entries* table fed by eight rule sets (open / recently closed doors, windows, garage doors, unlocked locks) with per-domain header count badges |
 
 ---
 
 ## Repo layout
 
 ```
-easy-entity-styler-card-vN.js   the card (highest N is current)
-past/                           previous versions
+easy-entity-styler-card.js      the card (fixed filename; the version is inside the file)
+hacs.json                       tells HACS which file to install
 examples/                       copy-paste card YAML
 README.md                       this file
 CHANGELOG.md                    version history
