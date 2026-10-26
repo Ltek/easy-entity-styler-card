@@ -8,7 +8,7 @@ A highly customizable Home Assistant Dashboard card that organizes and displays 
 
 https://github.com/Ltek/easy-entity-styler-card
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=easy-entity-styler-card&category=dashboard)
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=easy-entity-styler-card&category=plugin)
 
 Current build: **v2026.10.01.236** · full history in [CHANGELOG.md](CHANGELOG.md)
 
