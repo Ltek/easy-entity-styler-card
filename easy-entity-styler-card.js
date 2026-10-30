@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.10.30.237
+// Version: v2026.10.30.238
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.10.30.237';
+const BUILD_NUMBER = 'v2026.10.30.238';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1642,7 +1642,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.10.30.237: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.10.30.238: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3542,7 +3542,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.10.30.237: card-level links to one section.
+// v2026.10.30.238: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3560,7 +3560,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.10.30.237: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.10.30.238: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -16643,8 +16643,8 @@ console.log('[easy-entity-styler-card] Loaded successfully -', BUILD_NUMBER);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'easy-entity-styler-card',
-  name: 'Easy Entity Styler Card',
-  description: 'Easy Entity Styler Card',
+  name: 'Easy Entity Styler Card (Ltek)',
+  description: 'Entities in styled sections, chips and tables, with shared style libraries.',
 });
 
 console.log(`✅ easy-entity-styler-card registered successfully! [${BUILD_NUMBER}]`);

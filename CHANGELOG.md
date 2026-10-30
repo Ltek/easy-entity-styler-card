@@ -5,6 +5,13 @@ resets. Newest first.
 
 ---
 
+## v2026.10.30.238
+
+- **The card is named "Easy Entity Styler Card (Ltek)" in Home Assistant's *Add card* picker**,
+  matching its HACS name, so searching "Ltek" finds it. The description now says what the card does
+  instead of repeating the name. The card type (`custom:easy-entity-styler-card`) is unchanged, so
+  existing dashboards are not affected.
+
 ## v2026.10.30.237
 
 - **A collapsible card can open as a pop-up instead of expanding.** Card Appearance → *Open as:

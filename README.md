@@ -10,7 +10,7 @@ https://github.com/Ltek/easy-entity-styler-card
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=easy-entity-styler-card&category=plugin)
 
-Current build: **v2026.10.30.237** · full history in [CHANGELOG.md](CHANGELOG.md)
+Current build: **v2026.10.30.238** · full history in [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
