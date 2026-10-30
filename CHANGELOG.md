@@ -5,6 +5,34 @@ resets. Newest first.
 
 ---
 
+## v2026.10.30.239
+
+- **Pop-up per section.** Any collapsible section with its title row shown can open as a pop-up from
+  its own header instead of expanding in place. That covers Entity List, Entity Table, Embed Card and
+  Group sections. Find it in the section's settings → *Open as: Pop-up (tap the header)*. This is
+  for cards like a single "Open Shades" table with no card title, where the section header is the
+  only bar to tap and the card-level pop-up (v237) can't reach it.
+  - Same options as the card pop-up: Size (Small drops from the header and opens upward when low on
+    the screen; Medium is the default; Large; Full screen), Title bar, Close after N seconds (default
+    30, 0 = never), Backdrop dim / blur. Closes with the X, a tap on the backdrop, or Escape.
+  - **The title bar shows the section's live header**, the same icon, colour rules and
+    `{count}` template ("Open Shades - 2"), refreshed on every update.
+  - Inside the pop-up the section works as it does inline: table rows, chips, embedded cards and frames
+    update live. The section counts as open while its pop-up is, so embedded cards build when it
+    opens.
+  - Only one section pop-up is open at a time. It stays open, at the same scroll position, through a
+    full redraw. A section pop-up inside a card pop-up closes on its own without closing the card.
+  - *Default state* and *Keep expanded while entities are displayed* are hidden for a pop-up section
+    and never open it inline.
+  - The editor preview and dashboard edit mode expand the section in place, so you can still style it.
+- Keys on the section, written only when used: `open_mode: popup`,
+  `popup_size: small|large|full`, `popup_title: false`, `popup_auto_close`, `popup_dim`,
+  `popup_blur`. Existing sections are unchanged.
+- The card-level pop-up now targets only its own dialog (`dialog.ees-card-popup`), so it never
+  picks up a section's.
+- Test: `/shared/user/code/_tests/entity-card-section-popup.test.mjs` (16 checks under happy-dom;
+  15 fail against v238), now part of the publish gate.
+
 ## v2026.10.30.238
 
 - **The card is named "Easy Entity Styler Card (Ltek)" in Home Assistant's *Add card* picker**,

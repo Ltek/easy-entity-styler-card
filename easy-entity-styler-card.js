@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.10.30.238
+// Version: v2026.10.30.239
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.10.30.238';
+const BUILD_NUMBER = 'v2026.10.30.239';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1642,7 +1642,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.10.30.238: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.10.30.239: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -2736,6 +2736,7 @@ function normalizeGroupSection(s) {
     title_font_style: s.title_font_style || 'normal',
     title_indent: s.title_indent ?? 0,
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
+    ...sectionPopupKeys(s),
     // Vertical gap between the group's stacked MEMBERS (px, pre-scale). 0 is a
     // real value (flush), hence optNumber + emit-only-when-set: an untouched
     // group emits nothing and inherits the historical --seed-gap.
@@ -2779,6 +2780,7 @@ function normalizeCardsSection(s) {
     // Same optional-numeric contract as every other section type: key-absent
     // inherits the card's `section_header_pad_v` (see the .seed-summary chain).
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
+    ...sectionPopupKeys(s),
     frame: normalizeFrameRef(s.frame),
     // Vertical gap between stacked child cards (px, pre-scale). 0 is a real
     // value (flush stack), hence optNumber + emit-only-when-set.
@@ -2820,6 +2822,7 @@ function normalizeSection(s) {
     // explicit 0 is a real value (a flush header), hence optNumber + a
     // conditional spread so an untouched section emits nothing.
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
+    ...sectionPopupKeys(s),
     // Force the section open whenever it has visible entities (only meaningful
     // for a collapsible section). Overrides auto-close while entities show.
     keep_expanded_when_entities: s.keep_expanded_when_entities === true,
@@ -3542,7 +3545,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.10.30.238: card-level links to one section.
+// v2026.10.30.239: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3560,7 +3563,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.10.30.238: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.10.30.239: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3591,6 +3594,26 @@ function cardPopupKeys(c) {
   if (ac !== null && ac !== CARD_POPUP_AUTO_CLOSE_DEFAULT) out.card_popup_auto_close = ac;
   const dim = int(c.card_popup_dim, 0, 95); if (dim !== null) out.card_popup_dim = dim;
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
+  return out;
+}
+// v2026.10.30.239: per-SECTION pop-up. A collapsible section with its title row shown can open
+// its body in a pop-up from its own header, instead of expanding in place. Same options as the
+// card-level pop-up, prefixed `popup_` on the section:
+//   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
+//   popup_auto_close (absent = 30, 0 = never) · popup_dim % · popup_blur px
+// Written only when used; the popup_* keys only with open_mode: popup.
+const SECTION_POPUP_KEYS = ['open_mode', 'popup_size', 'popup_title', 'popup_auto_close', 'popup_dim', 'popup_blur'];
+function sectionPopupKeys(s) {
+  s = s || {};
+  if (s.open_mode !== 'popup') return {};
+  const out = { open_mode: 'popup' };
+  if (['small', 'large', 'full'].includes(s.popup_size)) out.popup_size = s.popup_size;
+  if (s.popup_title === false) out.popup_title = false;
+  const int = (v, lo, hi) => { const n = optNumber(v); return n === null ? null : Math.max(lo, Math.min(hi, Math.round(n))); };
+  const ac = int(s.popup_auto_close, 0, 3600);
+  if (ac !== null && ac !== CARD_POPUP_AUTO_CLOSE_DEFAULT) out.popup_auto_close = ac;
+  const dim = int(s.popup_dim, 0, 95); if (dim !== null) out.popup_dim = dim;
+  const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
 function stripCardPopupKeys(m) {
@@ -3757,6 +3780,8 @@ class SEEDCard extends HTMLElement {
     // v237: a card leaving the page takes its pop-up with it
     if (this._popupOpen) { try { this._closeCardPopup(); } catch (e) {} }
     this._clearCardPopupTimer();
+    if (this._secPopupOpen) { try { this._closeSectionPopup(); } catch (e) {} }
+    this._clearSecPopupTimer();
     // Stop listening, so a card that is gone is not kept alive (or re-rendered) by the library.
     _offLibListeners(this._onLibChange);
     this._libDetached = true;
@@ -4558,6 +4583,12 @@ class SEEDCard extends HTMLElement {
         .ees-popup-close { position: absolute; top: 6px; right: 6px; z-index: 2; background: rgba(0, 0, 0, 0.35); color: #fff; }
         .ees-popup-body { overflow: auto; flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
         .ees-popup-body > .easy-entity-styler-card-body { padding-top: var(--seed-pad); }
+        /* v239: section pop-up. The header copy in the title bar fills it; the chevron does not
+           flip while the (technically open) section shows its body in the pop-up. */
+        .ees-sec-popup-head { flex: 1 1 auto; min-width: 0; }
+        .ees-sec-popup .ees-popup-body { padding: calc(var(--seed-pad) * 0.5); }
+        details.seed-sec-popup > summary { cursor: pointer; }
+        details.seed-section.seed-sec-popup-open[open] > .seed-summary .seed-section-icon { transform: none; }
         .easy-entity-styler-card-body {
           display: flex;
           flex-direction: column;
@@ -5228,12 +5259,14 @@ class SEEDCard extends HTMLElement {
         // Initial state: 'expanded' renders open; 'collapsed' (default) closed.
         // Keep-expanded still forces open at render when it has visible entities
         // (re-asserted live in updateStates).
-        const forceOpen = section.default_state === 'expanded' ||
-          (section.keep_expanded_when_entities && count > 0);
+        // v239: a pop-up section never opens in place on its own
+        const secPop = this._sectionPopupOn(section);
+        const forceOpen = !secPop && (section.default_state === 'expanded' ||
+          (section.keep_expanded_when_entities && count > 0));
         sectionsHtml += `
-          <details class="seed-section ${autoClose ? 'seed-autoclose' : ''}" data-section-id="${section.id}" style="${sectionStyle}${sectionHiddenStyle}"${forceOpen ? ' open' : ''}>
+          <details class="seed-section ${autoClose ? 'seed-autoclose' : ''}${secPop ? ' seed-sec-popup' : ''}" data-section-id="${section.id}" style="${sectionStyle}${sectionHiddenStyle}"${forceOpen ? ' open' : ''}>
             <summary class="seed-summary">${headerHtml}</summary>
-            ${bodyHtml}
+            ${bodyHtml}${secPop ? this._sectionPopupDialogHtml(section) : ''}
           </details>
         `;
       } else {
@@ -5405,11 +5438,12 @@ class SEEDCard extends HTMLElement {
       return `<div class="seed-section seed-group non-collapsible" data-section-id="${section.id}" style="${styleVars}${hiddenStyle}">${bodyHtml}</div>`;
     }
     if (collapsible) {
-      const forceOpen = section.default_state === 'expanded';
+      const secPop = this._sectionPopupOn(section);
+      const forceOpen = !secPop && section.default_state === 'expanded';
       return `
-        <details class="seed-section seed-group ${autoClose ? 'seed-autoclose' : ''}" data-section-id="${section.id}" style="${styleVars}${hiddenStyle}"${forceOpen ? ' open' : ''}>
+        <details class="seed-section seed-group ${autoClose ? 'seed-autoclose' : ''}${secPop ? ' seed-sec-popup' : ''}" data-section-id="${section.id}" style="${styleVars}${hiddenStyle}"${forceOpen ? ' open' : ''}>
           <summary class="seed-summary">${headerHtml}</summary>
-          ${bodyHtml}
+          ${bodyHtml}${secPop ? this._sectionPopupDialogHtml(section) : ''}
         </details>
       `;
     }
@@ -5424,6 +5458,11 @@ class SEEDCard extends HTMLElement {
   // ---- v237: pop-up card ---------------------------------------------------
   // 'header' | 'icon' | null. Pop-up mode needs a collapsible card. In the editor preview and in
   // dashboard edit mode the card expands inline instead, so its contents stay styleable.
+  // changes whenever entering/leaving edit mode should switch something between pop-up and inline
+  _popupSig() {
+    const anySec = (list) => (list || []).some(x => (x && x.open_mode === 'popup') || (x && anySec(x.children)));
+    return `${this._popupMode()}|${anySec(this._config && this._config.sections) && !this._editMode}`;
+  }
   _popupMode() {
     const c = this._config || {};
     if (c.card_collapsible !== true || c.card_open_mode !== 'popup' || this._editMode) return null;
@@ -5444,7 +5483,7 @@ class SEEDCard extends HTMLElement {
       : `<div class="ees-popup-title"><span class="ees-popup-title-text">${escapeHtml(String(c.title || ''))}${this._cardTitleCountHtml()}</span>${close}</div>`;
     const body = `<div class="easy-entity-styler-card-body">${sectionsHtml}</div>`;
     const dialog = `
-        <dialog class="ees-popup size-${size}"${vars.length ? ` style="${vars.join(';')};"` : ''}>
+        <dialog class="ees-popup ees-card-popup size-${size}"${vars.length ? ` style="${vars.join(';')};"` : ''}>
           <div class="ees-popup-inner">${bar}<div class="ees-popup-body">${mode === 'header' ? body : ''}</div></div>
         </dialog>`;
     if (mode === 'header') {
@@ -5471,7 +5510,7 @@ class SEEDCard extends HTMLElement {
         </details>${dialog}`;
   }
   _wireCardPopup() {
-    const dlg = this.querySelector('dialog.ees-popup');
+    const dlg = this.querySelector('dialog.ees-card-popup');
     if (!dlg) return;
     this.querySelectorAll('.ees-popup-open').forEach(el => {
       el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this._openCardPopup(); });
@@ -5479,16 +5518,16 @@ class SEEDCard extends HTMLElement {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); this._openCardPopup(); }
       });
     });
-    dlg.querySelectorAll('.ees-popup-x').forEach(b => b.addEventListener('click', () => this._closeCardPopup()));
+    dlg.querySelectorAll('.ees-popup-x').forEach(b => { if (b.closest('dialog') === dlg) b.addEventListener('click', () => this._closeCardPopup()); });
     // a tap on the backdrop targets the dialog itself (the inner box covers everything else)
     dlg.addEventListener('click', (e) => { if (e.target === dlg) this._closeCardPopup(); });
     // Escape: the browser closes it; this keeps our state (and the body's home) in step
-    dlg.addEventListener('close', () => { if (dlg === this.querySelector('dialog.ees-popup')) this._onCardPopupClosed(); });
+    dlg.addEventListener('close', (e) => { if (e.target === dlg && dlg === this.querySelector('dialog.ees-card-popup')) this._onCardPopupClosed(); });
     ['pointerdown', 'keydown', 'wheel', 'input'].forEach(ev =>
       dlg.addEventListener(ev, () => this._armCardPopupTimer(), { passive: true }));
   }
   _openCardPopup() {
-    const dlg = this.querySelector('dialog.ees-popup');
+    const dlg = this.querySelector('dialog.ees-card-popup');
     if (!dlg) return;
     const slot = dlg.querySelector('.ees-popup-body');
     const body = this.querySelector('.easy-entity-styler-card-body');
@@ -5502,7 +5541,7 @@ class SEEDCard extends HTMLElement {
     try { this._mountEmbeddedCards(); } catch (e) {}
   }
   _closeCardPopup() {
-    const dlg = this.querySelector('dialog.ees-popup');
+    const dlg = this.querySelector('dialog.ees-card-popup');
     if (dlg && dlg.open) { try { dlg.close(); } catch (e) { dlg.removeAttribute('open'); } }
     this._onCardPopupClosed();
   }
@@ -5510,7 +5549,7 @@ class SEEDCard extends HTMLElement {
     this._popupOpen = false;
     this._clearCardPopupTimer();
     // icon mode: put the body back under the header
-    const body = this.querySelector('dialog.ees-popup .easy-entity-styler-card-body');
+    const body = this.querySelector('dialog.ees-card-popup .easy-entity-styler-card-body');
     if (body && this._popupBodyHome && this._popupBodyHome.isConnected) this._popupBodyHome.appendChild(body);
     this._popupBodyHome = null;
   }
@@ -5524,8 +5563,10 @@ class SEEDCard extends HTMLElement {
   // Small: drop from the header at its width, opening UP when the card sits in the lower half of
   // the screen, and capped to the space on that side (it scrolls inside). Other sizes are centred.
   _placeCardPopup(dlg) {
-    if ((this._config.card_popup_size || 'medium') !== 'small') { dlg.style.left = dlg.style.top = dlg.style.width = ''; return; }
-    const anchor = this.querySelector('.easy-entity-styler-card-summary');
+    this._placeSmallPopup(dlg, this.querySelector('.easy-entity-styler-card-summary'));
+  }
+  _placeSmallPopup(dlg, anchor) {
+    if (!dlg.classList.contains('size-small')) { dlg.style.left = dlg.style.top = dlg.style.width = ''; return; }
     if (!anchor || typeof window === 'undefined') return;
     const place = () => {
       const t = anchor.getBoundingClientRect();
@@ -5546,15 +5587,122 @@ class SEEDCard extends HTMLElement {
     _raf(place);   // again once the content has laid out
   }
 
+  // ---- v239: per-section pop-up -------------------------------------------
+  _findSectionById(id) {
+    const walk = (list) => {
+      for (const sec of list || []) {
+        if (sec && sec.id === id) return sec;
+        const hit = sec && Array.isArray(sec.children) ? walk(sec.children) : null;
+        if (hit) return hit;
+      }
+      return null;
+    };
+    return walk(this._config && this._config.sections);
+  }
+  // A section opens as a pop-up only when it is collapsible with its title row shown, and not in
+  // the editor preview / dashboard edit mode (there it expands inline, so it stays styleable).
+  _sectionPopupOn(section) {
+    return !!section && section.open_mode === 'popup' && section.show_title !== false
+      && section.collapsible !== false && !this._editMode;
+  }
+  _sectionPopupDialogHtml(section) {
+    const size = section.popup_size || 'medium';
+    const vars = [];
+    if (optNumber(section.popup_dim) !== null) vars.push(`--ees-pop-dim:${Number(section.popup_dim) / 100}`);
+    if (optNumber(section.popup_blur) !== null) vars.push(`--ees-pop-blur:${Number(section.popup_blur)}px`);
+    const x = '<button type="button" class="ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>';
+    // the title bar carries a live copy of the section's own header (filled on open + on updates)
+    const bar = section.popup_title === false
+      ? `<button type="button" class="ees-popup-close ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>`
+      : `<div class="ees-popup-title ees-sec-popup-title"><div class="ees-sec-popup-head"></div>${x}</div>`;
+    return `<dialog class="ees-popup ees-sec-popup size-${size}" data-section-id="${section.id}"${vars.length ? ` style="${vars.join(';')};"` : ''}><div class="ees-popup-inner">${bar}<div class="ees-popup-body"></div></div></dialog>`;
+  }
+  _wireSectionPopups() {
+    this.querySelectorAll('details.seed-sec-popup').forEach(det => {
+      const id = det.dataset.sectionId;
+      const sum = det.querySelector(':scope > summary');
+      const dlg = det.querySelector(`:scope > dialog.ees-sec-popup`);
+      if (!sum || !dlg) return;
+      // the header opens the pop-up instead of toggling the section
+      sum.addEventListener('click', (e) => { e.preventDefault(); this._openSectionPopup(id); });
+      dlg.querySelectorAll('.ees-popup-x').forEach(b => { if (b.closest('dialog') === dlg) b.addEventListener('click', () => this._closeSectionPopup()); });
+      dlg.addEventListener('click', (e) => { if (e.target === dlg) this._closeSectionPopup(); });
+      dlg.addEventListener('close', (e) => { if (e.target === dlg && this._secPopupOpen === id) this._onSectionPopupClosed(); });
+      ['pointerdown', 'keydown', 'wheel', 'input'].forEach(ev =>
+        dlg.addEventListener(ev, () => this._armSecPopupTimer(), { passive: true }));
+    });
+  }
+  _openSectionPopup(id) {
+    if (this._secPopupOpen && this._secPopupOpen !== id) this._closeSectionPopup();
+    const det = this.querySelector(`details.seed-sec-popup[data-section-id="${id}"]`);
+    const dlg = det && det.querySelector(':scope > dialog.ees-sec-popup');
+    const slot = dlg && dlg.querySelector('.ees-popup-body');
+    if (!det || !dlg || !slot) return;
+    // Opening the <details> keeps every "is this section open?" check true (embedded cards mount,
+    // frames, live updates). Its body moves into the dialog — a child of the same <details>, so
+    // every lookup scoped to the section still finds it.
+    det.classList.add('seed-sec-popup-open');
+    det.open = true;
+    [...det.children].forEach(ch => { if (ch.tagName !== 'SUMMARY' && ch !== dlg) slot.appendChild(ch); });
+    if (!dlg.open) { try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); } }
+    this._secPopupOpen = id;
+    this._refreshSecPopupTitle();
+    this._armSecPopupTimer();
+    try { this._mountEmbeddedCards(); } catch (e) {}
+    if (typeof this._placeSmallPopup === 'function') this._placeSmallPopup(dlg, det.querySelector(':scope > summary'));
+  }
+  _closeSectionPopup() {
+    const id = this._secPopupOpen;
+    const dlg = id && this.querySelector(`dialog.ees-sec-popup[data-section-id="${id}"]`);
+    if (dlg && dlg.open) { try { dlg.close(); } catch (e) { dlg.removeAttribute('open'); } }
+    this._onSectionPopupClosed();
+  }
+  _onSectionPopupClosed() {
+    const id = this._secPopupOpen;
+    this._secPopupOpen = null;
+    this._clearSecPopupTimer();
+    if (!id) return;
+    const det = this.querySelector(`details.seed-sec-popup[data-section-id="${id}"]`);
+    const dlg = det && det.querySelector(':scope > dialog.ees-sec-popup');
+    const slot = dlg && dlg.querySelector('.ees-popup-body');
+    if (det && dlg && slot) {
+      [...slot.children].forEach(ch => det.insertBefore(ch, dlg));
+      det.open = false;
+      det.classList.remove('seed-sec-popup-open');
+    }
+  }
+  // the pop-up's title bar shows a copy of the live header; refreshed after every updateStates
+  _refreshSecPopupTitle() {
+    const id = this._secPopupOpen;
+    if (!id) return;
+    const det = this.querySelector(`details.seed-sec-popup[data-section-id="${id}"]`);
+    const head = det && det.querySelector(':scope > dialog .ees-sec-popup-head');
+    const sum = det && det.querySelector(':scope > summary');
+    if (head && sum) head.innerHTML = sum.innerHTML;
+  }
+  _clearSecPopupTimer() { if (this._secPopupTimer) { clearTimeout(this._secPopupTimer); this._secPopupTimer = null; } }
+  _armSecPopupTimer() {
+    this._clearSecPopupTimer();
+    const sec = this._secPopupOpen ? this._findSectionById(this._secPopupOpen) : null;
+    if (!sec) return;
+    const n = optNumber(sec.popup_auto_close);
+    const secs = n === null ? CARD_POPUP_AUTO_CLOSE_DEFAULT : n;
+    if (secs > 0) this._secPopupTimer = setTimeout(() => { this._secPopupTimer = null; this._closeSectionPopup(); }, secs * 1000);
+  }
+
   // Assemble the final card wrapper (collapsible <details> or static <div>)
   // around the rendered sections, mount it, and kick off the embedded-card
   // mount. Split out of renderCard so the section loop could be extracted.
   _finishRenderCard(html, styles, container, titleHtml, sectionsHtml, cardCollapsible) {
     // v237: a pop-up open across a full re-render (library update, config change) is rebuilt
     // and reopened in place, keeping its scroll position.
-    const prevDlg = this.querySelector('dialog.ees-popup');
+    const prevDlg = this.querySelector('dialog.ees-card-popup');
     const reopen = this._popupOpen === true;
     const prevScroll = (prevDlg && prevDlg.querySelector('.ees-popup-body')) ? prevDlg.querySelector('.ees-popup-body').scrollTop : 0;
+    const reopenSec = this._secPopupOpen || null;
+    const secDlgPrev = reopenSec ? this.querySelector(`dialog.ees-sec-popup[data-section-id="${reopenSec}"] .ees-popup-body`) : null;
+    const prevSecScroll = secDlgPrev ? secDlgPrev.scrollTop : 0;
+    this._secPopupOpen = null; this._clearSecPopupTimer();
     const popup = this._popupMode();
     if (popup) {
       html += this._popupCardHtml(popup, titleHtml, sectionsHtml);
@@ -5597,14 +5745,23 @@ class SEEDCard extends HTMLElement {
     this._rendered = true;
     this.attachEventListeners();
     this._wireCardPopup();
+    this._wireSectionPopups();
     if (reopen) {
       if (popup) {
         this._openCardPopup();
-        const body = this.querySelector('dialog.ees-popup .ees-popup-body');
+        const body = this.querySelector('dialog.ees-card-popup .ees-popup-body');
         if (body) body.scrollTop = prevScroll;
       } else {
         this._popupOpen = false;
         this._clearCardPopupTimer();
+      }
+    }
+    if (reopenSec) {
+      const sec = this._findSectionById(reopenSec);
+      if (sec && this._sectionPopupOn(sec)) {
+        this._openSectionPopup(reopenSec);
+        const b = this.querySelector(`dialog.ees-sec-popup[data-section-id="${reopenSec}"] .ees-popup-body`);
+        if (b) b.scrollTop = prevSecScroll;
       }
     }
     this.updateGlow();
@@ -5770,12 +5927,12 @@ class SEEDCard extends HTMLElement {
   // — matching the built-in Conditional card, so hidden cards/sections stay
   // reachable in the editor instead of collapsing to a blank area.
   set editMode(v) {
-    const wasPopup = this._popupMode ? this._popupMode() : null;
+    const wasPopup = this._popupSig ? this._popupSig() : null;
     this._edit = !!v;
     this._editMode = this._edit || this._prev;
     if (this._rendered) {
       // v237: entering/leaving edit mode switches a pop-up card between pop-up and inline expand
-      if (this._config && this._popupMode() !== wasPopup) { try { this.renderCard(); } catch (e) {} return; }
+      if (this._config && this._popupSig() !== wasPopup) { try { this.renderCard(); } catch (e) {} return; }
       try { this.applyCardVisibility(); this.updateStates(); } catch (e) {}
     }
   }
@@ -5784,12 +5941,12 @@ class SEEDCard extends HTMLElement {
   // Treat it like edit mode (show everything) so a conditionally-hidden card
   // isn't a blank preview.
   set preview(v) {
-    const wasPopup = this._popupMode ? this._popupMode() : null;
+    const wasPopup = this._popupSig ? this._popupSig() : null;
     this._prev = !!v;
     this._editMode = this._edit || this._prev;
     if (this._rendered) {
       // v237: entering/leaving edit mode switches a pop-up card between pop-up and inline expand
-      if (this._config && this._popupMode() !== wasPopup) { try { this.renderCard(); } catch (e) {} return; }
+      if (this._config && this._popupSig() !== wasPopup) { try { this.renderCard(); } catch (e) {} return; }
       try { this.applyCardVisibility(); this.updateStates(); } catch (e) {}
     }
   }
@@ -7060,6 +7217,8 @@ class SEEDCard extends HTMLElement {
 
   updateStates() {
     if (!this._hass) return;
+    // v239: after this pass, copy the refreshed header into an open section pop-up's title bar
+    if (this._secPopupOpen) Promise.resolve().then(() => { try { this._refreshSecPopupTitle(); } catch (e) {} });
 
     // Card-level Conditional Visibility — re-evaluate as its rules' entities change.
     this.applyCardVisibility();
@@ -7281,7 +7440,7 @@ class SEEDCard extends HTMLElement {
       }
 
       // Keep-expanded: force the section open while it has visible entities.
-      if (section.keep_expanded_when_entities && sectionEl.tagName === 'DETAILS' && count > 0 && !sectionEl.open) {
+      if (section.keep_expanded_when_entities && !this._sectionPopupOn(section) && sectionEl.tagName === 'DETAILS' && count > 0 && !sectionEl.open) {
         sectionEl.open = true;
       }
     });
@@ -7563,6 +7722,43 @@ class SEEDCardEditor extends HTMLElement {
 
   // Resolve a label id to its display name (shared module-level resolver).
   _labelName(id) { return haLabelName(id, this._hass); }
+
+  // v239: per-section "Open as" + pop-up options. Fields carry data-section-id + data-sp-key;
+  // one delegated handler (attachEventListeners) writes them.
+  _edSectionPopupRows(section, sid) {
+    const on = section.open_mode === 'popup';
+    const lab = (t) => `<span style="font-size:12px; color:#ccc;">${t}</span>`;
+    const opt = (v, cur, t) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`;
+    const head = `
+            <div class="seed-ed-checkbox-row">${lab('Open as:')}
+              <select class="ed-sec-pop" data-sp-key="open_mode" data-section-id="${sid}">
+                ${opt('expand', on ? 'popup' : 'expand', 'Expand in place')}${opt('popup', on ? 'popup' : 'expand', 'Pop-up (tap the header)')}
+              </select>
+            </div>`;
+    if (!on) return head;
+    const size = section.popup_size || 'medium';
+    const ac = optNumber(section.popup_auto_close) ?? CARD_POPUP_AUTO_CLOSE_DEFAULT;
+    const dim = optNumber(section.popup_dim) ?? (size === 'small' ? 15 : 55);
+    const blur = optNumber(section.popup_blur) ?? 0;
+    const slider = (key, label, min, max, step, val, text) => `
+            <div class="seed-ed-slider-row">
+              <label><span>${label}:</span></label>
+              <input type="range" class="ed-sec-pop" data-sp-key="${key}" data-section-id="${sid}" min="${min}" max="${max}" step="${step}" value="${val}" />
+              <span class="seed-ed-slider-value">${text}</span>
+            </div>`;
+    return head + `
+            <div class="seed-ed-checkbox-row">${lab('Size:')}
+              <select class="ed-sec-pop" data-sp-key="popup_size" data-section-id="${sid}">${opt('small', size, 'Small (drops from the header)')}${opt('medium', size, 'Medium')}${opt('large', size, 'Large')}${opt('full', size, 'Full screen')}</select>
+            </div>
+            <div class="seed-ed-checkbox-row">
+              <input type="checkbox" class="ed-sec-pop" data-sp-key="popup_title" data-section-id="${sid}" ${section.popup_title === false ? '' : 'checked'} />
+              <label>Title bar (this section's header + close button)</label>
+            </div>
+            ${slider('popup_auto_close', 'Close after', 0, 300, 5, Math.min(ac, 300), ac > 0 ? `${ac}s` : 'Never')}
+            ${slider('popup_dim', 'Backdrop dim', 0, 95, 5, dim, `${dim}%`)}
+            ${slider('popup_blur', 'Backdrop blur', 0, 30, 1, blur, `${blur}px`)}
+            <span class="seed-ed-hint">In the editor preview and dashboard edit mode the section expands in place, so you can still style what's inside.</span>`;
+  }
 
   // v237: the pop-up options under "Open as: Pop-up".
   _edCardPopupRows() {
@@ -9003,13 +9199,15 @@ class SEEDCardEditor extends HTMLElement {
           </div>
           ${section.show_title === false ? '<span class="seed-ed-hint">With the title row hidden, this section always renders expanded.</span>' : ''}
           ${(section.show_title !== false && section.collapsible !== false) ? `
+          ${this._edSectionPopupRows(section, sid)}
+          ${section.open_mode === 'popup' ? '' : `
           <div class="seed-ed-checkbox-row">
             <span style="font-size:12px; color:#ccc;">Default state:</span>
             <select class="ed-section-default-state" data-section-id="${sid}">
               <option value="collapsed" ${(section.default_state || 'collapsed') === 'collapsed' ? 'selected' : ''}>Collapsed</option>
               <option value="expanded" ${section.default_state === 'expanded' ? 'selected' : ''}>Expanded</option>
             </select>
-          </div>
+          </div>`}
           <span class="seed-ed-hint">A collapsed section does not build its cards until it's first opened, so a heavy card (a graph, a camera) costs nothing while closed.</span>
           ` : ''}
 
@@ -9171,13 +9369,15 @@ class SEEDCardEditor extends HTMLElement {
             <label>Collapsible Group</label>
           </div>
           ${(section.show_title !== false && section.collapsible !== false) ? `
+          ${this._edSectionPopupRows(section, sid)}
+          ${section.open_mode === 'popup' ? '' : `
           <div class="seed-ed-checkbox-row">
             <span style="font-size:12px; color:#ccc;">Default state:</span>
             <select class="ed-section-default-state" data-section-id="${sid}">
               <option value="collapsed" ${(section.default_state || 'collapsed') === 'collapsed' ? 'selected' : ''}>Collapsed</option>
               <option value="expanded" ${section.default_state === 'expanded' ? 'selected' : ''}>Expanded</option>
             </select>
-          </div>` : ''}
+          </div>`}` : ''}
 
           <div class="seed-ed-font-row" style="margin-top:6px;">
             <label style="flex:1;">Use Header From
@@ -12837,6 +13037,8 @@ class SEEDCardEditor extends HTMLElement {
             </div>
             ${section.show_title === false ? '<span class="seed-ed-hint">With the title row hidden, this section always renders expanded.</span>' : ''}
             ${(section.show_title !== false && section.collapsible !== false) ? `
+            ${this._edSectionPopupRows(section, section.id)}
+            ${section.open_mode === 'popup' ? '' : `
             <div class="seed-ed-checkbox-row">
               <span style="font-size:12px; color:#ccc;">Default state:</span>
               <select class="ed-section-default-state" data-section-id="${section.id}">
@@ -12847,7 +13049,7 @@ class SEEDCardEditor extends HTMLElement {
             <div class="seed-ed-checkbox-row">
               <input type="checkbox" class="ed-section-keep-expanded" data-section-id="${section.id}" ${section.keep_expanded_when_entities ? 'checked' : ''} />
               <label>Keep expanded while entities are displayed in this section</label>
-            </div>
+            </div>`}
             ` : ''}
             ${section.type === 'activity_table' ? this._atSectionBody(section.id, section) : `
             <div class="seed-ed-checkbox-row">
@@ -15764,6 +15966,31 @@ class SEEDCardEditor extends HTMLElement {
           section.keep_expanded_when_entities = el.checked;
           this._fireConfigChanged();
         }
+      });
+    });
+
+    // v239: per-section pop-up fields
+    this.querySelectorAll('.ed-sec-pop').forEach(el => {
+      const key = el.dataset.spKey;
+      const fmt = (n) => key === 'popup_auto_close' ? (n > 0 ? `${n}s` : 'Never') : key === 'popup_dim' ? `${n}%` : `${n}px`;
+      if (el.type === 'range') el.addEventListener('input', () => {
+        const out = el.parentElement && el.parentElement.querySelector('.seed-ed-slider-value');
+        if (out) out.textContent = fmt(Number(el.value));
+      });
+      el.addEventListener('change', () => {
+        const section = this._findSectionDeep(el.dataset.sectionId);
+        if (!section) return;
+        let v;
+        if (key === 'open_mode') v = el.value === 'popup' ? 'popup' : undefined;
+        else if (key === 'popup_size') v = el.value === 'medium' ? undefined : el.value;
+        else if (key === 'popup_title') v = el.checked ? undefined : false;
+        else if (key === 'popup_auto_close') v = Number(el.value) === CARD_POPUP_AUTO_CLOSE_DEFAULT ? undefined : Number(el.value);
+        else if (key === 'popup_blur') v = Number(el.value) === 0 ? undefined : Number(el.value);
+        else v = Number(el.value);
+        if (v === undefined) delete section[key]; else section[key] = v;
+        if (key === 'open_mode' && v === undefined) SECTION_POPUP_KEYS.forEach(k => delete section[k]);
+        this._fireConfigChanged();
+        if (el.type !== 'range') { this._rendered = false; this.renderEditor(); }
       });
     });
 
