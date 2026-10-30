@@ -5,6 +5,42 @@ resets. Newest first.
 
 ---
 
+## v2026.10.30.237
+
+- **A collapsible card can open as a pop-up instead of expanding.** Card Appearance → *Open as:
+  Pop-up*. It's for cards near the bottom of the screen, which expand off it.
+  - **Opens from:** *tapping the header* (default), or *a header icon* (default `mdi:open-in-new`)
+    while tapping the header still expands in place.
+  - **Size:** Small, **Medium** (default), Large, Full screen. Medium, Large and Full are centred,
+    so they fit wherever the card sits. Small drops from the header at the header's width. When the
+    card is in the lower half of the screen it opens upward, and it's capped to the space on that
+    side, scrolling inside.
+  - **Title bar** (on by default): the card title, the live count from *Count in title*, and a close
+    button. With it off, a small floating close button is shown instead.
+  - **Close after N seconds unused:** default 30, 0 = never. Any tap, key, scroll or input inside
+    restarts the timer.
+  - **Backdrop dim / blur:** default 55% (15% for Small) / 0 px.
+  - Closes with the X, a tap on the backdrop, or Escape.
+- **How it works:** the pop-up is a native `<dialog>` opened with `showModal()`. That puts it in the
+  browser's top layer, above HA's own dialogs, the same as the Easy Thermostat Styler Card. It is a
+  child of the card and holds the card's own sections. It is not a second copy of the card, so live
+  updates, chip and row taps, tables, embedded cards and frames all work in it unchanged. With the
+  icon trigger, the same body moves into the pop-up and back under the header on close.
+- **Kept open across a redraw.** A library update or config change while the pop-up is open rebuilds
+  it, reopens it, and restores its scroll position.
+- **Editor preview and dashboard edit mode** show the card expanding in place, so its contents stay
+  styleable. It switches back when you leave edit mode.
+- With the header as the trigger there's nothing to expand, so the editor hides *Default state* and
+  *Expand when section has entities*. The chevron checkbox becomes *Show the pop-up icon on the title
+  row*.
+- Keys (all optional, written only when used, and the pop-up ones only in pop-up mode):
+  `card_open_mode: popup`, `card_popup_trigger: icon`, `card_popup_icon`,
+  `card_popup_size: small|large|full`, `card_popup_title: false`, `card_popup_auto_close`,
+  `card_popup_dim`, `card_popup_blur`. Existing cards are unchanged.
+- Test: `/shared/user/code/_tests/entity-card-popup.test.mjs` (20 checks under happy-dom; 18 fail
+  against v236), now part of the publish gate. Small's on-screen placement is not covered: the test
+  DOM has no layout.
+
 ## v2026.10.01.236
 
 Docs and examples only; the card code is unchanged from v235.

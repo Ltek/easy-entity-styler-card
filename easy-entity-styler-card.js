@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.10.01.236
+// Version: v2026.10.30.237
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.10.01.236';
+const BUILD_NUMBER = 'v2026.10.30.237';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1642,7 +1642,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.10.01.236: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.10.30.237: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3542,7 +3542,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.10.01.236: card-level links to one section.
+// v2026.10.30.237: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3560,6 +3560,44 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
+// v2026.10.30.237: a collapsible card can open its body in a POP-UP instead of expanding in place
+// (a card near the bottom of the screen otherwise expands off it).
+//   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
+//   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
+//                                       icon opens it and tapping the header still expands
+//   card_popup_icon                     the header icon (trigger icon only); absent = mdi:open-in-new
+//   card_popup_size: small|large|full   absent = medium (centred). Small drops from the header,
+//                                       opening upward when the card is low on the screen
+//   card_popup_title: false             absent = title bar with the card title, live count, close
+//   card_popup_auto_close: N seconds    absent = 30; 0 = never
+//   card_popup_dim: %  card_popup_blur: px    backdrop; absent = 55% (15% for Small) / 0
+// Every key is written only when used, and the popup-only keys only in popup mode.
+const CARD_POPUP_KEYS = ['card_open_mode', 'card_popup_trigger', 'card_popup_icon', 'card_popup_size',
+  'card_popup_title', 'card_popup_auto_close', 'card_popup_dim', 'card_popup_blur'];
+const CARD_POPUP_AUTO_CLOSE_DEFAULT = 30;
+function cardPopupKeys(c) {
+  c = c || {};
+  const out = {};
+  if (c.card_open_mode !== 'popup') return out;
+  out.card_open_mode = 'popup';
+  if (c.card_popup_trigger === 'icon') {
+    out.card_popup_trigger = 'icon';
+    if (typeof c.card_popup_icon === 'string' && c.card_popup_icon.trim()) out.card_popup_icon = c.card_popup_icon.trim();
+  }
+  if (['small', 'large', 'full'].includes(c.card_popup_size)) out.card_popup_size = c.card_popup_size;
+  if (c.card_popup_title === false) out.card_popup_title = false;
+  const int = (v, lo, hi) => { const n = optNumber(v); return n === null ? null : Math.max(lo, Math.min(hi, Math.round(n))); };
+  const ac = int(c.card_popup_auto_close, 0, 3600);
+  if (ac !== null && ac !== CARD_POPUP_AUTO_CLOSE_DEFAULT) out.card_popup_auto_close = ac;
+  const dim = int(c.card_popup_dim, 0, 95); if (dim !== null) out.card_popup_dim = dim;
+  const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
+  return out;
+}
+function stripCardPopupKeys(m) {
+  const keep = cardPopupKeys(m);
+  CARD_POPUP_KEYS.forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
+  return m;
+}
 function stripCardSectionLinkKeys(m) {
   const keep = cardSectionLinkKeys(m);
   ['card_count_section', 'card_expand_when_section', 'card_expand_mode'].forEach(k => {
@@ -3716,6 +3754,9 @@ class SEEDCard extends HTMLElement {
 
   disconnectedCallback() {
     if (this._updateTimer) { clearTimeout(this._updateTimer); this._updateTimer = null; }
+    // v237: a card leaving the page takes its pop-up with it
+    if (this._popupOpen) { try { this._closeCardPopup(); } catch (e) {} }
+    this._clearCardPopupTimer();
     // Stop listening, so a card that is gone is not kept alive (or re-rendered) by the library.
     _offLibListeners(this._onLibChange);
     this._libDetached = true;
@@ -3789,6 +3830,7 @@ class SEEDCard extends HTMLElement {
       // v233: card title shows a section's live count / card auto-expands when a section has
       // entities. Section ids; emitted only when set (byte-stable).
       ...cardSectionLinkKeys(config),
+      ...cardPopupKeys(config),
       rule_sets,
       sections
     };
@@ -3801,6 +3843,7 @@ class SEEDCard extends HTMLElement {
     if (optNumber(merged.card_padding_h) === null) delete merged.card_padding_h;
     if (optNumber(merged.section_header_pad_v) === null) delete merged.section_header_pad_v;
     stripCardSectionLinkKeys(merged);
+    stripCardPopupKeys(merged);
     this._config = merged;
     DEBUG = !!merged.debug;
     if (this._hass) {
@@ -4471,6 +4514,50 @@ class SEEDCard extends HTMLElement {
           flex-shrink: 0;
         }
         details.easy-entity-styler-card-wrapper[open] > .easy-entity-styler-card-summary .easy-entity-styler-card-chevron { transform: rotate(180deg); }
+        /* ---- v237: pop-up card (native dialog -> browser top layer, above HA's own dialogs) ---- */
+        .ees-popup-host > .easy-entity-styler-card-summary { cursor: pointer; }
+        .ees-popup-host > .easy-entity-styler-card-summary:focus-visible { outline: 2px solid var(--primary-color, #2196F3); outline-offset: -2px; }
+        .ees-popup-btn { cursor: pointer; flex-shrink: 0; color: var(--seed-c-secondary); --mdc-icon-size: calc(20px * var(--seed-scale)); border-radius: 50%; padding: 2px; }
+        .ees-popup-btn:hover, .ees-popup-btn:focus-visible { color: var(--primary-text-color); outline: none; }
+        dialog.ees-popup {
+          border: none; padding: 0; background: transparent; color: var(--primary-text-color);
+          width: min(600px, 94vw); max-width: 100vw; max-height: 90vh; overflow: visible;
+        }
+        dialog.ees-popup::backdrop {
+          background: rgba(0, 0, 0, var(--ees-pop-dim, 0.55));
+          -webkit-backdrop-filter: blur(var(--ees-pop-blur, 0px));
+          backdrop-filter: blur(var(--ees-pop-blur, 0px));
+        }
+        dialog.ees-popup.size-small { position: fixed; margin: 0; inset: auto; max-height: var(--ees-pop-h, 90vh); }
+        dialog.ees-popup.size-small::backdrop { background: rgba(0, 0, 0, var(--ees-pop-dim, 0.15)); }
+        dialog.ees-popup.size-large { width: min(1000px, 94vw); }
+        dialog.ees-popup.size-full { width: 100vw; height: 100vh; max-height: 100vh; margin: 0; inset: 0; }
+        .ees-popup-inner {
+          position: relative; display: flex; flex-direction: column; overflow: hidden;
+          max-height: var(--ees-pop-h, 90vh);
+          /* the card's own background (often transparent) laid over the theme card colour */
+          background: linear-gradient(var(--seed-card-bg, transparent), var(--seed-card-bg, transparent)), var(--card-background-color, #1c1c1c);
+          border: 1px solid var(--primary-color, #2196F3);
+          border-radius: var(--ha-card-border-radius, 12px);
+          box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+        }
+        dialog.ees-popup.size-full .ees-popup-inner { height: 100%; max-height: 100vh; border-radius: 0; border: none; }
+        .ees-popup-title {
+          display: flex; align-items: center; gap: 8px; flex: none;
+          padding: calc(var(--seed-pad) * 0.75) calc(var(--seed-pad) * 0.5) calc(var(--seed-pad) * 0.75) calc(var(--seed-pad) * 1.5);
+          border-bottom: 1px solid var(--divider-color, #333);
+          font-size: calc(16px * var(--seed-title-text-scale, 1)); font-weight: 500;
+        }
+        .ees-popup-title-text { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ees-popup-x {
+          border: none; background: transparent; color: var(--secondary-text-color); cursor: pointer;
+          width: 36px; height: 36px; border-radius: 50%; flex: none; --mdc-icon-size: 22px;
+          display: inline-flex; align-items: center; justify-content: center;
+        }
+        .ees-popup-x:hover { color: var(--primary-text-color); background: rgba(127, 127, 127, 0.15); }
+        .ees-popup-close { position: absolute; top: 6px; right: 6px; z-index: 2; background: rgba(0, 0, 0, 0.35); color: #fff; }
+        .ees-popup-body { overflow: auto; flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
+        .ees-popup-body > .easy-entity-styler-card-body { padding-top: var(--seed-pad); }
         .easy-entity-styler-card-body {
           display: flex;
           flex-direction: column;
@@ -5334,11 +5421,144 @@ class SEEDCard extends HTMLElement {
     `;
   }
 
+  // ---- v237: pop-up card ---------------------------------------------------
+  // 'header' | 'icon' | null. Pop-up mode needs a collapsible card. In the editor preview and in
+  // dashboard edit mode the card expands inline instead, so its contents stay styleable.
+  _popupMode() {
+    const c = this._config || {};
+    if (c.card_collapsible !== true || c.card_open_mode !== 'popup' || this._editMode) return null;
+    return c.card_popup_trigger === 'icon' ? 'icon' : 'header';
+  }
+  _popupCardHtml(mode, titleHtml, sectionsHtml) {
+    const c = this._config;
+    const summaryTitleHtml = titleHtml || '<div class="seed-title"><span class="seed-title-text"></span></div>';
+    const glyph = escapeHtml(c.card_popup_icon || 'mdi:open-in-new');
+    const showGlyph = c.show_card_chevron !== false;
+    const size = c.card_popup_size || 'medium';
+    const vars = [];
+    if (optNumber(c.card_popup_dim) !== null) vars.push(`--ees-pop-dim:${Number(c.card_popup_dim) / 100}`);
+    if (optNumber(c.card_popup_blur) !== null) vars.push(`--ees-pop-blur:${Number(c.card_popup_blur)}px`);
+    const close = '<button type="button" class="ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>';
+    const bar = c.card_popup_title === false
+      ? `<button type="button" class="ees-popup-close ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>`
+      : `<div class="ees-popup-title"><span class="ees-popup-title-text">${escapeHtml(String(c.title || ''))}${this._cardTitleCountHtml()}</span>${close}</div>`;
+    const body = `<div class="easy-entity-styler-card-body">${sectionsHtml}</div>`;
+    const dialog = `
+        <dialog class="ees-popup size-${size}"${vars.length ? ` style="${vars.join(';')};"` : ''}>
+          <div class="ees-popup-inner">${bar}<div class="ees-popup-body">${mode === 'header' ? body : ''}</div></div>
+        </dialog>`;
+    if (mode === 'header') {
+      // the header IS the button; the body lives in the dialog
+      return `
+        <div class="easy-entity-styler-card-wrapper ees-popup-host">
+          <div class="easy-entity-styler-card-summary ees-popup-open" role="button" tabindex="0" aria-haspopup="dialog">
+            ${summaryTitleHtml}
+            ${showGlyph ? `<ha-icon class="easy-entity-styler-card-chevron ees-popup-glyph" icon="${glyph}"></ha-icon>` : ''}
+          </div>
+        </div>${dialog}`;
+    }
+    // 'icon': the header still expands; the icon moves the same body into the pop-up and back
+    const expandSid = c.card_expand_when_section;
+    const startOpen = c.card_default_state !== 'collapsed' || (!!expandSid && this._sectionLiveCount(expandSid) > 0);
+    return `
+        <details class="easy-entity-styler-card-wrapper"${startOpen ? ' open' : ''}>
+          <summary class="easy-entity-styler-card-summary">
+            ${summaryTitleHtml}
+            <ha-icon class="ees-popup-open ees-popup-btn" icon="${glyph}" role="button" tabindex="0" aria-haspopup="dialog" title="Open as pop-up"></ha-icon>
+            ${showGlyph ? '<ha-icon class="easy-entity-styler-card-chevron" icon="mdi:chevron-down"></ha-icon>' : ''}
+          </summary>
+          ${body}
+        </details>${dialog}`;
+  }
+  _wireCardPopup() {
+    const dlg = this.querySelector('dialog.ees-popup');
+    if (!dlg) return;
+    this.querySelectorAll('.ees-popup-open').forEach(el => {
+      el.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this._openCardPopup(); });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); this._openCardPopup(); }
+      });
+    });
+    dlg.querySelectorAll('.ees-popup-x').forEach(b => b.addEventListener('click', () => this._closeCardPopup()));
+    // a tap on the backdrop targets the dialog itself (the inner box covers everything else)
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) this._closeCardPopup(); });
+    // Escape: the browser closes it; this keeps our state (and the body's home) in step
+    dlg.addEventListener('close', () => { if (dlg === this.querySelector('dialog.ees-popup')) this._onCardPopupClosed(); });
+    ['pointerdown', 'keydown', 'wheel', 'input'].forEach(ev =>
+      dlg.addEventListener(ev, () => this._armCardPopupTimer(), { passive: true }));
+  }
+  _openCardPopup() {
+    const dlg = this.querySelector('dialog.ees-popup');
+    if (!dlg) return;
+    const slot = dlg.querySelector('.ees-popup-body');
+    const body = this.querySelector('.easy-entity-styler-card-body');
+    if (slot && body && body.parentElement !== slot) { this._popupBodyHome = body.parentElement; slot.appendChild(body); }
+    if (!dlg.open) {
+      try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); }
+    }
+    this._popupOpen = true;
+    this._placeCardPopup(dlg);
+    this._armCardPopupTimer();
+    try { this._mountEmbeddedCards(); } catch (e) {}
+  }
+  _closeCardPopup() {
+    const dlg = this.querySelector('dialog.ees-popup');
+    if (dlg && dlg.open) { try { dlg.close(); } catch (e) { dlg.removeAttribute('open'); } }
+    this._onCardPopupClosed();
+  }
+  _onCardPopupClosed() {
+    this._popupOpen = false;
+    this._clearCardPopupTimer();
+    // icon mode: put the body back under the header
+    const body = this.querySelector('dialog.ees-popup .easy-entity-styler-card-body');
+    if (body && this._popupBodyHome && this._popupBodyHome.isConnected) this._popupBodyHome.appendChild(body);
+    this._popupBodyHome = null;
+  }
+  _clearCardPopupTimer() { if (this._popupTimer) { clearTimeout(this._popupTimer); this._popupTimer = null; } }
+  _armCardPopupTimer() {
+    this._clearCardPopupTimer();
+    const n = optNumber(this._config && this._config.card_popup_auto_close);
+    const secs = n === null ? CARD_POPUP_AUTO_CLOSE_DEFAULT : n;
+    if (this._popupOpen && secs > 0) this._popupTimer = setTimeout(() => { this._popupTimer = null; this._closeCardPopup(); }, secs * 1000);
+  }
+  // Small: drop from the header at its width, opening UP when the card sits in the lower half of
+  // the screen, and capped to the space on that side (it scrolls inside). Other sizes are centred.
+  _placeCardPopup(dlg) {
+    if ((this._config.card_popup_size || 'medium') !== 'small') { dlg.style.left = dlg.style.top = dlg.style.width = ''; return; }
+    const anchor = this.querySelector('.easy-entity-styler-card-summary');
+    if (!anchor || typeof window === 'undefined') return;
+    const place = () => {
+      const t = anchor.getBoundingClientRect();
+      const vw = window.innerWidth || 0, vh = window.innerHeight || 0, gap = 6, edge = 4;
+      const up = t.top > vh / 2;
+      const room = Math.max(160, Math.floor(up ? t.top - gap - edge : vh - t.bottom - gap - edge));
+      const w = Math.round(Math.min(Math.max(t.width, 280), vw * 0.94));
+      dlg.style.width = `${w}px`;
+      dlg.style.setProperty('--ees-pop-h', `${room}px`);
+      const d = dlg.getBoundingClientRect();
+      const h = Math.min(d.height || room, room);
+      const top = up ? t.top - gap - h : t.bottom + gap;
+      const left = t.left + t.width / 2 - w / 2;
+      dlg.style.left = `${Math.round(Math.max(edge, Math.min(left, vw - w - edge)))}px`;
+      dlg.style.top = `${Math.round(Math.max(edge, Math.min(top, vh - h - edge)))}px`;
+    };
+    place();
+    _raf(place);   // again once the content has laid out
+  }
+
   // Assemble the final card wrapper (collapsible <details> or static <div>)
   // around the rendered sections, mount it, and kick off the embedded-card
   // mount. Split out of renderCard so the section loop could be extracted.
   _finishRenderCard(html, styles, container, titleHtml, sectionsHtml, cardCollapsible) {
-    if (cardCollapsible) {
+    // v237: a pop-up open across a full re-render (library update, config change) is rebuilt
+    // and reopened in place, keeping its scroll position.
+    const prevDlg = this.querySelector('dialog.ees-popup');
+    const reopen = this._popupOpen === true;
+    const prevScroll = (prevDlg && prevDlg.querySelector('.ees-popup-body')) ? prevDlg.querySelector('.ees-popup-body').scrollTop : 0;
+    const popup = this._popupMode();
+    if (popup) {
+      html += this._popupCardHtml(popup, titleHtml, sectionsHtml);
+    } else if (cardCollapsible) {
       const showCardChevronFlag = this._config.show_card_chevron !== false;
       // Initial state: 'collapsed' renders the card as just its title bar until
       // the user expands it; anything else (default 'expanded') starts open.
@@ -5371,10 +5591,22 @@ class SEEDCard extends HTMLElement {
     }
 
     container.innerHTML = html;
+    this._popupBodyHome = null;
     this.innerHTML = '';
     this.appendChild(container);
     this._rendered = true;
     this.attachEventListeners();
+    this._wireCardPopup();
+    if (reopen) {
+      if (popup) {
+        this._openCardPopup();
+        const body = this.querySelector('dialog.ees-popup .ees-popup-body');
+        if (body) body.scrollTop = prevScroll;
+      } else {
+        this._popupOpen = false;
+        this._clearCardPopupTimer();
+      }
+    }
     this.updateGlow();
     this.updateCardGlow();
     this.applyCardVisibility();
@@ -5538,18 +5770,28 @@ class SEEDCard extends HTMLElement {
   // — matching the built-in Conditional card, so hidden cards/sections stay
   // reachable in the editor instead of collapsing to a blank area.
   set editMode(v) {
+    const wasPopup = this._popupMode ? this._popupMode() : null;
     this._edit = !!v;
     this._editMode = this._edit || this._prev;
-    if (this._rendered) { try { this.applyCardVisibility(); this.updateStates(); } catch (e) {} }
+    if (this._rendered) {
+      // v237: entering/leaving edit mode switches a pop-up card between pop-up and inline expand
+      if (this._config && this._popupMode() !== wasPopup) { try { this.renderCard(); } catch (e) {} return; }
+      try { this.applyCardVisibility(); this.updateStates(); } catch (e) {}
+    }
   }
   get editMode() { return this._edit === true; }
   // HA sets `preview` on the card in the card-picker / config-dialog preview.
   // Treat it like edit mode (show everything) so a conditionally-hidden card
   // isn't a blank preview.
   set preview(v) {
+    const wasPopup = this._popupMode ? this._popupMode() : null;
     this._prev = !!v;
     this._editMode = this._edit || this._prev;
-    if (this._rendered) { try { this.applyCardVisibility(); this.updateStates(); } catch (e) {} }
+    if (this._rendered) {
+      // v237: entering/leaving edit mode switches a pop-up card between pop-up and inline expand
+      if (this._config && this._popupMode() !== wasPopup) { try { this.renderCard(); } catch (e) {} return; }
+      try { this.applyCardVisibility(); this.updateStates(); } catch (e) {}
+    }
   }
   get preview() { return this._prev === true; }
 
@@ -6824,12 +7066,14 @@ class SEEDCard extends HTMLElement {
 
     // v233: card-title count + card auto-expand ('keep' mode) follow the linked section live.
     if (this._config.card_count_section) {
-      const el = this.querySelector('.seed-title-count');
       const section = (this._config.sections || []).find(s => s.id === this._config.card_count_section);
-      if (el && section) {
+      if (section) {
         const n = this._sectionLiveCount(section.id);
-        el.textContent = `${section.count_prefix ?? ' - '}${n}`;
-        el.style.display = n > 0 ? '' : 'none';
+        // the header title and (v237) the pop-up's title bar
+        this.querySelectorAll('.seed-title-count').forEach(el => {
+          el.textContent = `${section.count_prefix ?? ' - '}${n}`;
+          el.style.display = n > 0 ? '' : 'none';
+        });
       }
     }
     if (this._config.card_expand_when_section && this._config.card_expand_mode === 'keep') {
@@ -7242,6 +7486,7 @@ class SEEDCardEditor extends HTMLElement {
       ...(optNumber(cfg.section_header_pad_v) !== null
         ? { section_header_pad_v: optNumber(cfg.section_header_pad_v) } : {}),
       ...cardSectionLinkKeys(cfg),
+      ...cardPopupKeys(cfg),
       rule_sets,
       sections
     };
@@ -7252,6 +7497,7 @@ class SEEDCardEditor extends HTMLElement {
     if (optNumber(merged.card_padding_h) === null) delete merged.card_padding_h;
     if (optNumber(merged.section_header_pad_v) === null) delete merged.section_header_pad_v;
     stripCardSectionLinkKeys(merged);
+    stripCardPopupKeys(merged);
     return JSON.parse(JSON.stringify(merged));
   }
 
@@ -7317,6 +7563,46 @@ class SEEDCardEditor extends HTMLElement {
 
   // Resolve a label id to its display name (shared module-level resolver).
   _labelName(id) { return haLabelName(id, this._hass); }
+
+  // v237: the pop-up options under "Open as: Pop-up".
+  _edCardPopupRows() {
+    const c = this._config;
+    const lab = (t) => `<span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">${t}</span>`;
+    const opt = (v, cur, t) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`;
+    const trig = c.card_popup_trigger === 'icon' ? 'icon' : 'header';
+    const size = c.card_popup_size || 'medium';
+    const ac = optNumber(c.card_popup_auto_close) ?? CARD_POPUP_AUTO_CLOSE_DEFAULT;
+    const dimDefault = size === 'small' ? 15 : 55;
+    const dim = optNumber(c.card_popup_dim) ?? dimDefault;
+    const blur = optNumber(c.card_popup_blur) ?? 0;
+    const slider = (id, label, min, max, step, val, text) => `
+        <div class="seed-ed-slider-row">
+          <label><span>${label}:</span></label>
+          <input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${val}" />
+          <span class="seed-ed-slider-value" id="${id}-value">${text}</span>
+        </div>`;
+    return `
+        <div class="seed-ed-group-div">Pop-up</div>
+        <div class="seed-ed-checkbox-row">${lab('Opens from:')}
+          <select id="ed-card-popup-trigger">${opt('header', trig, 'Tapping the header')}${opt('icon', trig, 'A header icon (tapping the header still expands)')}</select>
+        </div>
+        ${trig === 'icon' ? `
+        <div class="seed-ed-checkbox-row">${lab('Header icon:')}
+          <input type="text" id="ed-card-popup-icon" value="${escapeHtml(c.card_popup_icon || '')}" placeholder="mdi:open-in-new" style="flex:1 1 160px;min-width:120px;" />
+        </div>` : ''}
+        <div class="seed-ed-checkbox-row">${lab('Size:')}
+          <select id="ed-card-popup-size">${opt('small', size, 'Small (drops from the header)')}${opt('medium', size, 'Medium')}${opt('large', size, 'Large')}${opt('full', size, 'Full screen')}</select>
+        </div>
+        <div class="seed-ed-checkbox-row">
+          <input type="checkbox" id="ed-card-popup-title" ${c.card_popup_title === false ? '' : 'checked'} />
+          <label for="ed-card-popup-title">Title bar (card title, live count, close button)</label>
+        </div>
+        ${slider('ed-card-popup-auto-close', 'Close after', 0, 300, 5, Math.min(ac, 300), ac > 0 ? `${ac}s` : 'Never')}
+        ${slider('ed-card-popup-dim', 'Backdrop dim', 0, 95, 5, dim, `${dim}%`)}
+        ${slider('ed-card-popup-blur', 'Backdrop blur', 0, 30, 1, blur, `${blur}px`)}
+        <span class="seed-ed-hint">In the editor preview and in dashboard edit mode the card expands in place, so you can still style what's inside.</span>
+        <div class="seed-ed-group-div">Collapsed header</div>`;
+  }
 
   // v235: a size / indent value as a design-guide slider row: label, range, bold px readout.
   // The existing per-class 'change' handlers keep working (a range fires 'change' on release);
@@ -12012,6 +12298,10 @@ class SEEDCardEditor extends HTMLElement {
 
     // Whole-card collapsible wrapper
     const cardCollapsible = this._config.card_collapsible === true;
+    // v237: pop-up mode. With the header as the trigger there is nothing to expand, so the
+    // expand-only rows (default state, expand when a section has entities) are hidden.
+    const popupOn = cardCollapsible && this._config.card_open_mode === 'popup';
+    const popupHeader = popupOn && this._config.card_popup_trigger !== 'icon';
 
     html += `
       <details class="seed-ed-row">
@@ -12024,9 +12314,18 @@ class SEEDCardEditor extends HTMLElement {
         </div>
         ${cardCollapsible ? `
         <div class="seed-ed-checkbox-row">
-          <input type="checkbox" id="ed-show-card-chevron" ${showCardChevron ? 'checked' : ''} />
-          <label for="ed-show-card-chevron">Show expand/collapse chevron on the title row</label>
+          <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Open as:</span>
+          <select id="ed-card-open-mode">
+            <option value="expand" ${popupOn ? '' : 'selected'}>Expand in place</option>
+            <option value="popup" ${popupOn ? 'selected' : ''}>Pop-up</option>
+          </select>
         </div>
+        ${popupOn ? this._edCardPopupRows() : ''}
+        <div class="seed-ed-checkbox-row">
+          <input type="checkbox" id="ed-show-card-chevron" ${showCardChevron ? 'checked' : ''} />
+          <label for="ed-show-card-chevron">${popupHeader ? 'Show the pop-up icon on the title row' : 'Show expand/collapse chevron on the title row'}</label>
+        </div>
+        ${popupHeader ? '' : `
         <div class="seed-ed-checkbox-row">
           <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Default state:</span>
           <select id="ed-card-default-state">
@@ -12045,7 +12344,7 @@ class SEEDCardEditor extends HTMLElement {
             <option value="load" ${this._config.card_expand_mode !== 'keep' ? 'selected' : ''}>On load only (a manual collapse stays)</option>
             <option value="keep" ${this._config.card_expand_mode === 'keep' ? 'selected' : ''}>Keep expanded while it has entities</option>
           </select>
-        </div>` : ''}
+        </div>` : ''}`}
         ` : ''}
 
         ${this._edCardSub('title', 'Card Header', `
@@ -15022,6 +15321,45 @@ class SEEDCardEditor extends HTMLElement {
         this._fireConfigChanged();
       });
     }
+    // v237: pop-up options. Structural ones re-render (rows appear/disappear); sliders commit on
+    // release and update their readout while dragging.
+    const popupSel = (id, key, map) => {
+      const el = this.querySelector(id);
+      if (!el) return;
+      el.addEventListener('change', () => {
+        const v = map(el);
+        if (v === undefined) delete this._config[key]; else this._config[key] = v;
+        if (key === 'card_open_mode' && v === undefined) CARD_POPUP_KEYS.forEach(k => delete this._config[k]);
+        this._fireConfigChanged();
+        this._rendered = false; this.renderEditor();
+      });
+    };
+    popupSel('#ed-card-open-mode', 'card_open_mode', el => (el.value === 'popup' ? 'popup' : undefined));
+    popupSel('#ed-card-popup-trigger', 'card_popup_trigger', el => (el.value === 'icon' ? 'icon' : undefined));
+    popupSel('#ed-card-popup-size', 'card_popup_size', el => (el.value === 'medium' ? undefined : el.value));
+    popupSel('#ed-card-popup-title', 'card_popup_title', el => (el.checked ? undefined : false));
+    const popupIconEl = this.querySelector('#ed-card-popup-icon');
+    if (popupIconEl) popupIconEl.addEventListener('change', () => {
+      const v = popupIconEl.value.trim();
+      if (v) this._config.card_popup_icon = v; else delete this._config.card_popup_icon;
+      this._fireConfigChanged();
+    });
+    const popupSlider = (id, key, fmt, toCfg) => {
+      const el = this.querySelector(id);
+      const out = this.querySelector(id + '-value');
+      if (!el) return;
+      el.addEventListener('input', () => { if (out) out.textContent = fmt(Number(el.value)); });
+      el.addEventListener('change', () => {
+        const v = toCfg(Number(el.value));
+        if (v === undefined) delete this._config[key]; else this._config[key] = v;
+        this._fireConfigChanged();
+      });
+    };
+    popupSlider('#ed-card-popup-auto-close', 'card_popup_auto_close', n => (n > 0 ? `${n}s` : 'Never'),
+      n => (n === CARD_POPUP_AUTO_CLOSE_DEFAULT ? undefined : n));
+    popupSlider('#ed-card-popup-dim', 'card_popup_dim', n => `${n}%`, n => n);
+    popupSlider('#ed-card-popup-blur', 'card_popup_blur', n => `${n}px`, n => (n === 0 ? undefined : n));
+
     // v233: card-level section links. Clearing a value deletes the key (byte-stable).
     const linkSelect = (id, key, rerender) => {
       const el = this.querySelector(id);
