@@ -5,6 +5,39 @@ resets. Newest first.
 
 ---
 
+## v2026.11.19.240
+
+Options for replacing `expander-card` + `button-card` headers (EES-FEATURE-GAPS items 1, 2, 4, 5,
+6, 7). All are optional and written only when set; an untouched card is unchanged. Rendered next to
+the 27 originals in Home Assistant 2026.2.3: all 27 match within 1px collapsed, and 25 match
+expanded.
+
+- **Card title bar spacing:** `card_title_pad_v`, `card_title_pad_left`, `card_title_pad_right`
+  (defaults 8 / 12 / 12 px) and `card_title_icon_gap` (default 8 px). In Card Header → *Title bar
+  spacing*.
+- **Padding inside the card frame:** `card_inner_pad_v`, `card_inner_pad_left`,
+  `card_inner_pad_right`. This wraps the title bar and the body together, the way an expander-card's
+  ha-card padding does. When set, the body's own small inset is dropped. In Card Layout → *Padding
+  inside the frame*.
+- **Chevron icon and colour:** `card_chevron_icon` (default `mdi:chevron-down`) and
+  `card_chevron_color` (the four-mode colour control).
+- **Embedded cards section:**
+  - `clear_children: true` draws the child cards without their own background, border and shadow,
+    like expander-card's `clear-children`.
+  - `body_pad_v` / `body_pad_left` / `body_pad_right` inset the body.
+  - `child_margin_top` puts space above each card, like expander-card's `child-margin-top`. Use it
+    with `card_gap: 0`.
+- **Frame Style radius per corner:** `border.radii: [tl, tr, br, bl]`, e.g. `[2, 2, 12, 12]`. An
+  unticked corner stays square. In the Frame Style editor → *Different radius per corner*.
+- **Fixed: a Frame Style background of *theme* left the card transparent.** It now paints HA's card
+  colour. Also fixed: on a collapsible card, a frame background colour and gradient edges were both
+  overridden by the stylesheet's `background` shorthand. That rule now sets only the colour, through a
+  variable.
+- Card-local `frame_presets` are a supported feature, not a legacy path. A pasted card can carry its
+  own frames, and the test suite now checks they resolve.
+- Test: `/shared/user/code/_tests/entity-card-gaps.test.mjs` (20 checks; 13 fail against v239), now
+  part of the publish gate.
+
 ## v2026.10.30.239
 
 - **Pop-up per section.** Any collapsible section with its title row shown can open as a pop-up from

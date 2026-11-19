@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.10.30.239
+// Version: v2026.11.19.240
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.10.30.239';
+const BUILD_NUMBER = 'v2026.11.19.240';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1293,6 +1293,10 @@ function normalizeFramePreset(fx) {
     // card's card_border_corners so the frame model is a superset.)
     corners: Array.isArray(fx.border.corners) && fx.border.corners.length === 4
       ? fx.border.corners.map(c => c !== false) : [true, true, true, true],
+    // v240 (item 5): optional radius PER corner [TL, TR, BR, BL] in px, e.g. [2, 2, 12, 12].
+    // When present it replaces `radius` corner by corner; a corner unticked in `corners` stays square.
+    ...(Array.isArray(fx.border.radii) && fx.border.radii.length === 4 && fx.border.radii.every(r => optNumber(r) !== null)
+      ? { radii: fx.border.radii.map(r => Math.max(0, Math.min(48, Number(r)))) } : {}),
     follow_icon: fx.border.follow_icon === true,
     sides: Array.isArray(fx.border.sides) ? fx.border.sides.filter(s => ['top', 'bottom', 'left', 'right'].includes(s)) : ['top', 'bottom', 'left', 'right']
   };
@@ -1642,7 +1646,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.10.30.239: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.19.240: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -2785,6 +2789,14 @@ function normalizeCardsSection(s) {
     // Vertical gap between stacked child cards (px, pre-scale). 0 is a real
     // value (flush stack), hence optNumber + emit-only-when-set.
     ...(optNumber(s.card_gap) !== null ? { card_gap: optNumber(s.card_gap) } : {}),
+    // v240 (EES-FEATURE-GAPS item 2): draw the embedded cards without their own background,
+    // border and shadow (expander-card's clear-children), and inset the body. Optional.
+    ...(s.clear_children === true ? { clear_children: true } : {}),
+    ...(optPx(s.body_pad_v) !== null ? { body_pad_v: optPx(s.body_pad_v) } : {}),
+    ...(optPx(s.body_pad_left) !== null ? { body_pad_left: optPx(s.body_pad_left) } : {}),
+    ...(optPx(s.body_pad_right) !== null ? { body_pad_right: optPx(s.body_pad_right) } : {}),
+    // margin above EACH child card (expander-card's child-margin-top). Combine with card_gap: 0.
+    ...(optPx(s.child_margin_top) !== null ? { child_margin_top: optPx(s.child_margin_top) } : {}),
     ...(s.hidden === true ? { hidden: true } : {}),
     ...((Array.isArray(s.header_rule_refs) && s.header_rule_refs.length)
       ? { header_rule_refs: normalizeHeaderRuleRefs(s.header_rule_refs) } : {}),
@@ -3545,7 +3557,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.10.30.239: card-level links to one section.
+// v2026.11.19.240: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3563,7 +3575,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.10.30.239: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.19.240: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3596,7 +3608,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.10.30.239: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.19.240: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3615,6 +3627,34 @@ function sectionPopupKeys(s) {
   const dim = int(s.popup_dim, 0, 95); if (dim !== null) out.popup_dim = dim;
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
+}
+// v2026.11.19.240: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+//   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
+//   card_title_icon_gap                                             px; absent = 8
+//   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
+//   card_chevron_color  any colour (four-mode control); absent = the card's secondary text colour
+// All optional and written only when set, so an untouched card is byte-identical.
+//   card_inner_pad_v / card_inner_pad_left / card_inner_pad_right   px; padding INSIDE the card frame,
+//   around the title bar and the body together (what an expander-card's ha-card padding does). When
+//   any is set, the body's own default 4px inset is dropped so this is the card's only inner padding.
+const CARD_INNER_PAD_KEYS = ['card_inner_pad_v', 'card_inner_pad_left', 'card_inner_pad_right'];
+const CARD_TITLE_BAR_KEYS = ['card_title_pad_v', 'card_title_pad_left', 'card_title_pad_right', 'card_title_icon_gap',
+  'card_chevron_icon', 'card_chevron_color', ...CARD_INNER_PAD_KEYS];
+const optPx = (v, hi = 64) => { const n = optNumber(v); return n === null ? null : Math.max(0, Math.min(hi, Math.round(n))); };
+function cardTitleBarKeys(c) {
+  c = c || {};
+  const out = {};
+  ['card_title_pad_v', 'card_title_pad_left', 'card_title_pad_right', 'card_title_icon_gap', ...CARD_INNER_PAD_KEYS].forEach(k => {
+    const n = optPx(c[k]); if (n !== null) out[k] = n;
+  });
+  if (typeof c.card_chevron_icon === 'string' && c.card_chevron_icon.trim()) out.card_chevron_icon = c.card_chevron_icon.trim();
+  if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
+  return out;
+}
+function stripCardTitleBarKeys(m) {
+  const keep = cardTitleBarKeys(m);
+  CARD_TITLE_BAR_KEYS.forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
+  return m;
 }
 function stripCardPopupKeys(m) {
   const keep = cardPopupKeys(m);
@@ -3856,6 +3896,7 @@ class SEEDCard extends HTMLElement {
       // entities. Section ids; emitted only when set (byte-stable).
       ...cardSectionLinkKeys(config),
       ...cardPopupKeys(config),
+      ...cardTitleBarKeys(config),
       rule_sets,
       sections
     };
@@ -3869,6 +3910,7 @@ class SEEDCard extends HTMLElement {
     if (optNumber(merged.section_header_pad_v) === null) delete merged.section_header_pad_v;
     stripCardSectionLinkKeys(merged);
     stripCardPopupKeys(merged);
+    stripCardTitleBarKeys(merged);
     this._config = merged;
     DEBUG = !!merged.debug;
     if (this._hass) {
@@ -3973,8 +4015,9 @@ class SEEDCard extends HTMLElement {
 
   _framePresetsById() {
     const map = {};
-    // Legacy local presets (pre-System-only configs) still resolve so old
-    // cards keep rendering; authoring is library-only going forward.
+    // Card-local presets (`frame_presets`) ALWAYS resolve, alongside the library. This is a
+    // guarantee, not a legacy path (v240, EES-FEATURE-GAPS item 7): it is what lets a pasted card
+    // carry its own frames with no library entries. A `lib:` id of the same name wins below.
     (this._config.frame_presets || []).forEach(fx => { if (fx && fx.id) map[fx.id] = fx; });
     // Overlay the shared System library so `lib:<slug>` refs resolve.
     const lib = frameLibraryMap(this._config.frame_library_scope);
@@ -4101,7 +4144,8 @@ class SEEDCard extends HTMLElement {
       const on = side => acc.border.sides.includes(side);
       // Per-corner radius [TL, TR, BR, BL]: a false corner is square (0).
       const cn = Array.isArray(acc.border.corners) && acc.border.corners.length === 4 ? acc.border.corners : [true, true, true, true];
-      const rad = `${cn[0] ? br : 0}px ${cn[1] ? br : 0}px ${cn[2] ? br : 0}px ${cn[3] ? br : 0}px`;
+      const rr = Array.isArray(acc.border.radii) && acc.border.radii.length === 4 ? acc.border.radii : [br, br, br, br];
+      const rad = `${cn[0] ? rr[0] : 0}px ${cn[1] ? rr[1] : 0}px ${cn[2] ? rr[2] : 0}px ${cn[3] ? rr[3] : 0}px`;
       out.borderVars = {
         top: on('top') ? `${bw}px solid ${bc}` : 'none',
         bottom: on('bottom') ? `${bw}px solid ${bc}` : 'none',
@@ -4239,7 +4283,11 @@ class SEEDCard extends HTMLElement {
       wrapper.style.borderLeft = bv ? bv.left : 'none';
       wrapper.style.borderRight = bv ? bv.right : 'none';
       wrapper.style.borderRadius = bv ? bv.radius : '';
-      wrapper.style.backgroundColor = (fx.background != null && fx.background !== 'theme') ? fx.background : '';
+      // v240 (item 6): 'theme' paints HA's own card colour (it used to unset the background, which
+      // left the card transparent). Set through --seed-card-bg so it also wins on a collapsible card.
+      if (fx.background === 'theme') wrapper.style.setProperty('--seed-card-bg', 'var(--ha-card-background, var(--card-background-color, #1c1c1c))');
+      else if (fx.background != null) wrapper.style.setProperty('--seed-card-bg', fx.background);
+      else wrapper.style.removeProperty('--seed-card-bg');
       if (fx.edge) {
         wrapper.style.backgroundImage = fx.edge.image;
         wrapper.style.backgroundSize = fx.edge.size;
@@ -4253,6 +4301,7 @@ class SEEDCard extends HTMLElement {
       wrapper.style.borderBottom = 'none';
       wrapper.style.borderLeft = 'none';
       wrapper.style.borderRight = 'none';
+      wrapper.style.removeProperty('--seed-card-bg');
     }
   }
 
@@ -4453,6 +4502,13 @@ class SEEDCard extends HTMLElement {
       `--seed-card-title-color: ${this._config.title_text_color || colors.text}`,
       `--seed-card-title-icon-color: ${this._config.title_icon_color || colors.icon}`,
       `--seed-card-title-icon-size: calc(${this._config.title_icon_size || 22}px * var(--seed-scale))`,
+      // v240: title bar spacing + chevron colour, emitted only when set (byte-stable)
+      ...[['card_title_pad_v', '--seed-ctb-pad-v'], ['card_title_pad_left', '--seed-ctb-pad-l'],
+          ['card_title_pad_right', '--seed-ctb-pad-r'], ['card_title_icon_gap', '--seed-ctb-gap'],
+          ['card_inner_pad_v', '--seed-cip-v'], ['card_inner_pad_left', '--seed-cip-l'], ['card_inner_pad_right', '--seed-cip-r']]
+        .filter(([k]) => optNumber(this._config[k]) !== null)
+        .map(([k, v]) => `${v}: calc(${optNumber(this._config[k])}px * var(--seed-scale))`),
+      ...(this._config.card_chevron_color ? [`--seed-ctb-chevron-color: ${this._config.card_chevron_color}`] : []),
       // Palette + global row/chip defaults that section vars fall back to.
       `--seed-c-icon: ${colors.icon}`,
       `--seed-c-text: ${colors.text}`,
@@ -4499,7 +4555,7 @@ class SEEDCard extends HTMLElement {
           padding: 0 var(--seed-pad);
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: var(--seed-ctb-gap, 8px);
         }
         .seed-title ha-icon {
           color: var(--seed-card-title-icon-color);
@@ -4518,8 +4574,13 @@ class SEEDCard extends HTMLElement {
           box-shadow: none;
           overflow: hidden;
           background: var(--seed-card-bg);
+          /* v240: optional padding inside the frame (card_inner_pad_*); 0 = as before */
+          padding: var(--seed-cip-v, 0) var(--seed-cip-r, 0) var(--seed-cip-v, 0) var(--seed-cip-l, 0);
         }
-        details.easy-entity-styler-card-wrapper { background: var(--seed-card-bg) !important; }
+        .easy-entity-styler-card-wrapper.seed-inner-pad > .easy-entity-styler-card-body { padding: 0; }
+        /* v240: background-COLOR only, so an inline edge background-image (a frame's gradient
+           edges) is no longer reset by the shorthand. */
+        details.easy-entity-styler-card-wrapper { background-color: var(--seed-card-bg) !important; }
         .easy-entity-styler-card-summary {
           list-style: none;
           cursor: pointer;
@@ -4527,14 +4588,15 @@ class SEEDCard extends HTMLElement {
           display: flex;
           align-items: center;
           gap: 8px;
-          padding: var(--seed-pad) calc(var(--seed-pad) * 1.5);
+          padding: var(--seed-ctb-pad-v, var(--seed-pad)) var(--seed-ctb-pad-r, calc(var(--seed-pad) * 1.5))
+                   var(--seed-ctb-pad-v, var(--seed-pad)) var(--seed-ctb-pad-l, calc(var(--seed-pad) * 1.5));
         }
         .easy-entity-styler-card-summary::-webkit-details-marker { display: none; }
         .easy-entity-styler-card-summary::marker { content: ""; }
         .easy-entity-styler-card-summary .seed-title { flex: 1; padding: 0; }
         .easy-entity-styler-card-chevron {
           transition: transform 0.25s ease;
-          color: var(--seed-c-secondary);
+          color: var(--seed-ctb-chevron-color, var(--seed-c-secondary));
           --mdc-icon-size: calc(22px * var(--seed-scale));
           flex-shrink: 0;
         }
@@ -4716,14 +4778,24 @@ class SEEDCard extends HTMLElement {
            so this body adds no left row-indent — that would double-inset a card
            that is already inset. The gap is the one thing we own. */
         .seed-children-cards {
-          padding-left: 0;
-          padding-right: 0;
+          /* v240: optional body inset; the fallbacks are exactly the old values (0 0 pad 0) */
+          padding: var(--sec-body-pad-v, 0) var(--sec-body-pad-r, 0) var(--sec-body-pad-v, var(--seed-pad)) var(--sec-body-pad-l, 0);
           gap: var(--sec-card-gap, var(--seed-gap));
+        }
+        /* v240: clear_children — the embedded cards draw no background, border or shadow of their
+           own (expander-card's clear-children). ha-card reads these from inherited custom
+           properties, which cross the children's shadow roots. */
+        .seed-cards-clear > .seed-embed-card {
+          --ha-card-background: transparent;
+          --card-background-color: transparent;
+          --ha-card-border-width: 0px;
+          --ha-card-border-color: transparent;
+          --ha-card-box-shadow: none;
         }
         /* The per-child mount point. display:block (not flex) so a child card
            that sizes itself off its parent's width behaves as it would in a
            normal dashboard column. */
-        .seed-embed-card { display: block; }
+        .seed-embed-card { display: block; margin-top: var(--sec-child-mt, 0); }
         /* GROUP section (v225): a pure container that nests its child sections.
            Its body drops the row-indent (children own their own spacing) and
            stacks them with the standard section gap. Each child keeps its own
@@ -5188,6 +5260,10 @@ class SEEDCard extends HTMLElement {
         ...(optNumber(section.card_gap) !== null
           ? [`--sec-card-gap: calc(${optNumber(section.card_gap)}px * var(--seed-scale))`]
           : []),
+        ...[['body_pad_v', '--sec-body-pad-v'], ['body_pad_left', '--sec-body-pad-l'], ['body_pad_right', '--sec-body-pad-r'],
+            ['child_margin_top', '--sec-child-mt']]
+          .filter(([k]) => optNumber(section[k]) !== null)
+          .map(([k, v]) => `${v}: calc(${optNumber(section[k])}px * var(--seed-scale))`),
         `--sec-entity-icon-color: ${section.entity_icon_color || colors.icon}`,
         `--sec-entity-icon-size: calc(${section.entity_icon_size}px * var(--seed-scale) * var(--seed-icon-scale))`,
         `--sec-entity-text-color: ${section.entity_text_color || colors.text}`,
@@ -5207,7 +5283,7 @@ class SEEDCard extends HTMLElement {
       // drop the .seed-children base row-indent padding (which otherwise sets a
       // floor you can't go below - i.e. can't sit flush-left).
       const atBodyClass = section.type === 'activity_table' ? ' seed-children-at'
-        : section.type === 'cards' ? ' seed-children-cards' : '';
+        : section.type === 'cards' ? ` seed-children-cards${section.clear_children ? ' seed-cards-clear' : ''}` : '';
       const bodyHtml = `<div class="seed-children${chipLayoutClass}${atBodyClass}">${contentHtml}</div>`;
 
       // Per-section entity count. The old global "show entity count" toggle
@@ -5455,6 +5531,8 @@ class SEEDCard extends HTMLElement {
     `;
   }
 
+  _innerPadCls() { return CARD_INNER_PAD_KEYS.some(k => optNumber(this._config[k]) !== null) ? ' seed-inner-pad' : ''; }
+
   // ---- v237: pop-up card ---------------------------------------------------
   // 'header' | 'icon' | null. Pop-up mode needs a collapsible card. In the editor preview and in
   // dashboard edit mode the card expands inline instead, so its contents stay styleable.
@@ -5489,7 +5567,7 @@ class SEEDCard extends HTMLElement {
     if (mode === 'header') {
       // the header IS the button; the body lives in the dialog
       return `
-        <div class="easy-entity-styler-card-wrapper ees-popup-host">
+        <div class="easy-entity-styler-card-wrapper ees-popup-host${this._innerPadCls()}">
           <div class="easy-entity-styler-card-summary ees-popup-open" role="button" tabindex="0" aria-haspopup="dialog">
             ${summaryTitleHtml}
             ${showGlyph ? `<ha-icon class="easy-entity-styler-card-chevron ees-popup-glyph" icon="${glyph}"></ha-icon>` : ''}
@@ -5500,11 +5578,11 @@ class SEEDCard extends HTMLElement {
     const expandSid = c.card_expand_when_section;
     const startOpen = c.card_default_state !== 'collapsed' || (!!expandSid && this._sectionLiveCount(expandSid) > 0);
     return `
-        <details class="easy-entity-styler-card-wrapper"${startOpen ? ' open' : ''}>
+        <details class="easy-entity-styler-card-wrapper${this._innerPadCls()}"${startOpen ? ' open' : ''}>
           <summary class="easy-entity-styler-card-summary">
             ${summaryTitleHtml}
             <ha-icon class="ees-popup-open ees-popup-btn" icon="${glyph}" role="button" tabindex="0" aria-haspopup="dialog" title="Open as pop-up"></ha-icon>
-            ${showGlyph ? '<ha-icon class="easy-entity-styler-card-chevron" icon="mdi:chevron-down"></ha-icon>' : ''}
+            ${showGlyph ? `<ha-icon class="easy-entity-styler-card-chevron" icon="${escapeHtml(c.card_chevron_icon || 'mdi:chevron-down')}"></ha-icon>` : ''}
           </summary>
           ${body}
         </details>${dialog}`;
@@ -5718,10 +5796,10 @@ class SEEDCard extends HTMLElement {
       // pushes the chevron to the right.
       const summaryTitleHtml = titleHtml || '<div class="seed-title"><span class="seed-title-text"></span></div>';
       html += `
-        <details class="easy-entity-styler-card-wrapper"${cardStartOpen ? ' open' : ''}>
+        <details class="easy-entity-styler-card-wrapper${this._innerPadCls()}"${cardStartOpen ? ' open' : ''}>
           <summary class="easy-entity-styler-card-summary">
             ${summaryTitleHtml}
-            ${showCardChevronFlag ? '<ha-icon class="easy-entity-styler-card-chevron" icon="mdi:chevron-down"></ha-icon>' : ''}
+            ${showCardChevronFlag ? `<ha-icon class="easy-entity-styler-card-chevron" icon="${escapeHtml(this._config.card_chevron_icon || 'mdi:chevron-down')}"></ha-icon>` : ''}
           </summary>
           <div class="easy-entity-styler-card-body">${sectionsHtml}</div>
         </details>
@@ -5732,7 +5810,7 @@ class SEEDCard extends HTMLElement {
       // .seed-has-title drives the body's top padding: only a card that actually
       // renders a title row needs it (see the rule in the stylesheet).
       html += `
-        <div class="easy-entity-styler-card-wrapper easy-entity-styler-card-static${titleHtml ? ' seed-has-title' : ''}">
+        <div class="easy-entity-styler-card-wrapper easy-entity-styler-card-static${titleHtml ? ' seed-has-title' : ''}${this._innerPadCls()}">
           <div class="easy-entity-styler-card-body">${titleHtml}${sectionsHtml}</div>
         </div>
       `;
@@ -7646,6 +7724,7 @@ class SEEDCardEditor extends HTMLElement {
         ? { section_header_pad_v: optNumber(cfg.section_header_pad_v) } : {}),
       ...cardSectionLinkKeys(cfg),
       ...cardPopupKeys(cfg),
+      ...cardTitleBarKeys(cfg),
       rule_sets,
       sections
     };
@@ -7657,6 +7736,7 @@ class SEEDCardEditor extends HTMLElement {
     if (optNumber(merged.section_header_pad_v) === null) delete merged.section_header_pad_v;
     stripCardSectionLinkKeys(merged);
     stripCardPopupKeys(merged);
+    stripCardTitleBarKeys(merged);
     return JSON.parse(JSON.stringify(merged));
   }
 
@@ -7722,6 +7802,23 @@ class SEEDCardEditor extends HTMLElement {
 
   // Resolve a label id to its display name (shared module-level resolver).
   _labelName(id) { return haLabelName(id, this._hass); }
+
+  // v240: an optional px value as a slider row. Absent = the card's built-in default, shown as
+  // "Default"; moving the slider writes the key, the group's Reset deletes it again.
+  _edOptPx(key, label, def, max, sid = '') {
+    const cur = sid ? (this._findSectionDeep(sid) || {})[key] : this._config[key];
+    const set = optNumber(cur) !== null;
+    const v = set ? optNumber(cur) : def;
+    return `
+        <div class="seed-ed-slider-row">
+          <label><span>${label}:</span></label>
+          <input type="range" class="ed-opt-px" data-key="${key}"${sid ? ` data-section-id="${sid}"` : ''} min="0" max="${max}" step="1" value="${v}" />
+          <span class="seed-ed-slider-value">${set ? `${v}px` : 'Default'}</span>
+        </div>`;
+  }
+  _edOptPxReset(keys, label, sid = '') {
+    return `<span class="seed-ed-reset-btn ed-opt-px-reset" data-keys="${keys.join(',')}"${sid ? ` data-section-id="${sid}"` : ''} title="Back to the default values"><ha-icon icon="mdi:backup-restore"></ha-icon>${label}</span>`;
+  }
 
   // v239: per-section "Open as" + pop-up options. Fields carry data-section-id + data-sp-key;
   // one delegated handler (attachEventListeners) writes them.
@@ -8852,7 +8949,12 @@ class SEEDCardEditor extends HTMLElement {
               const cn = Array.isArray(bd.corners) ? bd.corners : [true, true, true, true];
               return `<label><input type="checkbox" class="at-check" data-at-sid="${fid}" data-at-path="border.corners.${i}" ${cn[Number(i)] !== false ? 'checked' : ''}/> ${l}</label>`;
             }).join('')}
-          </div>` : ''}
+          </div>
+          <div class="seed-ed-font-row">
+            <label><input type="checkbox" class="fx-radii-toggle" data-at-sid="${fid}" ${Array.isArray(bd.radii) ? 'checked' : ''}/> Different radius per corner</label>
+          </div>
+          ${Array.isArray(bd.radii) ? [['0', 'Top left'], ['1', 'Top right'], ['2', 'Bottom right'], ['3', 'Bottom left']]
+            .map(([i, l]) => this._atSlider(fid, `border.radii.${i}`, `${l} (px)`, bd.radii[Number(i)], 0, 24, 1)).join('') : ''}` : ''}
 
           <div class="seed-ed-group-title">Background</div>
           <div class="seed-ed-font-row">
@@ -8962,7 +9064,8 @@ class SEEDCardEditor extends HTMLElement {
         el.style.borderRight = on('right') ? `${fx.border.width}px solid ${bc}` : 'none';
         const cn = Array.isArray(fx.border.corners) && fx.border.corners.length === 4 ? fx.border.corners : [true, true, true, true];
         const r = fx.border.radius;
-        el.style.borderRadius = `${cn[0] ? r : 0}px ${cn[1] ? r : 0}px ${cn[2] ? r : 0}px ${cn[3] ? r : 0}px`;
+        const rr = Array.isArray(fx.border.radii) && fx.border.radii.length === 4 ? fx.border.radii : [r, r, r, r];
+        el.style.borderRadius = `${cn[0] ? rr[0] : 0}px ${cn[1] ? rr[1] : 0}px ${cn[2] ? rr[2] : 0}px ${cn[3] ? rr[3] : 0}px`;
       } else { el.style.border = 'none'; }
       // Background preview: custom color, explicit transparent, or theme
       // (fall back to the editor's own surface so the swatch stays legible).
@@ -9303,6 +9406,15 @@ class SEEDCardEditor extends HTMLElement {
               <span class="seed-ed-slider-value ed-cards-gap-value" data-section-id="${sid}">${optNumber(section.card_gap)}px</span>
             </div>
             ` : '<span class="seed-ed-hint">Using the card\'s normal section spacing.</span>'}
+            <div class="seed-ed-group-div">Embedded card look${this._edOptPxReset(['body_pad_v', 'body_pad_left', 'body_pad_right', 'child_margin_top'], 'Reset padding', sid)}</div>
+            <div class="seed-ed-checkbox-row">
+              <input type="checkbox" class="ed-cards-clear" data-section-id="${sid}" ${section.clear_children ? 'checked' : ''} />
+              <label>Clear the cards' own background, border and shadow (like expander-card's clear-children)</label>
+            </div>
+            ${this._edOptPx('body_pad_v', 'Padding (top/bottom)', 0, 32, sid)}
+            ${this._edOptPx('body_pad_left', 'Padding (left)', 0, 48, sid)}
+            ${this._edOptPx('body_pad_right', 'Padding (right)', 0, 48, sid)}
+            ${this._edOptPx('child_margin_top', 'Space above each card', 0, 32, sid)}
             ${this._atHeaderRuleRefEditor(sid, section)}
             </div>
           </details>
@@ -12525,6 +12637,14 @@ class SEEDCardEditor extends HTMLElement {
           <input type="checkbox" id="ed-show-card-chevron" ${showCardChevron ? 'checked' : ''} />
           <label for="ed-show-card-chevron">${popupHeader ? 'Show the pop-up icon on the title row' : 'Show expand/collapse chevron on the title row'}</label>
         </div>
+        ${showCardChevron && !popupHeader ? `
+        <div class="seed-ed-checkbox-row">
+          <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Chevron icon:</span>
+          <input type="text" id="ed-card-chevron-icon" value="${escapeHtml(this._config.card_chevron_icon || '')}" placeholder="mdi:chevron-down" style="flex:1 1 160px;min-width:120px;" />
+        </div>
+        ${this._edColorField('config', '', 'card_chevron_color', 'Chevron color', this._config.card_chevron_color,
+          `<input type="color" value="${/^#[0-9a-fA-F]{6}$/.test(this._config.card_chevron_color || '') ? this._config.card_chevron_color : '#808080'}" />`,
+          { seedHex: '#808080', defaultLabel: 'Card default' })}` : ''}
         ${popupHeader ? '' : `
         <div class="seed-ed-checkbox-row">
           <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Default state:</span>
@@ -12609,6 +12729,13 @@ class SEEDCardEditor extends HTMLElement {
         </div>
         ` : ''}
 
+        <div class="seed-ed-group-div">Title bar spacing${this._edOptPxReset(['card_title_pad_v', 'card_title_pad_left', 'card_title_pad_right', 'card_title_icon_gap'], 'Reset')}</div>
+        <span class="seed-ed-hint">Padding applies to a collapsible card's title bar (and a pop-up card's header). Default matches earlier versions: 8px top/bottom, 12px left/right, 8px between icon and text.</span>
+        ${this._edOptPx('card_title_pad_v', 'Padding (top/bottom)', 8, 32)}
+        ${this._edOptPx('card_title_pad_left', 'Padding (left)', 12, 48)}
+        ${this._edOptPx('card_title_pad_right', 'Padding (right)', 12, 48)}
+        ${this._edOptPx('card_title_icon_gap', 'Icon ↔ text gap', 8, 40)}
+
         ${this._atHeaderRuleRefEditor('__card__', this._config, { flush: true })}
         `)}
 
@@ -12675,6 +12802,11 @@ class SEEDCardEditor extends HTMLElement {
           <span class="seed-ed-slider-value" id="ed-card-padding-h-value">${this._config.card_padding_h == null ? 'Default' : currentCardPadH + 'px'}</span>
         </div>
         <span class="seed-ed-reset-btn" id="ed-card-padding-reset" title="Remove the card padding override and go back to the default 8px"><ha-icon icon="mdi:backup-restore"></ha-icon>Reset card padding to default</span>
+        <div class="seed-ed-group-div">Padding inside the frame${this._edOptPxReset(CARD_INNER_PAD_KEYS, 'Reset')}</div>
+        <span class="seed-ed-hint">Space between the card's frame and everything in it, title bar and body together. Use it to match an expander-card's padding. Default: none.</span>
+        ${this._edOptPx('card_inner_pad_v', 'Inner padding (top/bottom)', 0, 32)}
+        ${this._edOptPx('card_inner_pad_left', 'Inner padding (left)', 0, 48)}
+        ${this._edOptPx('card_inner_pad_right', 'Inner padding (right)', 0, 48)}
         `)}
 
         ${this._edCardSub('performance', 'Performance', `
@@ -15968,6 +16100,46 @@ class SEEDCardEditor extends HTMLElement {
         }
       });
     });
+
+    // v240: optional px sliders + their resets, the cards "clear" box, chevron icon, per-corner radius
+    this.querySelectorAll('.ed-opt-px').forEach(el => {
+      const target = () => (el.dataset.sectionId ? this._findSectionDeep(el.dataset.sectionId) : this._config);
+      el.addEventListener('input', () => {
+        const out = el.parentElement && el.parentElement.querySelector('.seed-ed-slider-value');
+        if (out) out.textContent = `${el.value}px`;
+      });
+      el.addEventListener('change', () => {
+        const t = target(); if (!t) return;
+        t[el.dataset.key] = Number(el.value);
+        this._fireConfigChanged();
+      });
+    });
+    this.querySelectorAll('.ed-opt-px-reset').forEach(el => el.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const t = el.dataset.sectionId ? this._findSectionDeep(el.dataset.sectionId) : this._config;
+      if (!t) return;
+      (el.dataset.keys || '').split(',').forEach(k => delete t[k]);
+      this._fireConfigChanged();
+      this._rendered = false; this.renderEditor();
+    }));
+    this.querySelectorAll('.ed-cards-clear').forEach(el => el.addEventListener('change', () => {
+      const sec = this._findSectionDeep(el.dataset.sectionId); if (!sec) return;
+      if (el.checked) sec.clear_children = true; else delete sec.clear_children;
+      this._fireConfigChanged();
+    }));
+    const chevIconEl = this.querySelector('#ed-card-chevron-icon');
+    if (chevIconEl) chevIconEl.addEventListener('change', () => {
+      const v = chevIconEl.value.trim();
+      if (v) this._config.card_chevron_icon = v; else delete this._config.card_chevron_icon;
+      this._fireConfigChanged();
+    });
+    this.querySelectorAll('.fx-radii-toggle').forEach(el => el.addEventListener('change', () => {
+      this._atApply(el.dataset.atSid, fx => {
+        fx.border = fx.border || {};
+        const r = fx.border.radius != null ? Number(fx.border.radius) : 12;
+        if (el.checked) fx.border.radii = [r, r, r, r]; else delete fx.border.radii;
+      });
+    }));
 
     // v239: per-section pop-up fields
     this.querySelectorAll('.ed-sec-pop').forEach(el => {

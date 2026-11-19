@@ -10,7 +10,7 @@ https://github.com/Ltek/easy-entity-styler-card
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=Ltek&repository=easy-entity-styler-card&category=plugin)
 
-Current build: **v2026.10.30.239** · full history in [CHANGELOG.md](CHANGELOG.md)
+Version history: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
@@ -49,6 +49,7 @@ Every option below is fully point-and-click in the visual editor.
 ### Appearance & styling
 - **Colors, fonts & scaling** — global palette plus independent scale sliders (overall, icons, title icon/text, entity text); per-section header/row/chip styling; a secondary info line under entity names.
 - **Card padding** — set the space around the outside edge of the card (vertical and horizontal) independently of its contents, to tune how tightly it sits against neighboring cards without shrinking any text.
+- **Replace expander-card + button-card headers** — card title bar padding and icon-to-text gap, padding inside the card frame, the chevron's icon and colour, embedded cards drawn without their own background/border/shadow (like expander-card's `clear-children`) with a body inset and per-card top margin, and a Frame Style radius per corner (e.g. `2 2 12 12`).
 - **Section header padding** — set the height of the section title band (the space above and below the title text) card-wide, and override it per section. Independent of the **Scale** slider, so tightening the header never shrinks your text.
 - **Chips** — compact, colorful chips in wrap / column / grid layouts, with separate tap and hold actions.
 - **Color blender** — smooth value-driven color gradients for any icon or text color (value → color stops, interpolated).
