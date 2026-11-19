@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.19.240
+// Version: v2026.11.19.241
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.19.240';
+const BUILD_NUMBER = 'v2026.11.19.241';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1646,7 +1646,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.19.240: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.19.241: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -2741,6 +2741,7 @@ function normalizeGroupSection(s) {
     title_indent: s.title_indent ?? 0,
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
     ...sectionPopupKeys(s),
+    ...titleRightKeys(s),
     // Vertical gap between the group's stacked MEMBERS (px, pre-scale). 0 is a
     // real value (flush), hence optNumber + emit-only-when-set: an untouched
     // group emits nothing and inherits the historical --seed-gap.
@@ -2785,6 +2786,7 @@ function normalizeCardsSection(s) {
     // inherits the card's `section_header_pad_v` (see the .seed-summary chain).
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
     ...sectionPopupKeys(s),
+    ...titleRightKeys(s),
     frame: normalizeFrameRef(s.frame),
     // Vertical gap between stacked child cards (px, pre-scale). 0 is a real
     // value (flush stack), hence optNumber + emit-only-when-set.
@@ -2835,6 +2837,7 @@ function normalizeSection(s) {
     // conditional spread so an untouched section emits nothing.
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
     ...sectionPopupKeys(s),
+    ...titleRightKeys(s),
     // Force the section open whenever it has visible entities (only meaningful
     // for a collapsible section). Overrides auto-close while entities show.
     keep_expanded_when_entities: s.keep_expanded_when_entities === true,
@@ -3557,7 +3560,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.19.240: card-level links to one section.
+// v2026.11.19.241: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3575,7 +3578,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.19.240: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.19.241: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3608,7 +3611,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.19.240: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.19.241: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3628,7 +3631,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.19.240: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.19.241: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3650,6 +3653,55 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_icon === 'string' && c.card_chevron_icon.trim()) out.card_chevron_icon = c.card_chevron_icon.trim();
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
+}
+// v2026.11.19.241 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// every section header alike. Same four keys at both levels (card ones prefixed `card_`):
+//   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
+//                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
+//   title_right_show   false hides it while keeping the template (absent = shown)
+//   title_right_color  four-mode colour; absent = the secondary text colour
+//   title_right_size   px; absent = 13
+// If any token's entity is missing, unknown or unavailable, the whole text is hidden.
+const TITLE_RIGHT_KEYS = ['title_right', 'title_right_show', 'title_right_color', 'title_right_size'];
+function titleRightKeys(c, prefix = '') {
+  c = c || {};
+  const k = (n) => prefix + n;
+  const out = {};
+  const tpl = typeof c[k('title_right')] === 'string' ? c[k('title_right')] : '';
+  if (!tpl.trim()) return out;
+  out[k('title_right')] = tpl;
+  if (c[k('title_right_show')] === false) out[k('title_right_show')] = false;
+  if (typeof c[k('title_right_color')] === 'string' && c[k('title_right_color')].trim()) out[k('title_right_color')] = c[k('title_right_color')].trim();
+  const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
+  return out;
+}
+function stripTitleRightKeys(m, prefix = '') {
+  const keep = titleRightKeys(m, prefix);
+  TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
+  return m;
+}
+// Resolve a right-text template. Returns null when it should be hidden (empty, or any token's
+// entity missing / unknown / unavailable).
+function renderTitleRight(tpl, hass) {
+  if (!tpl || !hass || !hass.states) return null;
+  let bad = false;
+  const out = tpl.replace(/\{entity:([^:}]+)(?::([^}]+))?\}/g, (m, id, attr) => {
+    const st = hass.states[id.trim()];
+    if (!st || st.state === 'unavailable' || st.state === 'unknown' || st.state == null) { bad = true; return ''; }
+    if (attr === 'raw') return String(st.state);
+    if (!attr) {
+      if (typeof hass.formatEntityState === 'function') { try { return String(hass.formatEntityState(st)); } catch (e) {} }
+      const u = st.attributes && st.attributes.unit_of_measurement;
+      return u ? `${st.state} ${u}` : String(st.state);
+    }
+    const v = st.attributes ? st.attributes[attr] : undefined;
+    if (v == null) { bad = true; return ''; }
+    if (typeof hass.formatEntityAttributeValue === 'function') { try { return String(hass.formatEntityAttributeValue(st, attr)); } catch (e) {} }
+    return String(v);
+  });
+  if (bad) return null;
+  const t = out.trim();
+  return t ? t : null;
 }
 function stripCardTitleBarKeys(m) {
   const keep = cardTitleBarKeys(m);
@@ -3897,6 +3949,7 @@ class SEEDCard extends HTMLElement {
       ...cardSectionLinkKeys(config),
       ...cardPopupKeys(config),
       ...cardTitleBarKeys(config),
+      ...titleRightKeys(config, 'card_'),
       rule_sets,
       sections
     };
@@ -3911,6 +3964,7 @@ class SEEDCard extends HTMLElement {
     stripCardSectionLinkKeys(merged);
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
+    stripTitleRightKeys(merged, 'card_');
     this._config = merged;
     DEBUG = !!merged.debug;
     if (this._hass) {
@@ -4562,6 +4616,12 @@ class SEEDCard extends HTMLElement {
           --mdc-icon-size: var(--seed-card-title-icon-size);
         }
         .seed-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* v241: right-side header text (card title + section headers) */
+        .ees-title-right {
+          flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          font-size: calc(13px * var(--seed-scale, 1)); font-weight: 400; color: var(--seed-c-secondary);
+          margin-left: auto;
+        }
         .seed-title-last-changed {
           font-size: calc(12px * var(--seed-scale));
           font-weight: 400;
@@ -5085,6 +5145,7 @@ class SEEDCard extends HTMLElement {
         <div class="seed-title">
           ${showTitleIcon ? `<ha-icon icon="${titleIconGlyph}"${titleIconStyle ? ` style="${titleIconStyle}"` : ''}></ha-icon>` : ''}
           ${showTitleText ? `<span class="seed-title-text"${titleTextStyle ? ` style="${titleTextStyle}"` : ''}>${this._config.title}${this._cardTitleCountHtml()}</span>` : ''}
+          ${this._titleRightHtml(this._config, 'card_', '__card__')}
           ${lastChangedText ? `<span class="seed-title-last-changed">${lastChangedText}</span>` : ''}
           ${cts.secondaryText ? `<span class="seed-title-secondary">${escapeHtml(String(cts.secondaryText))}</span>` : ''}
         </div>
@@ -5396,6 +5457,7 @@ class SEEDCard extends HTMLElement {
       ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
     return `
       <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${section.name || ''}${titleCountHtml}${secondaryHtml}</div>
+      ${this._titleRightHtml(section, '', section.id)}
       ${rightCountHtml}
       <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
     `;
@@ -5499,6 +5561,7 @@ class SEEDCard extends HTMLElement {
         ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
       headerHtml = `
         <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${escapeHtml(String(groupName))}${secondaryHtml}</div>
+        ${this._titleRightHtml(section, '', section.id)}
         <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
       `;
     }
@@ -5531,6 +5594,31 @@ class SEEDCard extends HTMLElement {
     `;
   }
 
+  // v241: the right-side header text. `src` is the card config (prefix 'card_') or a section.
+  _titleRightHtml(src, prefix, id) {
+    const k = (n) => prefix + n;
+    const tpl = src && src[k('title_right')];
+    if (!tpl || src[k('title_right_show')] === false) return '';
+    const txt = renderTitleRight(tpl, this._hass);
+    const st = [
+      src[k('title_right_color')] ? `color:${src[k('title_right_color')]};` : '',
+      optNumber(src[k('title_right_size')]) !== null ? `font-size:calc(${optNumber(src[k('title_right_size')])}px * var(--seed-scale, 1));` : '',
+      txt === null ? 'display:none;' : '',
+    ].join('');
+    return `<span class="ees-title-right" data-ees-right="${escapeHtml(id)}"${st ? ` style="${st}"` : ''}>${escapeHtml(txt || '')}</span>`;
+  }
+  _refreshTitleRights() {
+    this.querySelectorAll('.ees-title-right').forEach(el => {
+      const id = el.dataset.eesRight;
+      const src = id === '__card__' ? this._config : this._findSectionById(id);
+      const prefix = id === '__card__' ? 'card_' : '';
+      if (!src) return;
+      const txt = renderTitleRight(src[prefix + 'title_right'], this._hass);
+      el.textContent = txt || '';
+      el.style.display = txt === null ? 'none' : '';
+    });
+  }
+
   _innerPadCls() { return CARD_INNER_PAD_KEYS.some(k => optNumber(this._config[k]) !== null) ? ' seed-inner-pad' : ''; }
 
   // ---- v237: pop-up card ---------------------------------------------------
@@ -5558,7 +5646,7 @@ class SEEDCard extends HTMLElement {
     const close = '<button type="button" class="ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>';
     const bar = c.card_popup_title === false
       ? `<button type="button" class="ees-popup-close ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>`
-      : `<div class="ees-popup-title"><span class="ees-popup-title-text">${escapeHtml(String(c.title || ''))}${this._cardTitleCountHtml()}</span>${close}</div>`;
+      : `<div class="ees-popup-title"><span class="ees-popup-title-text">${escapeHtml(String(c.title || ''))}${this._cardTitleCountHtml()}</span>${this._titleRightHtml(c, 'card_', '__card__')}${close}</div>`;
     const body = `<div class="easy-entity-styler-card-body">${sectionsHtml}</div>`;
     const dialog = `
         <dialog class="ees-popup ees-card-popup size-${size}"${vars.length ? ` style="${vars.join(';')};"` : ''}>
@@ -6724,6 +6812,8 @@ class SEEDCard extends HTMLElement {
       push(badge, this._headerBadgeHtml(section, badge));
     });
 
+    const rightTxt = this._titleRightHtml(section, '', section.id);
+    if (rightTxt) zones.right.unshift(rightTxt);
     const zoneHtml = (name, justify) =>
       `<div class="seed-at-title-zone" style="justify-content:${justify};">${zones[name].join('')}</div>`;
 
@@ -7295,6 +7385,8 @@ class SEEDCard extends HTMLElement {
 
   updateStates() {
     if (!this._hass) return;
+    // v241: right-side header text follows its entities (after this pass, so rebuilt headers count)
+    Promise.resolve().then(() => { try { this._refreshTitleRights(); } catch (e) {} });
     // v239: after this pass, copy the refreshed header into an open section pop-up's title bar
     if (this._secPopupOpen) Promise.resolve().then(() => { try { this._refreshSecPopupTitle(); } catch (e) {} });
 
@@ -7725,6 +7817,7 @@ class SEEDCardEditor extends HTMLElement {
       ...cardSectionLinkKeys(cfg),
       ...cardPopupKeys(cfg),
       ...cardTitleBarKeys(cfg),
+      ...titleRightKeys(cfg, 'card_'),
       rule_sets,
       sections
     };
@@ -7737,6 +7830,7 @@ class SEEDCardEditor extends HTMLElement {
     stripCardSectionLinkKeys(merged);
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
+    stripTitleRightKeys(merged, 'card_');
     return JSON.parse(JSON.stringify(merged));
   }
 
@@ -7802,6 +7896,33 @@ class SEEDCardEditor extends HTMLElement {
 
   // Resolve a label id to its display name (shared module-level resolver).
   _labelName(id) { return haLabelName(id, this._hass); }
+
+  // v241: "Right side" rows, identical for the card title (sid '') and any section header.
+  _edTitleRightRows(sid = '') {
+    const src = sid ? (this._findSectionDeep(sid) || {}) : this._config;
+    const pre = sid ? '' : 'card_';
+    const k = (n) => pre + n;
+    const tpl = src[k('title_right')] || '';
+    const d = `data-tr-key="%" ${sid ? `data-section-id="${sid}"` : ''}`;
+    const show = tpl && src[k('title_right_show')] !== false;
+    const size = optNumber(src[k('title_right_size')]);
+    return `
+        <div class="seed-ed-group-div">Right side${tpl ? `<span class="seed-ed-reset-btn ed-tr-reset" ${d.replace('%', k('title_right'))} title="Remove the right-side text"><ha-icon icon="mdi:backup-restore"></ha-icon>Clear</span>` : ''}</div>
+        <span class="seed-ed-hint">Text on the right of the header, side by side with ${sid ? 'the right-hand count' : 'the "last changed" time'}. <code>{entity:sensor.x}</code> shows its state as HA formats it ("1.84 kW"); <code>{entity:sensor.x:attribute}</code> an attribute; <code>{entity:sensor.x:raw}</code> the bare state. Hidden while any of its entities is unavailable or unknown.</span>
+        <div class="seed-ed-checkbox-row">
+          <input type="checkbox" class="ed-tr" ${d.replace('%', k('title_right_show'))} ${show ? 'checked' : ''} ${tpl ? '' : 'disabled'} />
+          <input type="text" class="ed-tr" ${d.replace('%', k('title_right'))} value="${escapeHtml(tpl)}" placeholder="e.g. {entity:sensor.power}" style="flex:1 1 200px;min-width:150px;" />
+        </div>
+        ${tpl ? `
+        ${this._edColorField(sid ? 'section' : 'config', sid, k('title_right_color'), 'Color', src[k('title_right_color')],
+          `<input type="color" value="${/^#[0-9a-fA-F]{6}$/.test(src[k('title_right_color')] || '') ? src[k('title_right_color')] : '#808080'}" />`,
+          { seedHex: '#808080', defaultLabel: 'Card default' })}
+        <div class="seed-ed-slider-row">
+          <label><span>Size:</span></label>
+          <input type="range" class="ed-tr" ${d.replace('%', k('title_right_size'))} min="8" max="32" step="1" value="${size ?? 13}" />
+          <span class="seed-ed-slider-value">${size === null ? 'Default' : `${size}px`}</span>
+        </div>` : ''}`;
+  }
 
   // v240: an optional px value as a slider row. Absent = the card's built-in default, shown as
   // "Default"; moving the slider writes the key, the group's Reset deletes it again.
@@ -9394,6 +9515,7 @@ class SEEDCardEditor extends HTMLElement {
             </div>
             ` : '<span class="seed-ed-hint">Following the card\'s <em>Section Header Defaults</em>.</span>'}
 
+            ${this._edTitleRightRows(sid)}
             <div class="seed-ed-group-div">Spacing between cards</div>
             <div class="seed-ed-checkbox-row">
               <input type="checkbox" class="ed-cards-gap-override" data-section-id="${sid}" ${optNumber(section.card_gap) !== null ? 'checked' : ''} />
@@ -9552,6 +9674,7 @@ class SEEDCardEditor extends HTMLElement {
                   { seedHex: colors.text || '#e1e1e1', defaultLabel: 'Card default' })}
                 ${this._edSizeSlider('ed-section-title-size', sid, 'Title font size', section.title_font_size, 8, 40)}
               </div>
+              ${this._edTitleRightRows(sid)}
             </div>
           </details>
 
@@ -11006,6 +11129,7 @@ class SEEDCardEditor extends HTMLElement {
             ? this._atSlider(sid, 'header_pad_v', 'Header padding, top/bottom (px)', optNumber(section.header_pad_v), 0, 24, 1, 'Flush (0)')
             : '<span class="seed-ed-hint">Following the card\'s <em>Section Header Defaults</em>.</span>'}
           <span class="seed-ed-hint">Tokens for any template: ${this._AT_TITLE_TOKENS}. Type freely and mix with text.</span>
+          ${this._edTitleRightRows(sid)}
 
           <details class="seed-ed-substyle"><summary>Icon part</summary><div class="seed-ed-substyle-body">
             ${this._atTitlePartEditor(sid, 'icon', 'Show icon', parts.icon, false)}
@@ -12707,6 +12831,7 @@ class SEEDCardEditor extends HTMLElement {
           <label style="margin-left:auto;"><input type="checkbox" id="ed-show-last-changed" ${showLastChanged ? 'checked' : ''} /> Show "last changed" time</label>
         </div>
         ` : ''}
+        ${this._edTitleRightRows()}
 
         <div class="seed-ed-group-title">Title Icon</div>
         <div class="seed-ed-pair">
@@ -13305,6 +13430,7 @@ class SEEDCardEditor extends HTMLElement {
               </div>
               ` : ''}
 
+              ${this._edTitleRightRows(section.id)}
               <div class="seed-ed-group-div">Never list an entity</div>
               <div class="seed-ed-checkbox-row">
                 <span style="font-size:12px; color:#ccc;">Skip the entity entirely when its state is:</span>
@@ -16101,6 +16227,33 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
+    // v241: right-side header text
+    this.querySelectorAll('.ed-tr').forEach(el => {
+      const target = () => (el.dataset.sectionId ? this._findSectionDeep(el.dataset.sectionId) : this._config);
+      const key = el.dataset.trKey;
+      if (el.type === 'range') el.addEventListener('input', () => {
+        const out = el.parentElement && el.parentElement.querySelector('.seed-ed-slider-value');
+        if (out) out.textContent = `${el.value}px`;
+      });
+      el.addEventListener('change', () => {
+        const t = target(); if (!t) return;
+        if (el.type === 'checkbox') { if (el.checked) delete t[key]; else t[key] = false; }
+        else if (el.type === 'range') t[key] = Number(el.value);
+        else { const v = el.value; if (v.trim()) t[key] = v; else delete t[key]; }
+        this._fireConfigChanged();
+        if (el.type === 'text') { this._rendered = false; this.renderEditor(); }   // colour/size rows appear
+      });
+    });
+    this.querySelectorAll('.ed-tr-reset').forEach(el => el.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const t = el.dataset.sectionId ? this._findSectionDeep(el.dataset.sectionId) : this._config;
+      if (!t) return;
+      const pre = el.dataset.sectionId ? '' : 'card_';
+      TITLE_RIGHT_KEYS.forEach(n => delete t[pre + n]);
+      this._fireConfigChanged();
+      this._rendered = false; this.renderEditor();
+    }));
+
     // v240: optional px sliders + their resets, the cards "clear" box, chevron icon, per-corner radius
     this.querySelectorAll('.ed-opt-px').forEach(el => {
       const target = () => (el.dataset.sectionId ? this._findSectionDeep(el.dataset.sectionId) : this._config);
@@ -16468,7 +16621,7 @@ class SEEDCardEditor extends HTMLElement {
         // card sees a new object, matching the existing #ed-color-* handlers).
         this._config.colors = { ...this._config.colors, [key]: value };
       } else {
-        const section = (this._config.sections || []).find(s => s.id === sid);
+        const section = this._findSectionDeep(sid);   // v241: group members too
         if (!section) return false;
         if (scope === 'si') {
           section.secondary_info = section.secondary_info || { enabled: true, source: 'attribute' };

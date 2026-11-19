@@ -5,6 +5,30 @@ resets. Newest first.
 
 ---
 
+## v2026.11.19.241
+
+- **Text on the right of any header (EES-FEATURE-GAPS 3b).** The card title and every section
+  header (Entity List, Entity Table, Embed Card, Group) take the same four settings, under *Right
+  side* in each header panel:
+  - `title_right` is a template with live tokens:
+    - `{entity:ID}` gives the state as HA formats it, e.g. "1.84 kW".
+    - `{entity:ID:attribute}` gives an attribute.
+    - `{entity:ID:raw}` gives the bare state.
+  - It is **hidden** while any of its entities is missing, unknown or unavailable, and comes back
+    when they recover.
+  - `title_right_show: false` hides it but keeps the template.
+  - `title_right_color` uses the four-mode colour control; `title_right_size` is in px (default 13).
+  - On the card the keys are prefixed `card_`.
+- **Placement.** It sits side by side with the other right-hand items, in front of them: before
+  "last changed" on the card title, before the right-hand count on a section, and first in a table's
+  right zone. Each item has its own show/hide. The card pop-up's title bar shows it too. It is
+  capped at half the bar's width and truncates with "…" before the title does.
+- State text is inserted escaped, so it can't inject markup.
+- Fixed: a colour option on a section inside a Group didn't save. The colour writer only searched
+  top-level sections.
+- Test: `/shared/user/code/_tests/entity-card-title-right.test.mjs` (15 checks; 14 fail against
+  v240), now part of the publish gate.
+
 ## v2026.11.19.240
 
 Options for replacing `expander-card` + `button-card` headers (EES-FEATURE-GAPS items 1, 2, 4, 5,
