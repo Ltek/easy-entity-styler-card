@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.20.247
+// Version: v2026.11.20.248
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.20.247';
+const BUILD_NUMBER = 'v2026.11.20.248';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1663,7 +1663,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.20.247: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.20.248: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -1817,7 +1817,7 @@ function normalizeFrameRef(f) {
 // Modeled 1:1 on Frame Styles: read-only Built-In + shared System library.
 // ---------------------------------------------------------------------------
 const HEADER_RULE_OUTPUT_KEYS = [
-  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary', 'set_right', 'set_title'
+  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary', 'set_right', 'set_title', 'set_title_suffix'
 ];
 // v2026.11.19.242 (EES-FEATURE-GAPS 3a): what a rule TESTS. Absent = the bound entity (as before).
 //   { type: 'entities', entities: [ids], match?: 'all' }  `when` is tested on each; any (default) or all
@@ -1871,6 +1871,7 @@ function normalizeHeaderRule(r) {
   if (typeof r.set_right === 'string' && r.set_right.trim()) out.set_right = r.set_right;
   // v246: the header's title (tokens allowed); first matching rule wins, like every output
   if (typeof r.set_title === 'string' && r.set_title.trim()) out.set_title = r.set_title;
+  if (typeof r.set_title_suffix === 'string' && r.set_title_suffix.trim()) out.set_title_suffix = r.set_title_suffix;   // v248
   const src = normalizeHeaderRuleSource(r.source);
   if (src) {
     out.source = src;
@@ -2809,6 +2810,7 @@ function normalizeGroupSection(s) {
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
     ...sectionPopupKeys(s),
     ...titleRightKeys(s),
+    ...titleExtraKeys(s),
     // Vertical gap between the group's stacked MEMBERS (px, pre-scale). 0 is a
     // real value (flush), hence optNumber + emit-only-when-set: an untouched
     // group emits nothing and inherits the historical --seed-gap.
@@ -2854,6 +2856,7 @@ function normalizeCardsSection(s) {
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
     ...sectionPopupKeys(s),
     ...titleRightKeys(s),
+    ...titleExtraKeys(s),
     frame: normalizeFrameRef(s.frame),
     // Vertical gap between stacked child cards (px, pre-scale). 0 is a real
     // value (flush stack), hence optNumber + emit-only-when-set.
@@ -2906,6 +2909,7 @@ function normalizeSection(s) {
     ...(optNumber(s.header_pad_v) !== null ? { header_pad_v: optNumber(s.header_pad_v) } : {}),
     ...sectionPopupKeys(s),
     ...titleRightKeys(s),
+    ...titleExtraKeys(s),
     // Force the section open whenever it has visible entities (only meaningful
     // for a collapsible section). Overrides auto-close while entities show.
     keep_expanded_when_entities: s.keep_expanded_when_entities === true,
@@ -3628,7 +3632,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.20.247: card-level links to one section.
+// v2026.11.20.248: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3646,7 +3650,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.20.247: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.20.248: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3679,7 +3683,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.20.247: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.20.248: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3699,7 +3703,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.20.247: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.20.248: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3722,7 +3726,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.20.247 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.20.248 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3744,7 +3748,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.20.247 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.20.248 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3762,12 +3766,36 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
+// v2026.11.20.248 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+//   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
+//       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
+//   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
+//       stacked under title_right
+const TITLE_EXTRA_KEYS = ['title_suffix', 'title_suffix_color', 'title_suffix_size', 'title_right2', 'title_right2_color', 'title_right2_size'];
+function titleExtraKeys(c, prefix = '') {
+  c = c || {};
+  const k = (n) => prefix + n;
+  const out = {};
+  ['title_suffix', 'title_right2'].forEach(base => {
+    const v = c[k(base)];
+    if (typeof v === 'string' && v.trim()) out[k(base)] = v;
+    const col = c[k(base + '_color')];
+    if (typeof col === 'string' && col.trim()) out[k(base + '_color')] = col.trim();
+    const sz = optPx(c[k(base + '_size')], 48); if (sz !== null && sz >= 6) out[k(base + '_size')] = sz;
+  });
+  return out;
+}
+function stripTitleExtraKeys(m, prefix = '') {
+  const keep = titleExtraKeys(m, prefix);
+  TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
+  return m;
+}
 function stripTitleRightKeys(m, prefix = '') {
   const keep = titleRightKeys(m, prefix);
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.20.247: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.20.248: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4112,6 +4140,7 @@ class SEEDCard extends HTMLElement {
       ...cardPopupKeys(config),
       ...cardTitleBarKeys(config),
       ...titleRightKeys(config, 'card_'),
+      ...titleExtraKeys(config, 'card_'),
       ...cardHeaderCardKeys(config),
       ...((Array.isArray(config.header_rules) && config.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(config.header_rules) } : {}),
       rule_sets,
@@ -4129,6 +4158,7 @@ class SEEDCard extends HTMLElement {
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
+    stripTitleExtraKeys(merged, 'card_');
     stripCardHeaderCardKeys(merged);
     if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     this._config = merged;
@@ -4790,6 +4820,11 @@ class SEEDCard extends HTMLElement {
         .ees-header-card-host { position: relative; flex: 1 1 auto; min-width: 0; padding: 0; display: block; }
         .ees-header-card-slot { display: block; min-width: 0; }
         .ees-header-card-overlay { position: absolute; inset: 0; cursor: pointer; z-index: 1; }
+        /* v248: title suffix + stacked second right-side line */
+        .ees-title-suffix { margin-left: 0.4em; font-weight: 400; white-space: nowrap; }
+        .ees-right-stack { display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; max-width: 50%; min-width: 0; line-height: 1.25; }
+        .ees-right-stack > .ees-title-right { margin-left: 0; max-width: 100%; }
+        .ees-title-right2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
         /* v241: right-side header text (card title + section headers) */
         .ees-title-right {
           flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -5325,7 +5360,7 @@ class SEEDCard extends HTMLElement {
       titleHtml = `
         <div class="seed-title">
           ${showTitleIcon ? `<ha-icon icon="${titleIconGlyph}"${titleIconStyle ? ` style="${titleIconStyle}"` : ''}></ha-icon>` : ''}
-          ${showTitleText ? `<span class="seed-title-text"${titleTextStyle ? ` style="${titleTextStyle}"` : ''}>${this._titleTplHtml(this._config.title, '__card__')}${this._cardTitleCountHtml()}</span>` : ''}
+          ${showTitleText ? `<span class="seed-title-text"${titleTextStyle ? ` style="${titleTextStyle}"` : ''}>${this._titleTplHtml(this._config.title, '__card__')}${this._titleSuffixHtml(this._config, 'card_', '__card__')}${this._cardTitleCountHtml()}</span>` : ''}
           ${this._titleRightHtml(this._config, 'card_', '__card__')}
           ${lastChangedText ? `<span class="seed-title-last-changed">${lastChangedText}</span>` : ''}
           ${cts.secondaryText ? `<span class="seed-title-secondary">${escapeHtml(String(cts.secondaryText))}</span>` : ''}
@@ -5637,7 +5672,7 @@ class SEEDCard extends HTMLElement {
     const secondaryHtml = hrs.secondaryText
       ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
     return `
-      <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${this._titleTplHtml(section.name || '', section.id)}${titleCountHtml}${secondaryHtml}</div>
+      <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${this._titleTplHtml(section.name || '', section.id)}${this._titleSuffixHtml(section, '', section.id)}${titleCountHtml}${secondaryHtml}</div>
       ${this._titleRightHtml(section, '', section.id)}
       ${rightCountHtml}
       <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
@@ -5741,7 +5776,7 @@ class SEEDCard extends HTMLElement {
       const secondaryHtml = hrs.secondaryText
         ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
       headerHtml = `
-        <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${(String(groupName || '').indexOf('{') === -1 && !this._rulesMaySetTitle(mirrorChild || section, (mirrorChild || section).id)) ? escapeHtml(String(groupName)) : this._titleTplHtml(groupName, mirrorChild ? mirrorChild.id : section.id)}${secondaryHtml}</div>
+        <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${(String(groupName || '').indexOf('{') === -1 && !this._rulesMaySetTitle(mirrorChild || section, (mirrorChild || section).id)) ? escapeHtml(String(groupName)) : this._titleTplHtml(groupName, mirrorChild ? mirrorChild.id : section.id)}${this._titleSuffixHtml(section, '', section.id)}${secondaryHtml}</div>
         ${this._titleRightHtml(section, '', section.id)}
         <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
       `;
@@ -5791,6 +5826,11 @@ class SEEDCard extends HTMLElement {
     return refs.some(r => { const set = byId[r.ref]; return set && ((set.default && set.default.set_right) || (set.rules || []).some(x => x.set_right)); });
   }
   _titleRightHtml(src, prefix, id) {
+    const one = this._titleRightLine1Html(src, prefix, id);
+    const two = this._right2Html(src, prefix, id);
+    return two ? `<span class="ees-right-stack">${one}${two}</span>` : one;
+  }
+  _titleRightLine1Html(src, prefix, id) {
     const k = (n) => prefix + n;
     const tpl = src && src[k('title_right')];
     if ((!tpl && !this._rulesMayGiveRight(src, id)) || src[k('title_right_show')] === false) return '';
@@ -5838,6 +5878,7 @@ class SEEDCard extends HTMLElement {
       if (el.textContent !== r.text) el.textContent = r.text;
     });
     this._refreshTitleRights();
+    this._refreshTitleExtras();
   }
   // Does this config show any {ago:…}? (decides whether it joins the shared minute tick)
   _usesAgo() {
@@ -5845,7 +5886,49 @@ class SEEDCard extends HTMLElement {
     const any = (o, keys) => keys.some(k => tplUsesAgo(o && o[k]));
     const walk = (list) => (list || []).some(x => any(x, ['name', 'title_right']) || walk(x && x.children));
     const rules = (c.header_rules || []).some(h => (h.rules || []).concat(h.default ? [h.default] : []).some(r => any(r, ['set_right', 'set_title'])));   // set_title: v246
-    return any(c, ['title', 'card_title_right']) || walk(c.sections) || rules;
+    return any(c, ['title', 'card_title_right', 'card_title_suffix', 'card_title_right2']) || walk(c.sections) || rules
+      || (function w2(list) { return (list || []).some(x => any(x, ['title_suffix', 'title_right2']) || w2(x && x.children)); })(c.sections);
+  }
+
+  // v248: the suffix right after the title, and the second right-side line. Both hide when empty
+  // or when a token's entity is unavailable.
+  _styleFor(src, prefix, base, defColor, defSize) {
+    const col = src[prefix + base + '_color'], sz = optNumber(src[prefix + base + '_size']);
+    return `color:${col || defColor};font-size:calc(${sz !== null ? sz : defSize}px * var(--seed-scale, 1));`;
+  }
+  _suffixText(src, prefix, id) {
+    const hrs = id === '__card__' ? this._resolveCardTitleStyle() : this._resolveHeaderStyle(src);
+    const tpl = (hrs && hrs.titleSuffix != null) ? hrs.titleSuffix : src[prefix + 'title_suffix'];
+    return renderTitleRight(tpl, this._hass, this._tplCtx());
+  }
+  _rulesMayGiveSuffix(src, id) {
+    const refs = id === '__card__' ? this._config.header_rule_refs : (src && src.header_rule_refs);
+    if (!Array.isArray(refs) || !refs.length) return false;
+    const byId = this._headerSetsById();
+    return refs.some(r => { const set = byId[r.ref]; return set && ((set.default && set.default.set_title_suffix) || (set.rules || []).some(x => x.set_title_suffix)); });
+  }
+  _titleSuffixHtml(src, prefix, id) {
+    if (!src || (!src[prefix + 'title_suffix'] && !this._rulesMayGiveSuffix(src, id))) return '';
+    const txt = this._suffixText(src, prefix, id);
+    return `<span class="ees-title-suffix" data-ees-suffix="${escapeHtml(id)}" style="${this._styleFor(src, prefix, 'title_suffix', 'var(--seed-c-secondary)', 14)}${txt === null ? 'display:none;' : ''}">${escapeHtml(txt || '')}</span>`;
+  }
+  _right2Html(src, prefix, id) {
+    if (!src || !src[prefix + 'title_right2'] || src[prefix + 'title_right_show'] === false) return '';
+    const txt = renderTitleRight(src[prefix + 'title_right2'], this._hass, this._tplCtx());
+    return `<span class="ees-title-right2" data-ees-right2="${escapeHtml(id)}" style="${this._styleFor(src, prefix, 'title_right2', 'var(--seed-c-secondary)', 12)}${txt === null ? 'display:none;' : ''}">${escapeHtml(txt || '')}</span>`;
+  }
+  _refreshTitleExtras() {
+    const srcOf = (id) => [id === '__card__' ? this._config : this._findSectionById(id), id === '__card__' ? 'card_' : ''];
+    this.querySelectorAll('.ees-title-suffix').forEach(el => {
+      const [src, pre] = srcOf(el.dataset.eesSuffix); if (!src) return;
+      const txt = this._suffixText(src, pre, el.dataset.eesSuffix);
+      el.textContent = txt || ''; el.style.display = txt === null ? 'none' : '';
+    });
+    this.querySelectorAll('.ees-title-right2').forEach(el => {
+      const [src, pre] = srcOf(el.dataset.eesRight2); if (!src) return;
+      const txt = renderTitleRight(src[pre + 'title_right2'], this._hass, this._tplCtx());
+      el.textContent = txt || ''; el.style.display = txt === null ? 'none' : '';
+    });
   }
 
   _refreshTitleRights() {
@@ -7053,6 +7136,7 @@ class SEEDCard extends HTMLElement {
         else if (k === 'set_text_size') { out.textSize = src[k]; }
         else if (k === 'set_right') { out.rightText = src[k]; }
         else if (k === 'set_title') { out.titleText = src[k]; }
+        else if (k === 'set_title_suffix') { out.titleSuffix = src[k]; }
       });
     };
     refs.forEach(ref => {
@@ -8152,6 +8236,7 @@ class SEEDCardEditor extends HTMLElement {
       ...cardPopupKeys(cfg),
       ...cardTitleBarKeys(cfg),
       ...titleRightKeys(cfg, 'card_'),
+      ...titleExtraKeys(cfg, 'card_'),
       ...cardHeaderCardKeys(cfg),
       ...((Array.isArray(cfg.header_rules) && cfg.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(cfg.header_rules) } : {}),
       rule_sets,
@@ -8167,6 +8252,7 @@ class SEEDCardEditor extends HTMLElement {
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
+    stripTitleExtraKeys(merged, 'card_');
     stripCardHeaderCardKeys(merged);
     if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     return JSON.parse(JSON.stringify(merged));
@@ -8237,6 +8323,32 @@ class SEEDCardEditor extends HTMLElement {
 
   // v241: "Right side" rows, identical for the card title (sid '') and any section header.
   _edTitleRightRows(sid = '') {
+    return this._edTitleSuffixRows(sid) + this._edTitleRightRowsInner(sid);
+  }
+  // v248: "Title suffix" + the right side's second line (same data-tr-key handler)
+  _edTitleSuffixRows(sid = '') {
+    const src = sid ? (this._findSectionDeep(sid) || {}) : this._config;
+    const pre = sid ? '' : 'card_';
+    const k = (n) => pre + n;
+    const d = (key) => `data-tr-key="${key}" ${sid ? `data-section-id="${sid}"` : ''}`;
+    const v = src[k('title_suffix')] || '';
+    const size = optNumber(src[k('title_suffix_size')]);
+    return `
+        <div class="seed-ed-group-div">Title suffix</div>
+        <span class="seed-ed-hint">A smaller part right after the title, e.g. "Living Room TV <span style="opacity:.6">- Plex</span>". Tokens allowed; a Header Rule's <em>Title suffix</em> replaces it.</span>
+        <div class="seed-ed-checkbox-row">
+          <input type="text" class="ed-tr" ${d(k('title_suffix'))} value="${escapeHtml(v)}" placeholder="e.g. - {entity:media_player.tv:app_name}" style="flex:1 1 200px;min-width:150px;" />
+        </div>
+        ${v ? `${this._edColorField(sid ? 'section' : 'config', sid, k('title_suffix_color'), 'Color', src[k('title_suffix_color')],
+          `<input type="color" value="${/^#[0-9a-fA-F]{6}$/.test(src[k('title_suffix_color')] || '') ? src[k('title_suffix_color')] : '#808080'}" />`,
+          { seedHex: '#808080', defaultLabel: 'Card default' })}
+        <div class="seed-ed-slider-row">
+          <label><span>Size:</span></label>
+          <input type="range" class="ed-tr" ${d(k('title_suffix_size'))} min="8" max="32" step="1" value="${size ?? 14}" />
+          <span class="seed-ed-slider-value">${size === null ? 'Default' : `${size}px`}</span>
+        </div>` : ''}`;
+  }
+  _edTitleRightRowsInner(sid = '') {
     const src = sid ? (this._findSectionDeep(sid) || {}) : this._config;
     const pre = sid ? '' : 'card_';
     const k = (n) => pre + n;
@@ -8259,7 +8371,19 @@ class SEEDCardEditor extends HTMLElement {
           <label><span>Size:</span></label>
           <input type="range" class="ed-tr" ${d.replace('%', k('title_right_size'))} min="8" max="32" step="1" value="${size ?? 13}" />
           <span class="seed-ed-slider-value">${size === null ? 'Default' : `${size}px`}</span>
-        </div>` : ''}`;
+        </div>
+        <div class="seed-ed-checkbox-row">
+          <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Second line:</span>
+          <input type="text" class="ed-tr" ${d.replace('%', k('title_right2'))} value="${escapeHtml(src[k('title_right2')] || '')}" placeholder="e.g. outdoor: {entity:sensor.out_temp:raw|round(1)}°" style="flex:1 1 200px;min-width:150px;" />
+        </div>
+        ${src[k('title_right2')] ? `${this._edColorField(sid ? 'section' : 'config', sid, k('title_right2_color'), 'Line 2 color', src[k('title_right2_color')],
+          `<input type="color" value="${/^#[0-9a-fA-F]{6}$/.test(src[k('title_right2_color')] || '') ? src[k('title_right2_color')] : '#808080'}" />`,
+          { seedHex: '#808080', defaultLabel: 'Card default' })}
+        <div class="seed-ed-slider-row">
+          <label><span>Line 2 size:</span></label>
+          <input type="range" class="ed-tr" ${d.replace('%', k('title_right2_size'))} min="8" max="32" step="1" value="${optNumber(src[k('title_right2_size')]) ?? 12}" />
+          <span class="seed-ed-slider-value">${optNumber(src[k('title_right2_size')]) === null ? 'Default' : `${optNumber(src[k('title_right2_size')])}px`}</span>
+        </div>` : ''}` : ''}`;
   }
 
   // v240: an optional px value as a slider row. Absent = the card's built-in default, shown as
@@ -11311,6 +11435,9 @@ class SEEDCardEditor extends HTMLElement {
           </div>
           <div class="seed-ed-font-row">
             <label style="flex:1;">Title<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_title" value="${escapeHtml(rule.set_title || '')}" placeholder="e.g. Door Locks - {count:rs_unlocked} Unlocked" style="width:100%;" /></label>
+          </div>
+          <div class="seed-ed-font-row">
+            <label style="flex:1;">Title suffix<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_title_suffix" value="${escapeHtml(rule.set_title_suffix || '')}" placeholder="e.g. - Plex" style="width:100%;" /></label>
           </div>
           <div class="seed-ed-font-row">
             <label style="flex:1;">Right-side text<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_right" value="${escapeHtml(rule.set_right || '')}" placeholder="e.g. Active, or {entity:sensor.x}" style="width:100%;" /></label>
@@ -16795,7 +16922,7 @@ class SEEDCardEditor extends HTMLElement {
       const t = el.dataset.sectionId ? this._findSectionDeep(el.dataset.sectionId) : this._config;
       if (!t) return;
       const pre = el.dataset.sectionId ? '' : 'card_';
-      TITLE_RIGHT_KEYS.forEach(n => delete t[pre + n]);
+      TITLE_RIGHT_KEYS.concat(['title_right2', 'title_right2_color', 'title_right2_size']).forEach(n => delete t[pre + n]);
       this._fireConfigChanged();
       this._rendered = false; this.renderEditor();
     }));

@@ -5,6 +5,21 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.248
+
+- **Title suffix (EES-FEATURE-GAPS 9.3).** A smaller part right after the card title or a section
+  name, for example "Living Room TV" followed by a grey "- Plex". Set it under *Title suffix* in each
+  header panel; tokens work in it.
+  - Keys: `title_suffix`, `title_suffix_color`, `title_suffix_size` (default 14 px); on the card the
+    keys are prefixed `card_`.
+  - A Header Rule's *Title suffix* (`set_title_suffix`) replaces it while the rule applies.
+  - It hides while one of its entities is unavailable, and updates live.
+- **Second right-side line (9.5).** `title_right2` sits under `title_right`, with its own colour and
+  size (default 12 px). Example: Subfloor's indoor reading with "outdoor: …" below it. Without a second
+  line, the markup is unchanged.
+- Test: `/shared/user/code/_tests/entity-card-title-extras.test.mjs` (7 checks; 6 fail against v247),
+  now part of the publish gate.
+
 ## v2026.11.20.247
 
 - **Frame Style conditions use the same sources as header rules (EES-FEATURE-GAPS 9.8).** The
