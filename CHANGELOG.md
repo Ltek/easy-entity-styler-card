@@ -5,6 +5,25 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.249
+
+- **An entity's picture as the title icon (EES-FEATURE-GAPS 9.6).** Card Header → Title Icon →
+  *Show: An entity's picture*. Examples: `person.*`, `image.*` or `camera.*`.
+  - It is drawn as a circle at the title icon size, or square with `title_icon_square: true`.
+  - It falls back to the icon when the entity has no picture.
+  - An optional **ring** (`title_icon_ring` px, `title_icon_ring_color`) can be coloured by a Header
+    Rule's new *Ring color* output (`set_icon_ring_color`). Example: green at home, red away, orange
+    in any other zone.
+- **Title-bar buttons (9.7).** `card_title_buttons:` adds icons on the right of the title bar, each
+  with its own tap and hold actions (hold time default 500 ms), e.g. a TV power button that toggles
+  on an 800 ms hold.
+  - Each button is coloured by its entity: `active_color` when it is active (or `active_when`
+    holds), `color` otherwise.
+  - Tapping or holding a button never opens or closes the card.
+  - Edited under Card Header → *Title buttons*.
+- Test: `/shared/user/code/_tests/entity-card-title-icon-buttons.test.mjs` (9 checks; 8 fail against
+  v248), now part of the publish gate.
+
 ## v2026.11.20.248
 
 - **Title suffix (EES-FEATURE-GAPS 9.3).** A smaller part right after the card title or a section

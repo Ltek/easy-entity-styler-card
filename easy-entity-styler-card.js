@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.20.248
+// Version: v2026.11.20.249
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.20.248';
+const BUILD_NUMBER = 'v2026.11.20.249';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1663,7 +1663,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.20.248: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.20.249: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -1817,7 +1817,7 @@ function normalizeFrameRef(f) {
 // Modeled 1:1 on Frame Styles: read-only Built-In + shared System library.
 // ---------------------------------------------------------------------------
 const HEADER_RULE_OUTPUT_KEYS = [
-  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary', 'set_right', 'set_title', 'set_title_suffix'
+  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary', 'set_right', 'set_title', 'set_title_suffix', 'set_icon_ring_color'
 ];
 // v2026.11.19.242 (EES-FEATURE-GAPS 3a): what a rule TESTS. Absent = the bound entity (as before).
 //   { type: 'entities', entities: [ids], match?: 'all' }  `when` is tested on each; any (default) or all
@@ -1872,6 +1872,7 @@ function normalizeHeaderRule(r) {
   // v246: the header's title (tokens allowed); first matching rule wins, like every output
   if (typeof r.set_title === 'string' && r.set_title.trim()) out.set_title = r.set_title;
   if (typeof r.set_title_suffix === 'string' && r.set_title_suffix.trim()) out.set_title_suffix = r.set_title_suffix;   // v248
+  if (typeof r.set_icon_ring_color === 'string' && r.set_icon_ring_color.trim()) out.set_icon_ring_color = r.set_icon_ring_color;   // v249
   const src = normalizeHeaderRuleSource(r.source);
   if (src) {
     out.source = src;
@@ -3632,7 +3633,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.20.248: card-level links to one section.
+// v2026.11.20.249: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3650,7 +3651,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.20.248: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.20.249: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3683,7 +3684,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.20.248: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.20.249: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3703,7 +3704,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.20.248: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.20.249: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3726,7 +3727,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.20.248 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.20.249 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3748,7 +3749,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.20.248 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.20.249 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3766,7 +3767,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.20.248 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.20.249 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3790,12 +3791,52 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
+// v2026.11.20.249 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+//   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
+//   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
+//   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
+//                                       set_icon_ring_color overrides the colour)
+//   title_icon_square: true             keep the picture square (default: a circle)
+//   card_title_buttons: [{ icon, entity, color, active_color, active_when, tap_action,
+//                          hold_action, hold_time }]   icons on the right of the title bar with
+//                          their own actions; a tap / hold on them never opens or closes the card
+function cardTitleIconKeys(c) {
+  c = c || {};
+  const out = {};
+  if (c.title_icon_source === 'entity_picture' && typeof c.title_icon_entity === 'string' && c.title_icon_entity.trim()) {
+    out.title_icon_source = 'entity_picture';
+    out.title_icon_entity = c.title_icon_entity.trim();
+    const ring = optPx(c.title_icon_ring, 12); if (ring) out.title_icon_ring = ring;
+    if (typeof c.title_icon_ring_color === 'string' && c.title_icon_ring_color.trim()) out.title_icon_ring_color = c.title_icon_ring_color.trim();
+    if (c.title_icon_square === true) out.title_icon_square = true;
+  }
+  if (Array.isArray(c.card_title_buttons) && c.card_title_buttons.length) {
+    const btns = c.card_title_buttons.filter(b => b && typeof b === 'object').map(b => {
+      const o = { icon: (typeof b.icon === 'string' && b.icon.trim()) ? b.icon.trim() : 'mdi:power' };
+      if (typeof b.entity === 'string' && b.entity.trim()) o.entity = b.entity.trim();
+      if (typeof b.color === 'string' && b.color.trim()) o.color = b.color.trim();
+      if (typeof b.active_color === 'string' && b.active_color.trim()) o.active_color = b.active_color.trim();
+      if (b.active_when && typeof b.active_when === 'object') o.active_when = normalizeCondition(b.active_when);
+      ['tap_action', 'hold_action'].forEach(k => { if (b[k] && typeof b[k] === 'object' && b[k].action && b[k].action !== 'none') o[k] = normalizeAction(b[k], 'none'); });
+      const ht = optNumber(b.hold_time); if (ht !== null && ht !== 500) o.hold_time = Math.max(200, Math.min(3000, Math.round(ht)));
+      return o;
+    });
+    if (btns.length) out.card_title_buttons = btns;
+  }
+  return out;
+}
+const CARD_TITLE_ICON_KEYS = ['title_icon_source', 'title_icon_entity', 'title_icon_ring', 'title_icon_ring_color', 'title_icon_square', 'card_title_buttons'];
+function stripCardTitleIconKeys(m) {
+  const keep = cardTitleIconKeys(m);
+  CARD_TITLE_ICON_KEYS.forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
+  return m;
+}
 function stripTitleRightKeys(m, prefix = '') {
   const keep = titleRightKeys(m, prefix);
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.20.248: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.20.249: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4141,6 +4182,7 @@ class SEEDCard extends HTMLElement {
       ...cardTitleBarKeys(config),
       ...titleRightKeys(config, 'card_'),
       ...titleExtraKeys(config, 'card_'),
+      ...cardTitleIconKeys(config),
       ...cardHeaderCardKeys(config),
       ...((Array.isArray(config.header_rules) && config.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(config.header_rules) } : {}),
       rule_sets,
@@ -4159,6 +4201,7 @@ class SEEDCard extends HTMLElement {
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
     stripTitleExtraKeys(merged, 'card_');
+    stripCardTitleIconKeys(merged);
     stripCardHeaderCardKeys(merged);
     if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     this._config = merged;
@@ -4820,6 +4863,9 @@ class SEEDCard extends HTMLElement {
         .ees-header-card-host { position: relative; flex: 1 1 auto; min-width: 0; padding: 0; display: block; }
         .ees-header-card-slot { display: block; min-width: 0; }
         .ees-header-card-overlay { position: absolute; inset: 0; cursor: pointer; z-index: 1; }
+        /* v249: title-bar buttons */
+        .ees-title-btn { cursor: pointer; flex-shrink: 0; --mdc-icon-size: calc(24px * var(--seed-scale)); border-radius: 50%; padding: 2px; position: relative; z-index: 2; }
+        .ees-title-btn:focus-visible { outline: 2px solid var(--primary-color, #2196F3); }
         /* v248: title suffix + stacked second right-side line */
         .ees-title-suffix { margin-left: 0.4em; font-weight: 400; white-space: nowrap; }
         .ees-right-stack { display: flex; flex-direction: column; align-items: flex-end; margin-left: auto; max-width: 50%; min-width: 0; line-height: 1.25; }
@@ -5359,10 +5405,11 @@ class SEEDCard extends HTMLElement {
       ].join('');
       titleHtml = `
         <div class="seed-title">
-          ${showTitleIcon ? `<ha-icon icon="${titleIconGlyph}"${titleIconStyle ? ` style="${titleIconStyle}"` : ''}></ha-icon>` : ''}
+          ${showTitleIcon ? (this._titlePicHtml(cts) || `<ha-icon icon="${titleIconGlyph}"${titleIconStyle ? ` style="${titleIconStyle}"` : ''}></ha-icon>`) : ''}
           ${showTitleText ? `<span class="seed-title-text"${titleTextStyle ? ` style="${titleTextStyle}"` : ''}>${this._titleTplHtml(this._config.title, '__card__')}${this._titleSuffixHtml(this._config, 'card_', '__card__')}${this._cardTitleCountHtml()}</span>` : ''}
           ${this._titleRightHtml(this._config, 'card_', '__card__')}
           ${lastChangedText ? `<span class="seed-title-last-changed">${lastChangedText}</span>` : ''}
+          ${this._titleButtonsHtml()}
           ${cts.secondaryText ? `<span class="seed-title-secondary">${escapeHtml(String(cts.secondaryText))}</span>` : ''}
         </div>
       `;
@@ -5879,6 +5926,7 @@ class SEEDCard extends HTMLElement {
     });
     this._refreshTitleRights();
     this._refreshTitleExtras();
+    this._refreshTitleIconAndButtons();
   }
   // Does this config show any {ago:…}? (decides whether it joins the shared minute tick)
   _usesAgo() {
@@ -5917,6 +5965,69 @@ class SEEDCard extends HTMLElement {
     const txt = renderTitleRight(src[prefix + 'title_right2'], this._hass, this._tplCtx());
     return `<span class="ees-title-right2" data-ees-right2="${escapeHtml(id)}" style="${this._styleFor(src, prefix, 'title_right2', 'var(--seed-c-secondary)', 12)}${txt === null ? 'display:none;' : ''}">${escapeHtml(txt || '')}</span>`;
   }
+  // v249: entity picture as the title icon (falls back to the mdi icon when there's no picture)
+  _titlePicUrl() {
+    const c = this._config;
+    if (c.title_icon_source !== 'entity_picture' || !this._hass) return '';
+    const st = this._hass.states[c.title_icon_entity];
+    const u = st && st.attributes && st.attributes.entity_picture;
+    return typeof u === 'string' ? u : '';
+  }
+  _titlePicStyle(cts) {
+    const c = this._config;
+    const size = `calc(${c.title_icon_size || 22}px * var(--seed-scale))`;
+    const ring = optNumber(c.title_icon_ring);
+    const ringColor = (cts && cts.ringColor) || c.title_icon_ring_color || 'var(--primary-color)';
+    return `width:${size};height:${size};border-radius:${c.title_icon_square ? '4px' : '50%'};object-fit:cover;flex-shrink:0;`
+      + (ring ? `box-shadow:0 0 0 ${ring}px ${ringColor};margin:${ring}px;` : '');
+  }
+  _titlePicHtml(cts) {
+    const url = this._titlePicUrl();
+    if (!url) return '';
+    return `<img class="ees-title-pic" alt="" src="${escapeHtml(url)}" style="${this._titlePicStyle(cts)}" />`;
+  }
+  // v249: title-bar buttons
+  _titleButtonColor(b) {
+    const st = b.entity && this._hass ? this._hass.states[b.entity] : null;
+    const active = st && (b.active_when ? evalCondition(b.entity, b.active_when, this._hass) : evalCondition(b.entity, { op: 'truthy' }, this._hass));
+    return active ? (b.active_color || 'var(--state-active-color, #fdd835)') : (b.color || 'var(--seed-c-secondary)');
+  }
+  _titleButtonsHtml() {
+    const list = this._config.card_title_buttons || [];
+    return list.map((b, i) => `<ha-icon class="ees-title-btn" data-ees-btn="${i}" role="button" tabindex="0" icon="${escapeHtml(b.icon)}" style="color:${this._titleButtonColor(b)};"></ha-icon>`).join('');
+  }
+  _wireTitleButtons() {
+    const list = this._config.card_title_buttons || [];
+    this.querySelectorAll('.ees-title-btn').forEach(el => {
+      const b = list[Number(el.dataset.eesBtn)]; if (!b) return;
+      let timer = null, held = false;
+      const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+      el.addEventListener('pointerdown', (e) => {
+        e.stopPropagation(); held = false;
+        if (b.hold_action) timer = setTimeout(() => { held = true; timer = null; this._performAction(b.hold_action, b.entity); }, b.hold_time || 500);
+      });
+      const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+      el.addEventListener('pointerup', cancel);
+      el.addEventListener('pointerleave', cancel);
+      el.addEventListener('click', (e) => {
+        stop(e);                                   // never opens / closes the card
+        if (held) { held = false; return; }
+        if (b.tap_action) this._performAction(b.tap_action, b.entity);
+      });
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { stop(e); if (b.tap_action) this._performAction(b.tap_action, b.entity); } });
+    });
+  }
+  _refreshTitleIconAndButtons() {
+    const pic = this.querySelector('.seed-title .ees-title-pic');
+    if (pic) {
+      const url = this._titlePicUrl();
+      if (url && pic.getAttribute('src') !== url) pic.setAttribute('src', url);
+      pic.setAttribute('style', this._titlePicStyle(this._resolveCardTitleStyle()));
+    }
+    const list = this._config.card_title_buttons || [];
+    this.querySelectorAll('.ees-title-btn').forEach(el => { const b = list[Number(el.dataset.eesBtn)]; if (b) el.style.color = this._titleButtonColor(b); });
+  }
+
   _refreshTitleExtras() {
     const srcOf = (id) => [id === '__card__' ? this._config : this._findSectionById(id), id === '__card__' ? 'card_' : ''];
     this.querySelectorAll('.ees-title-suffix').forEach(el => {
@@ -6274,6 +6385,7 @@ class SEEDCard extends HTMLElement {
     this._wireCardPopup();
     this._wireSectionPopups();
     this._mountHeaderCard();
+    this._wireTitleButtons();
     if (this.isConnected) _agoWatch(this, this._usesAgo());
     if (reopen) {
       if (popup) {
@@ -7137,6 +7249,7 @@ class SEEDCard extends HTMLElement {
         else if (k === 'set_right') { out.rightText = src[k]; }
         else if (k === 'set_title') { out.titleText = src[k]; }
         else if (k === 'set_title_suffix') { out.titleSuffix = src[k]; }
+        else if (k === 'set_icon_ring_color') { out.ringColor = src[k]; }
       });
     };
     refs.forEach(ref => {
@@ -7361,7 +7474,7 @@ class SEEDCard extends HTMLElement {
     const titleEl = this.querySelector('.seed-title');
     if (!titleEl) return;
     const cts = this._resolveCardTitleStyle();
-    const iconEl = titleEl.querySelector('ha-icon');
+    const iconEl = titleEl.querySelector('ha-icon:not(.ees-title-btn)');
     if (iconEl) {
       iconEl.setAttribute('icon', cts.glyph || this._config.title_icon || 'mdi:view-list');
       iconEl.style.color = cts.iconColor ? String(cts.iconColor) : '';
@@ -8237,6 +8350,7 @@ class SEEDCardEditor extends HTMLElement {
       ...cardTitleBarKeys(cfg),
       ...titleRightKeys(cfg, 'card_'),
       ...titleExtraKeys(cfg, 'card_'),
+      ...cardTitleIconKeys(cfg),
       ...cardHeaderCardKeys(cfg),
       ...((Array.isArray(cfg.header_rules) && cfg.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(cfg.header_rules) } : {}),
       rule_sets,
@@ -8253,6 +8367,7 @@ class SEEDCardEditor extends HTMLElement {
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
     stripTitleExtraKeys(merged, 'card_');
+    stripCardTitleIconKeys(merged);
     stripCardHeaderCardKeys(merged);
     if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     return JSON.parse(JSON.stringify(merged));
@@ -13443,6 +13558,31 @@ class SEEDCardEditor extends HTMLElement {
         ${this._edTitleRightRows()}
 
         <div class="seed-ed-group-title">Title Icon</div>
+        <div class="seed-ed-checkbox-row">
+          <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Show:</span>
+          <select class="ed-tr" data-tr-key="title_icon_source">
+            <option value="" ${this._config.title_icon_source !== 'entity_picture' ? 'selected' : ''}>An icon</option>
+            <option value="entity_picture" ${this._config.title_icon_source === 'entity_picture' ? 'selected' : ''}>An entity's picture</option>
+          </select>
+          ${this._config.title_icon_source === 'entity_picture' ? `<input type="text" class="ed-tr" data-tr-key="title_icon_entity" list="ees-all-entities" value="${escapeHtml(this._config.title_icon_entity || '')}" placeholder="person.robyn / image.avatar" style="flex:1 1 160px;min-width:140px;" />` : ''}
+        </div>
+        ${this._config.title_icon_source === 'entity_picture' ? `
+        ${this._edOptPx('title_icon_ring', 'Ring', 0, 12)}
+        ${this._edColorField('config', '', 'title_icon_ring_color', 'Ring color', this._config.title_icon_ring_color,
+          `<input type="color" value="${/^#[0-9a-fA-F]{6}$/.test(this._config.title_icon_ring_color || '') ? this._config.title_icon_ring_color : '#4caf50'}" />`,
+          { seedHex: '#4caf50', defaultLabel: 'Theme accent' })}
+        <span class="seed-ed-hint">A Header Rule's <em>Ring color</em> can change it by state (e.g. green at home, red away).</span>` : ''}
+        <div class="seed-ed-group-div">Title buttons</div>
+        <span class="seed-ed-hint">Icons on the right of the title bar with their own tap and hold actions. Tapping them never opens or closes the card.</span>
+        ${(this._config.card_title_buttons || []).map((b, i) => `
+        <div class="seed-ed-checkbox-row ed-tbtn-row">
+          <input type="text" class="ed-tbtn" data-i="${i}" data-k="icon" value="${escapeHtml(b.icon || '')}" placeholder="mdi:power" style="width:120px;" />
+          <input type="text" class="ed-tbtn" data-i="${i}" data-k="entity" list="ees-all-entities" value="${escapeHtml(b.entity || '')}" placeholder="media_player.tv" style="flex:1 1 140px;min-width:120px;" />
+          <label>Tap<select class="ed-tbtn" data-i="${i}" data-k="tap_action">${this._atOpts([['none', 'Nothing'], ['more-info', 'More info'], ['toggle', 'Toggle']], (b.tap_action || {}).action || 'none')}</select></label>
+          <label>Hold<select class="ed-tbtn" data-i="${i}" data-k="hold_action">${this._atOpts([['none', 'Nothing'], ['more-info', 'More info'], ['toggle', 'Toggle']], (b.hold_action || {}).action || 'none')}</select></label>
+          <ha-icon class="seed-ed-icon-btn ed-tbtn-del" data-i="${i}" icon="mdi:trash-can-outline" title="Remove"></ha-icon>
+        </div>`).join('')}
+        <div class="seed-ed-add-row"><div class="seed-ed-add-btn seed-ed-add-btn-sm" id="ed-tbtn-add"><ha-icon icon="mdi:plus"></ha-icon>Title button</div></div>
         <div class="seed-ed-pair">
           <div class="seed-ed-checkbox-row" style="flex:0 0 auto;padding:0;">
             <input type="checkbox" id="ed-show-title-icon" ${showTitleIcon ? 'checked' : ''} />
@@ -16843,6 +16983,23 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
+    // v249: title buttons
+    const tbList = () => (this._config.card_title_buttons = this._config.card_title_buttons || []);
+    const tbAdd = this.querySelector('#ed-tbtn-add');
+    if (tbAdd) tbAdd.addEventListener('click', () => { tbList().push({ icon: 'mdi:power', hold_action: { action: 'toggle' } }); this._fireConfigChanged(); this._rendered = false; this.renderEditor(); });
+    this.querySelectorAll('.ed-tbtn').forEach(el => el.addEventListener('change', () => {
+      const b = tbList()[Number(el.dataset.i)]; if (!b) return;
+      const k = el.dataset.k;
+      if (k === 'tap_action' || k === 'hold_action') { if (el.value === 'none') delete b[k]; else b[k] = { action: el.value }; }
+      else if (el.value.trim()) b[k] = el.value.trim(); else delete b[k];
+      this._fireConfigChanged();
+    }));
+    this.querySelectorAll('.ed-tbtn-del').forEach(el => el.addEventListener('click', () => {
+      tbList().splice(Number(el.dataset.i), 1);
+      if (!this._config.card_title_buttons.length) delete this._config.card_title_buttons;
+      this._fireConfigChanged(); this._rendered = false; this.renderEditor();
+    }));
+
     // v244: header card
     const hcOn = this.querySelector('#ed-header-card-on');
     if (hcOn) hcOn.addEventListener('change', () => {
@@ -16914,7 +17071,7 @@ class SEEDCardEditor extends HTMLElement {
         else if (el.type === 'range') t[key] = Number(el.value);
         else { const v = el.value; if (v.trim()) t[key] = v; else delete t[key]; }
         this._fireConfigChanged();
-        if (el.type === 'text') { this._rendered = false; this.renderEditor(); }   // colour/size rows appear
+        if (el.type === 'text' || el.tagName === 'SELECT') { this._rendered = false; this.renderEditor(); }   // dependent rows appear
       });
     });
     this.querySelectorAll('.ed-tr-reset').forEach(el => el.addEventListener('click', (e) => {
