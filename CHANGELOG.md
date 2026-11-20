@@ -5,6 +5,21 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.247
+
+- **Frame Style conditions use the same sources as header rules (EES-FEATURE-GAPS 9.8).** The
+  *Only apply when… → Based on* setting gains two kinds:
+  - *Any / all of a list of entities*, `when_source: {type: entities, entities: [...], match: all}`.
+    Example: glow while either deadbolt is unlocked.
+  - *How many entities a Rule Set matches*, `when_source: {type: rule_set, ref}` with a count test.
+    Example: glow while any security zone is on.
+- A Frame Style condition whose sub-conditions each name their own entity no longer needs a watched
+  entity. Example: Leak glows red while `valve.main` is closed.
+- **New operators "is set" / "is not set"** (`is_set`, `not_set`), for filters and conditions. Rule Sets
+  can now match "entities that HAVE a `zone` attribute" (EES-FEATURE-GAPS 9.4).
+- Test: `/shared/user/code/_tests/entity-card-frame-sources.test.mjs` (7 checks; all 7 fail against
+  v246), now part of the publish gate.
+
 ## v2026.11.20.246
 
 - **Rules can set the title (EES-FEATURE-GAPS 9.2).** A header rule has a *Title* (`set_title`)

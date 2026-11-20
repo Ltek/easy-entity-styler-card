@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.20.246
+// Version: v2026.11.20.247
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.20.246';
+const BUILD_NUMBER = 'v2026.11.20.247';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -729,6 +729,9 @@ function applyOp(resolved, cond) {
     case 'is_off': return String(raw).toLowerCase() === 'off' || raw === false;
     case 'truthy': return !badState && !['off', '0', '', 'false', 'closed', 'locked'].includes(String(raw).toLowerCase());
     case 'unavailable': return badState;
+    // v247: "has a value" — e.g. a binary_sensor that HAS a `zone` attribute (EES-FEATURE-GAPS 9.4)
+    case 'is_set':  return raw != null && String(raw).trim() !== '';
+    case 'not_set': return raw == null || String(raw).trim() === '';
     case 'eq':  return norm(raw) === norm(cond.value);
     case 'ne':  return norm(raw) !== norm(cond.value);
     case 'contains': {
@@ -1327,6 +1330,16 @@ function normalizeFramePreset(fx) {
     if (fx.when) out.when = normalizeCondition(fx.when);
     // The entity a conditional preset watches (paired with `when`).
     if (fx.when_entity) out.when_entity = String(fx.when_entity);
+    // v247 (EES-FEATURE-GAPS 9.8): or a source, exactly as header rules use it:
+    //   when_source: { type: entities, entities: [...], match?: all }  -> `when` on each
+    //   when_source: { type: rule_set, ref }                            -> `when` is a count test
+    const src = normalizeHeaderRuleSource(fx.when_source);
+    if (src) {
+      out.when_source = src;
+      delete out.when_entity;
+      if (src.type === 'rule_set') out.when = { op: (fx.when && fx.when.op) || 'gt', value: Number(fx.when && fx.when.value != null ? fx.when.value : 0) };
+      else if (!out.when) out.when = { op: 'is_on' };
+    }
   }
   return out;
 }
@@ -1650,7 +1663,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.20.246: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.20.247: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3615,7 +3628,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.20.246: card-level links to one section.
+// v2026.11.20.247: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3633,7 +3646,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.20.246: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.20.247: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3666,7 +3679,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.20.246: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.20.247: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3686,7 +3699,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.20.246: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.20.247: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3709,7 +3722,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.20.246 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.20.247 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3731,7 +3744,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.20.246 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.20.247 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3754,7 +3767,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.20.246: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.20.247: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4275,8 +4288,11 @@ class SEEDCard extends HTMLElement {
       else if (baseWhen && baseWhen.value !== undefined) when.value = baseWhen.value;
       else delete when.value;
     }
+    // v247: a source (entity list / Rule Set count) decides it, like a header rule
+    if (fx.when_source) return this._headerRuleMatch({ source: fx.when_source, when: fx.when }, ctxId).hit;
     // No condition anywhere (preset unconditional and no override op) → always on.
-    if (!when || !when.op) return true;
+    if (!when || (!when.op && !when.all && !when.any)) return true;
+    if (conditionNamesEntities(when)) return evalCondition(ctxId, when, this._hass);
     if (!ctxId || !this._hass || !this._hass.states[ctxId]) return false;
     return evalCondition(ctxId, when, this._hass);
   }
@@ -8926,7 +8942,8 @@ class SEEDCardEditor extends HTMLElement {
     ['eq', '='], ['ne', '≠'], ['in', 'in list'], ['not_in', 'not in list'],
     ['contains', 'contains'], ['not_contains', 'not contains'], ['regex', 'regex'],
     ['gt', '>'], ['ge', '≥'], ['lt', '<'], ['le', '≤'], ['between', 'between'],
-    ['is_on', 'is on'], ['is_off', 'is off'], ['truthy', 'is active'], ['unavailable', 'unavailable']
+    ['is_on', 'is on'], ['is_off', 'is off'], ['truthy', 'is active'], ['unavailable', 'unavailable'],
+    ['is_set', 'is set'], ['not_set', 'is not set']
   ];
   _AT_VALUE_SOURCES = [
     ['state', 'State'], ['attribute', 'Attribute'], ['last_changed_ago', 'Time since change'],
@@ -9322,7 +9339,8 @@ class SEEDCardEditor extends HTMLElement {
     const hasGlow = !!fx.glow, hasShadow = !!fx.shadow, hasBorder = !!fx.border;
     const isSectionCond = fx.when_kind === 'section_has_entities' || fx.when_kind === 'section_empty';
     const condActive = !!fx.when || isSectionCond;
-    const condKind = isSectionCond ? fx.when_kind : 'entity';
+    const condKind = isSectionCond ? fx.when_kind
+      : (fx.when_source ? (fx.when_source.type === 'rule_set' ? 'src_rule_set' : 'src_entities') : 'entity');   // v247
     const g = fx.glow || {}, sh = fx.shadow || {}, bd = fx.border || {}, wh = fx.when || {};
     const bgMode = fx.background ? (fx.background.mode || 'custom') : 'custom';
     const sideOn = s => bd.sides ? bd.sides.includes(s) : true;
@@ -9445,10 +9463,13 @@ class SEEDCardEditor extends HTMLElement {
                 <option value="entity" ${condKind === 'entity' ? 'selected' : ''}>An entity's state</option>
                 <option value="section_has_entities" ${condKind === 'section_has_entities' ? 'selected' : ''}>A section HAS visible entities</option>
                 <option value="section_empty" ${condKind === 'section_empty' ? 'selected' : ''}>A section has NO visible entities</option>
+                <option value="src_entities" ${condKind === 'src_entities' ? 'selected' : ''}>Any / all of a list of entities</option>
+                <option value="src_rule_set" ${condKind === 'src_rule_set' ? 'selected' : ''}>How many entities a Rule Set matches</option>
               </select>
             </label>
           </div>
-          ${condKind === 'entity' ? `<div class="seed-ed-font-row">
+          ${condKind === 'src_entities' || condKind === 'src_rule_set' ? this._atFrameSourceEditor(fid, fx) : ''}
+          ${condKind === 'src_entities' || condKind === 'src_rule_set' ? '' : condKind === 'entity' ? `<div class="seed-ed-font-row">
             <input type="text" class="at-input" list="ees-all-entities" data-at-sid="${fid}" data-at-path="when_entity" value="${escapeHtml(fx.when_entity || '')}" placeholder="entity id" style="flex:1;" />
             <select class="at-input" data-at-sid="${fid}" data-at-path="when.op">${this._atOpts(this._AT_OPS, wh.op)}</select>
             <input type="text" class="at-input" data-at-sid="${fid}" data-at-path="when.value" value="${escapeHtml(wh.value ?? '')}" placeholder="value" style="width:90px;" />
@@ -11306,6 +11327,29 @@ class SEEDCardEditor extends HTMLElement {
           </div>` : ''}
         </div>
       </details>`;
+  }
+
+  // v247: a Frame Style's source condition (same model as a header rule's Test).
+  _atFrameSourceEditor(fid, fx) {
+    const src = fx.when_source || {};
+    const w = fx.when || {};
+    if (src.type === 'rule_set') {
+      const rsOpts = (this._config.rule_sets || []).map(r => [r.id, r.name || r.id]);
+      return `<div class="seed-ed-font-row">
+            <label>Rule Set<select class="at-input at-structural" data-at-sid="${fid}" data-at-path="when_source.ref">${this._atOpts([['', '— choose —'], ...rsOpts], src.ref || '')}</select></label>
+            <label>matches<select class="at-input" data-at-sid="${fid}" data-at-path="when.op">${this._atOpts([['gt', 'more than'], ['ge', 'at least'], ['eq', 'exactly'], ['ne', 'not'], ['lt', 'fewer than'], ['le', 'at most']], w.op || 'gt')}</select></label>
+            <input type="number" class="at-input" data-at-sid="${fid}" data-at-path="when.value" value="${Number(w.value ?? 0)}" min="0" style="width:70px;" />
+          </div>
+          <span class="seed-ed-hint">Rule Sets belong to the card, so a library Frame Style that tests one only works on cards that have it.</span>`;
+    }
+    return `<div class="seed-ed-font-row">
+            <label style="flex:1;">Entities<input type="text" class="at-input at-input-multi" data-at-sid="${fid}" data-at-path="when_source.entities" value="${escapeHtml((src.entities || []).join(', '))}" placeholder="lock.front, lock.mudroom" style="width:100%;" /></label>
+            <label>Match<select class="at-input" data-at-sid="${fid}" data-at-path="when_source.match">${this._atOpts([['', 'any of them'], ['all', 'all of them']], src.match || '')}</select></label>
+          </div>
+          <div class="seed-ed-font-row">
+            <select class="at-input" data-at-sid="${fid}" data-at-path="when.op">${this._atOpts(this._AT_OPS, w.op)}</select>
+            <input type="text" class="at-input" data-at-sid="${fid}" data-at-path="when.value" value="${escapeHtml(w.value ?? '')}" placeholder="value" style="width:110px;" />
+          </div>`;
   }
 
   // v242: what a header rule tests, plus its condition. The condition editor changes with the source:
@@ -14567,6 +14611,13 @@ class SEEDCardEditor extends HTMLElement {
       el.addEventListener('change', () => {
         const fid = el.dataset.fxId, kind = el.value;
         this._atApply(fid, fx => {
+          if (kind === 'src_entities' || kind === 'src_rule_set') {   // v247
+            delete fx.when_kind; delete fx.when_section; delete fx.when_entity;
+            fx.when_source = kind === 'src_rule_set' ? { type: 'rule_set', ref: '' } : { type: 'entities', entities: [] };
+            fx.when = kind === 'src_rule_set' ? { op: 'gt', value: 0 } : { op: 'is_on' };
+            return;
+          }
+          delete fx.when_source;
           if (kind === 'entity') {
             delete fx.when_kind; delete fx.when_section;
             fx.when = fx.when || { op: 'eq', value: '' };
