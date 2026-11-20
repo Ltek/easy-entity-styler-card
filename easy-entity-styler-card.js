@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.20.243
+// Version: v2026.11.20.244
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.20.243';
+const BUILD_NUMBER = 'v2026.11.20.244';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1646,7 +1646,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.20.243: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.20.244: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -2839,7 +2839,8 @@ function normalizeCardsSection(s) {
     ...(optPx(s.body_pad_left) !== null ? { body_pad_left: optPx(s.body_pad_left) } : {}),
     ...(optPx(s.body_pad_right) !== null ? { body_pad_right: optPx(s.body_pad_right) } : {}),
     // margin above EACH child card (expander-card's child-margin-top). Combine with card_gap: 0.
-    ...(optPx(s.child_margin_top) !== null ? { child_margin_top: optPx(s.child_margin_top) } : {}),
+    // may be negative, like expander-card's `child-margin-top: -1em` (pulls the cards up)
+    ...(optNumber(s.child_margin_top) !== null ? { child_margin_top: Math.max(-64, Math.min(64, Math.round(optNumber(s.child_margin_top)))) } : {}),
     ...(s.hidden === true ? { hidden: true } : {}),
     ...((Array.isArray(s.header_rule_refs) && s.header_rule_refs.length)
       ? { header_rule_refs: normalizeHeaderRuleRefs(s.header_rule_refs) } : {}),
@@ -3601,7 +3602,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.20.243: card-level links to one section.
+// v2026.11.20.244: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3619,7 +3620,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.20.243: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.20.244: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3652,7 +3653,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.20.243: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.20.244: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3672,7 +3673,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.20.243: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.20.244: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3695,7 +3696,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.20.243 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.20.244 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3716,6 +3717,24 @@ function titleRightKeys(c, prefix = '') {
   if (typeof c[k('title_right_color')] === 'string' && c[k('title_right_color')].trim()) out[k('title_right_color')] = c[k('title_right_color')].trim();
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
+}
+// v2026.11.20.244 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// expander-card's `title-card`.
+//   card_header_card: { type: …, … }   that card's own config, verbatim
+//   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
+//                                       absent = taps open/close this card (a transparent layer
+//                                       covers the header card, like expander-card's
+//                                       title-card-button-overlay)
+function cardHeaderCardKeys(c) {
+  c = c || {};
+  const hc = c.card_header_card;
+  if (!hc || typeof hc !== 'object' || Array.isArray(hc) || typeof hc.type !== 'string' || !hc.type) return {};
+  return { card_header_card: JSON.parse(JSON.stringify(hc)), ...(c.card_header_card_tap === 'card' ? { card_header_card_tap: 'card' } : {}) };
+}
+function stripCardHeaderCardKeys(m) {
+  const keep = cardHeaderCardKeys(m);
+  ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
+  return m;
 }
 function stripTitleRightKeys(m, prefix = '') {
   const keep = titleRightKeys(m, prefix);
@@ -3992,6 +4011,7 @@ class SEEDCard extends HTMLElement {
       ...cardPopupKeys(config),
       ...cardTitleBarKeys(config),
       ...titleRightKeys(config, 'card_'),
+      ...cardHeaderCardKeys(config),
       ...((Array.isArray(config.header_rules) && config.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(config.header_rules) } : {}),
       rule_sets,
       sections
@@ -4008,6 +4028,7 @@ class SEEDCard extends HTMLElement {
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
+    stripCardHeaderCardKeys(merged);
     if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     this._config = merged;
     DEBUG = !!merged.debug;
@@ -4660,6 +4681,11 @@ class SEEDCard extends HTMLElement {
           --mdc-icon-size: var(--seed-card-title-icon-size);
         }
         .seed-title-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* v244: a card as the title bar. The slot takes the bar's width; the overlay makes the whole
+           header card a tap target for opening/closing (expander-card's title-card-button-overlay). */
+        .ees-header-card-host { position: relative; flex: 1 1 auto; min-width: 0; padding: 0; display: block; }
+        .ees-header-card-slot { display: block; min-width: 0; }
+        .ees-header-card-overlay { position: absolute; inset: 0; cursor: pointer; z-index: 1; }
         /* v241: right-side header text (card title + section headers) */
         .ees-title-right {
           flex: 0 1 auto; min-width: 0; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
@@ -5172,7 +5198,14 @@ class SEEDCard extends HTMLElement {
     const showTitleText = this._config.show_title !== false && !!this._config.title;
     const showTitleIcon = this._config.show_title_icon !== false && !!this._config.title_icon;
     let titleHtml = '';
-    if (showTitleText || showTitleIcon) {
+    if (this._config.card_header_card) {
+      // v244: the header card stands in for the whole built-in title (icon, text, count, right side).
+      const overlay = this._config.card_header_card_tap !== 'card';
+      titleHtml = `<div class="ees-header-card-host">
+          <div class="ees-header-card-slot"></div>
+          ${overlay ? '<span class="ees-header-card-overlay" aria-hidden="true"></span>' : ''}
+        </div>`;
+    } else if (showTitleText || showTitleIcon) {
       // Header Rule Sets applied to the card title override icon/glyph/text
       // color+size and can add a secondary line.
       const cts = this._resolveCardTitleStyle();
@@ -5677,6 +5710,43 @@ class SEEDCard extends HTMLElement {
     });
   }
 
+  // v244: build (or re-attach) the header card. The element is kept across full re-renders when its
+  // config is unchanged, so a header card's own state survives a library update or config tweak.
+  async _mountHeaderCard() {
+    const cfg = this._config && this._config.card_header_card;
+    const slot = this.querySelector('.ees-header-card-slot');
+    if (!cfg || !slot) return;
+    const want = JSON.stringify(cfg);
+    const prev = this._headerCard;
+    if (prev && prev.sig === want && prev.el) {
+      if (prev.el.parentNode !== slot) slot.replaceChildren(prev.el);
+      return;
+    }
+    let el = null;
+    try {
+      if (customElements.get('hui-card')) {
+        el = document.createElement('hui-card');
+        el.preview = false;
+        el.config = JSON.parse(want);
+        if (this._hass) el.hass = this._hass;
+        if (typeof el.load === 'function') el.load();
+      } else {
+        const helpers = this._cardHelpers || (this._cardHelpers = await window.loadCardHelpers());
+        el = helpers.createCardElement(JSON.parse(want));
+        if (this._hass) el.hass = this._hass;
+      }
+    } catch (e) {
+      debugLog('header card failed', e);
+      slot.innerHTML = `<div class="seed-embed-error">Could not create header card: ${escapeHtml(String(cfg.type))}</div>`;
+      this._headerCard = { sig: want, el: null };
+      return;
+    }
+    const cur = this.querySelector('.ees-header-card-slot');   // an await may have re-rendered
+    if (!cur) return;
+    cur.replaceChildren(el);
+    this._headerCard = { sig: want, el };
+  }
+
   _innerPadCls() { return CARD_INNER_PAD_KEYS.some(k => optNumber(this._config[k]) !== null) ? ' seed-inner-pad' : ''; }
 
   // ---- v237: pop-up card ---------------------------------------------------
@@ -5970,6 +6040,7 @@ class SEEDCard extends HTMLElement {
     this.attachEventListeners();
     this._wireCardPopup();
     this._wireSectionPopups();
+    this._mountHeaderCard();
     if (reopen) {
       if (popup) {
         this._openCardPopup();
@@ -6152,6 +6223,9 @@ class SEEDCard extends HTMLElement {
   // patch themselves internally, exactly as they would on a normal dashboard.
   // Called from updateStates(), so it rides the same debounce as everything else.
   _updateEmbeddedCards() {
+    if (this._hass && this._headerCard && this._headerCard.el) {
+      try { this._headerCard.el.hass = this._hass; } catch (e) { debugLog('header card hass failed', e); }
+    }
     if (!this._hass || !this._embedEls) return;
     Object.keys(this._embedEls).forEach(k => {
       const rec = this._embedEls[k];
@@ -7386,6 +7460,11 @@ class SEEDCard extends HTMLElement {
 
   attachEventListeners() {
     const autoClose = this._config.auto_close_sections || false;
+    // v244: card_header_card_tap: 'card' — a tap on the header card is the header card's own
+    if (this._config.card_header_card && this._config.card_header_card_tap === 'card') {
+      const slot = this.querySelector('.ees-header-card-slot');
+      if (slot) slot.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+    }
 
     this.querySelectorAll('details.seed-section').forEach(details => {
       details.addEventListener('toggle', () => {
@@ -7919,6 +7998,7 @@ class SEEDCardEditor extends HTMLElement {
       ...cardPopupKeys(cfg),
       ...cardTitleBarKeys(cfg),
       ...titleRightKeys(cfg, 'card_'),
+      ...cardHeaderCardKeys(cfg),
       ...((Array.isArray(cfg.header_rules) && cfg.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(cfg.header_rules) } : {}),
       rule_sets,
       sections
@@ -7933,6 +8013,7 @@ class SEEDCardEditor extends HTMLElement {
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
+    stripCardHeaderCardKeys(merged);
     if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     return JSON.parse(JSON.stringify(merged));
   }
@@ -9651,7 +9732,7 @@ class SEEDCardEditor extends HTMLElement {
             ${this._edOptPx('body_pad_v', 'Padding (top/bottom)', 0, 32, sid)}
             ${this._edOptPx('body_pad_left', 'Padding (left)', 0, 48, sid)}
             ${this._edOptPx('body_pad_right', 'Padding (right)', 0, 48, sid)}
-            ${this._edOptPx('child_margin_top', 'Space above each card', 0, 32, sid)}
+            ${this._edOptPx('child_margin_top', 'Space above each card', 0, 32, sid).replace('min="0"', 'min="-32"')}
             ${this._atHeaderRuleRefEditor(sid, section)}
             </div>
           </details>
@@ -12989,6 +13070,22 @@ class SEEDCardEditor extends HTMLElement {
         ` : ''}
 
         ${this._edCardSub('title', 'Card Header', `
+        <div class="seed-ed-group-div">Header card</div>
+        <div class="seed-ed-checkbox-row">
+          <input type="checkbox" id="ed-header-card-on" ${this._config.card_header_card ? 'checked' : ''} />
+          <label for="ed-header-card-on">Use a card as the title bar (like expander-card's title-card)</label>
+        </div>
+        ${this._config.card_header_card ? `
+        <span class="seed-ed-hint">This card replaces the built-in title, icon, count and right-side text below. Its YAML is exactly what you'd write on a dashboard.</span>
+        <div class="seed-ed-cards-yaml"><ha-yaml-editor id="ed-header-card-yaml"></ha-yaml-editor></div>
+        <div class="seed-ed-hint" id="ed-header-card-err" style="display:none; color:var(--error-color,#db4437);"></div>
+        <div class="seed-ed-checkbox-row">
+          <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Tapping it:</span>
+          <select id="ed-header-card-tap">
+            <option value="expand" ${this._config.card_header_card_tap !== 'card' ? 'selected' : ''}>Opens / closes this card</option>
+            <option value="card" ${this._config.card_header_card_tap === 'card' ? 'selected' : ''}>Runs the header card's own tap / hold actions</option>
+          </select>
+        </div>` : ''}
         <div class="seed-ed-group-title">Title Text</div>
         <div class="seed-ed-pair">
           <div class="seed-ed-checkbox-row" style="flex:0 0 auto;padding:0;">
@@ -16422,6 +16519,35 @@ class SEEDCardEditor extends HTMLElement {
           this._fireConfigChanged();
         }
       });
+    });
+
+    // v244: header card
+    const hcOn = this.querySelector('#ed-header-card-on');
+    if (hcOn) hcOn.addEventListener('change', () => {
+      if (hcOn.checked) this._config.card_header_card = { type: 'custom:button-card', name: this._config.title || 'Header', icon: this._config.title_icon || 'mdi:view-list' };
+      else { delete this._config.card_header_card; delete this._config.card_header_card_tap; }
+      this._fireConfigChanged(); this._rendered = false; this.renderEditor();
+    });
+    const hcYaml = this.querySelector('#ed-header-card-yaml');
+    if (hcYaml && this._config.card_header_card) {
+      try { hcYaml.defaultValue = JSON.parse(JSON.stringify(this._config.card_header_card)); } catch (e) {}
+      hcYaml.addEventListener('value-changed', (ev) => {
+        ev.stopPropagation();
+        const d = ev.detail || {};
+        const err = this.querySelector('#ed-header-card-err');
+        const bad = (msg) => { if (err) { err.style.display = ''; err.textContent = msg; } };
+        if (d.isValid === false) return bad(d.errorMsg || 'Invalid YAML — the card still uses the last valid header card.');
+        const v = d.value;
+        if (!v || typeof v !== 'object' || Array.isArray(v) || typeof v.type !== 'string') return bad('A card config has to be a set of keys, starting with `type:`.');
+        if (err) { err.style.display = 'none'; err.textContent = ''; }
+        this._config.card_header_card = JSON.parse(JSON.stringify(v));
+        this._fireConfigChanged();
+      });
+    }
+    const hcTap = this.querySelector('#ed-header-card-tap');
+    if (hcTap) hcTap.addEventListener('change', () => {
+      if (hcTap.value === 'card') this._config.card_header_card_tap = 'card'; else delete this._config.card_header_card_tap;
+      this._fireConfigChanged();
     });
 
     // v242: the card's own Header Rule Sets

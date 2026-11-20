@@ -5,6 +5,23 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.244
+
+- **Any card as the title bar (EES-FEATURE-GAPS item 9, Option A).** Set it under Card Header →
+  *Header card*, or as `card_header_card: {type: …}` in YAML, with the card's own config verbatim
+  (HA's YAML editor in the panel). It replaces the built-in title, icon, count and right-side
+  text, like expander-card's `title-card`.
+  - **Tapping it:** by default it opens / closes the card, through a transparent layer over it
+    (expander-card's `title-card-button-overlay`). With `card_header_card_tap: card`, taps reach the
+    header card, so its own tap / hold actions run. The chevron still opens the card.
+  - It mounts through `hui-card`, gets live updates, and is kept across full redraws while its
+    config is unchanged.
+  - It also works as the header of a pop-up card.
+- `child_margin_top` may now be negative (−64 to 64 px), like expander-card's `child-margin-top:
+  -1em`.
+- Test: `/shared/user/code/_tests/entity-card-header-card.test.mjs` (8 checks; all 8 fail against
+  v243), now part of the publish gate.
+
 ## v2026.11.20.243
 
 - **Fixed: an embedded card with its own `card_mod` lost its top padding (EES-FEATURE-GAPS item
