@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.20.244
+// Version: v2026.11.20.245
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.20.244';
+const BUILD_NUMBER = 'v2026.11.20.245';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1646,7 +1646,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.20.244: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.20.245: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3602,7 +3602,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.20.244: card-level links to one section.
+// v2026.11.20.245: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3620,7 +3620,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.20.244: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.20.245: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3653,7 +3653,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.20.244: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.20.245: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3673,7 +3673,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.20.244: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.20.245: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3696,7 +3696,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.20.244 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.20.245 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3718,7 +3718,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.20.244 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.20.245 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3741,28 +3741,101 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// Resolve a right-text template. Returns null when it should be hidden (empty, or any token's
-// entity missing / unknown / unavailable).
-function renderTitleRight(tpl, hass) {
-  if (!tpl || !hass || !hass.states) return null;
-  let bad = false;
-  const out = tpl.replace(/\{entity:([^:}]+)(?::([^}]+))?\}/g, (m, id, attr) => {
-    const st = hass.states[id.trim()];
-    if (!st || st.state === 'unavailable' || st.state === 'unknown' || st.state == null) { bad = true; return ''; }
-    if (attr === 'raw') return String(st.state);
-    if (!attr) {
-      if (typeof hass.formatEntityState === 'function') { try { return String(hass.formatEntityState(st)); } catch (e) {} }
-      const u = st.attributes && st.attributes.unit_of_measurement;
-      return u ? `${st.state} ${u}` : String(st.state);
+// ---- v2026.11.20.245: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// One small, FIXED token language for every header text: card title, section names, right-side
+// text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
+//   {entity:ID}            state as HA formats it ("1.84 kW")
+//   {entity:ID:attr}       an attribute, HA-formatted
+//   {entity:ID:raw}        the bare state     ({entity:ID:attr:raw} the bare attribute)
+//   {count:rs_id}          how many entities the card's Rule Set matches now
+//   {ago:ID} {ago:ID1,ID2} time since last_changed (the most recent of several):
+//                          "Just now" / "N mins ago" / "N hrs ago"
+// Filters, chained after '|':  round(n)  div(n)  map(a=Text A,b=Text B,*=Other)
+//   e.g. {entity:sensor.dist:raw|div(5280)|round(1)}   {entity:valve.main:raw|map(open=Valve Open,closed=Valve Closed)}
+// Returns { text, bad }: bad = an {entity:…} token's entity is missing / unknown / unavailable
+// (or its attribute is absent), so the caller can hide the text (right side) or leave it blank.
+const TPL_TOKEN = /\{(entity|count|ago):([^}]*)\}/g;
+function formatAgo(sec) {
+  if (sec < 60) return 'Just now';
+  const m = Math.floor(sec / 60);
+  if (m < 60) return `${m} mins ago`;
+  return `${Math.floor(m / 60)} hrs ago`;
+}
+function applyTplFilters(val, filters) {
+  let v = val;
+  for (const f of filters) {
+    const m = /^\s*(round|div|map)\((.*)\)\s*$/.exec(f);
+    if (!m) continue;
+    const arg = m[2];
+    if (m[1] === 'map') {
+      const pairs = arg.split(',').map(x => x.split('=')).filter(x => x.length >= 2)
+        .map(([k, ...r]) => [k.trim().toLowerCase(), r.join('=').trim()]);
+      const hit = pairs.find(([k]) => k === String(v).trim().toLowerCase()) || pairs.find(([k]) => k === '*');
+      if (hit) v = hit[1];
+      continue;
     }
-    const v = st.attributes ? st.attributes[attr] : undefined;
-    if (v == null) { bad = true; return ''; }
-    if (typeof hass.formatEntityAttributeValue === 'function') { try { return String(hass.formatEntityAttributeValue(st, attr)); } catch (e) {} }
-    return String(v);
+    const n = Number(v), a = Number(arg);
+    if (!Number.isFinite(n)) continue;
+    if (m[1] === 'div') { if (Number.isFinite(a) && a !== 0) v = n / a; }
+    else v = n.toFixed(Number.isFinite(a) ? Math.max(0, Math.min(6, Math.round(a))) : 0);
+  }
+  return v;
+}
+function renderTemplate(tpl, hass, ctx = {}) {
+  if (tpl == null) return { text: '', bad: false };
+  tpl = String(tpl);
+  if (tpl.indexOf('{') === -1 || !hass || !hass.states) return { text: tpl, bad: false };
+  let bad = false;
+  const text = tpl.replace(TPL_TOKEN, (m, kind, body) => {
+    const [head, ...filters] = body.split('|');
+    let val = '';
+    if (kind === 'count') {
+      val = ctx.ruleSetCount ? ctx.ruleSetCount(head.trim()) : 0;
+    } else if (kind === 'ago') {
+      const ages = head.split(',').map(x => hass.states[x.trim()]).filter(st => st && st.last_changed)
+        .map(st => Math.max(0, (Date.now() - new Date(st.last_changed).getTime()) / 1000));
+      if (!ages.length) { bad = true; return ''; }
+      val = formatAgo(Math.min(...ages));
+    } else {
+      const parts = head.split(':').map(x => x.trim());
+      const st = hass.states[parts[0]];
+      const raw = parts[parts.length - 1] === 'raw';
+      const attr = raw ? parts.slice(1, -1)[0] : parts[1];
+      if (!st || st.state === 'unavailable' || st.state === 'unknown' || st.state == null) { bad = true; return ''; }
+      if (!attr) {
+        if (raw) val = st.state;
+        else if (typeof hass.formatEntityState === 'function') { try { val = hass.formatEntityState(st); } catch (e) { val = st.state; } }
+        else { const u = st.attributes && st.attributes.unit_of_measurement; val = u ? `${st.state} ${u}` : st.state; }
+      } else {
+        const a = st.attributes ? st.attributes[attr] : undefined;
+        if (a == null) { bad = true; return ''; }
+        val = a;
+        if (!raw && typeof hass.formatEntityAttributeValue === 'function') { try { val = hass.formatEntityAttributeValue(st, attr); } catch (e) {} }
+      }
+    }
+    return String(applyTplFilters(val, filters));
   });
-  if (bad) return null;
-  const t = out.trim();
+  return { text, bad };
+}
+const HEADER_TOKENS_HINT = 'Tokens (title, section names, right side, rules): <code>{entity:ID}</code> HA-formatted state, <code>{entity:ID:attr}</code>, <code>{entity:ID:raw}</code>, <code>{count:rule_set_id}</code>, <code>{ago:ID}</code> or <code>{ago:ID1,ID2}</code>; filters <code>|round(1)</code> <code>|div(5280)</code> <code>|map(on=Open,off=Closed,*=Other)</code>.';
+const tplUsesAgo = (t) => typeof t === 'string' && t.indexOf('{ago:') !== -1;
+// Right-side text: hidden (null) when empty or any entity token is bad.
+function renderTitleRight(tpl, hass, ctx) {
+  if (!tpl || !hass || !hass.states) return null;
+  const r = renderTemplate(tpl, hass, ctx);
+  if (r.bad) return null;
+  const t = r.text.trim();
   return t ? t : null;
+}
+// ONE shared once-a-minute tick for every card showing an {ago:…} token, so "5 mins ago" moves on
+// even when nothing changes — without a timer per card.
+const _AGO_CARDS = new Set();
+let _agoTimer = null;
+function _agoWatch(card, on) {
+  if (on) _AGO_CARDS.add(card); else _AGO_CARDS.delete(card);
+  if (_AGO_CARDS.size && !_agoTimer) {
+    _agoTimer = setInterval(() => _AGO_CARDS.forEach(c => { try { c._refreshTemplates(); } catch (e) {} }), 30000);
+  } else if (!_AGO_CARDS.size && _agoTimer) { clearInterval(_agoTimer); _agoTimer = null; }
 }
 function stripCardTitleBarKeys(m) {
   const keep = cardTitleBarKeys(m);
@@ -3921,6 +3994,7 @@ class SEEDCard extends HTMLElement {
   static _libListenerCount() { return _libListenerCount(); }
 
   connectedCallback() {
+    if (this._rendered) _agoWatch(this, this._usesAgo());
     if (!this._libDetached) return;
     this._libDetached = false;
     if (this._hass && this._config) this._ensureLibraries(this._hass);
@@ -3929,6 +4003,7 @@ class SEEDCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    _agoWatch(this, false);
     if (this._updateTimer) { clearTimeout(this._updateTimer); this._updateTimer = null; }
     // v237: a card leaving the page takes its pop-up with it
     if (this._popupOpen) { try { this._closeCardPopup(); } catch (e) {} }
@@ -5221,7 +5296,7 @@ class SEEDCard extends HTMLElement {
       titleHtml = `
         <div class="seed-title">
           ${showTitleIcon ? `<ha-icon icon="${titleIconGlyph}"${titleIconStyle ? ` style="${titleIconStyle}"` : ''}></ha-icon>` : ''}
-          ${showTitleText ? `<span class="seed-title-text"${titleTextStyle ? ` style="${titleTextStyle}"` : ''}>${this._config.title}${this._cardTitleCountHtml()}</span>` : ''}
+          ${showTitleText ? `<span class="seed-title-text"${titleTextStyle ? ` style="${titleTextStyle}"` : ''}>${this._titleTplHtml(this._config.title, '__card__')}${this._cardTitleCountHtml()}</span>` : ''}
           ${this._titleRightHtml(this._config, 'card_', '__card__')}
           ${lastChangedText ? `<span class="seed-title-last-changed">${lastChangedText}</span>` : ''}
           ${cts.secondaryText ? `<span class="seed-title-secondary">${escapeHtml(String(cts.secondaryText))}</span>` : ''}
@@ -5533,7 +5608,7 @@ class SEEDCard extends HTMLElement {
     const secondaryHtml = hrs.secondaryText
       ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
     return `
-      <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${section.name || ''}${titleCountHtml}${secondaryHtml}</div>
+      <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${this._titleTplHtml(section.name || '', section.id)}${titleCountHtml}${secondaryHtml}</div>
       ${this._titleRightHtml(section, '', section.id)}
       ${rightCountHtml}
       <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
@@ -5637,7 +5712,7 @@ class SEEDCard extends HTMLElement {
       const secondaryHtml = hrs.secondaryText
         ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
       headerHtml = `
-        <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${escapeHtml(String(groupName))}${secondaryHtml}</div>
+        <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${String(groupName || '').indexOf('{') === -1 ? escapeHtml(String(groupName)) : this._titleTplHtml(groupName, mirrorChild ? mirrorChild.id : section.id)}${secondaryHtml}</div>
         ${this._titleRightHtml(section, '', section.id)}
         <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
       `;
@@ -5676,8 +5751,8 @@ class SEEDCard extends HTMLElement {
   // applies. Returns the text, or null to hide.
   _titleRightText(src, prefix, id) {
     const hrs = id === '__card__' ? this._resolveCardTitleStyle() : this._resolveHeaderStyle(src);
-    if (hrs && hrs.rightText != null) return renderTitleRight(String(hrs.rightText), this._hass);
-    return renderTitleRight(src && src[prefix + 'title_right'], this._hass);
+    if (hrs && hrs.rightText != null) return renderTitleRight(String(hrs.rightText), this._hass, this._tplCtx());
+    return renderTitleRight(src && src[prefix + 'title_right'], this._hass, this._tplCtx());
   }
   // whether any header rule applied here can produce right-side text (so the span must exist)
   _rulesMayGiveRight(src, id) {
@@ -5698,6 +5773,38 @@ class SEEDCard extends HTMLElement {
     ].join('');
     return `<span class="ees-title-right" data-ees-right="${escapeHtml(id)}"${st ? ` style="${st}"` : ''}>${escapeHtml(txt || '')}</span>`;
   }
+  _tplCtx() { return { ruleSetCount: (id) => this._ruleSetCount(id) }; }
+  // v245: a title / section name rendered through the template engine. Plain text (no '{') is
+  // returned exactly as before (raw), so existing titles are byte-identical; a template's output
+  // is escaped and wrapped in a span the live refresh can find.
+  _titleTplHtml(raw, key) {
+    const str = raw == null ? '' : String(raw);
+    if (str.indexOf('{') === -1) return str;
+    const r = renderTemplate(str, this._hass, this._tplCtx());
+    return `<span class="ees-tpl" data-ees-tpl="${escapeHtml(key)}">${escapeHtml(r.text)}</span>`;
+  }
+  // The template behind a data-ees-tpl key (rules may replace it: see v246 set_title).
+  _tplSource(key) {
+    if (key === '__card__') return this._config.title;
+    const sec = this._findSectionById(key);
+    return sec ? sec.name : '';
+  }
+  _refreshTemplates() {
+    this.querySelectorAll('[data-ees-tpl]').forEach(el => {
+      const r = renderTemplate(this._tplSource(el.dataset.eesTpl), this._hass, this._tplCtx());
+      if (el.textContent !== r.text) el.textContent = r.text;
+    });
+    this._refreshTitleRights();
+  }
+  // Does this config show any {ago:…}? (decides whether it joins the shared minute tick)
+  _usesAgo() {
+    const c = this._config || {};
+    const any = (o, keys) => keys.some(k => tplUsesAgo(o && o[k]));
+    const walk = (list) => (list || []).some(x => any(x, ['name', 'title_right']) || walk(x && x.children));
+    const rules = (c.header_rules || []).some(h => (h.rules || []).concat(h.default ? [h.default] : []).some(r => any(r, ['set_right', 'set_title'])));
+    return any(c, ['title', 'card_title_right']) || walk(c.sections) || rules;
+  }
+
   _refreshTitleRights() {
     this.querySelectorAll('.ees-title-right').forEach(el => {
       const id = el.dataset.eesRight;
@@ -5774,7 +5881,7 @@ class SEEDCard extends HTMLElement {
     const close = '<button type="button" class="ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>';
     const bar = c.card_popup_title === false
       ? `<button type="button" class="ees-popup-close ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>`
-      : `<div class="ees-popup-title"><span class="ees-popup-title-text">${escapeHtml(String(c.title || ''))}${this._cardTitleCountHtml()}</span>${this._titleRightHtml(c, 'card_', '__card__')}${close}</div>`;
+      : `<div class="ees-popup-title"><span class="ees-popup-title-text">${String(c.title || '').indexOf('{') === -1 ? escapeHtml(String(c.title || '')) : this._titleTplHtml(c.title, '__card__')}${this._cardTitleCountHtml()}</span>${this._titleRightHtml(c, 'card_', '__card__')}${close}</div>`;
     const body = `<div class="easy-entity-styler-card-body">${sectionsHtml}</div>`;
     const dialog = `
         <dialog class="ees-popup ees-card-popup size-${size}"${vars.length ? ` style="${vars.join(';')};"` : ''}>
@@ -6041,6 +6148,7 @@ class SEEDCard extends HTMLElement {
     this._wireCardPopup();
     this._wireSectionPopups();
     this._mountHeaderCard();
+    if (this.isConnected) _agoWatch(this, this._usesAgo());
     if (reopen) {
       if (popup) {
         this._openCardPopup();
@@ -7227,16 +7335,12 @@ class SEEDCard extends HTMLElement {
       .replace(/\{newest\}/g, newest)
       .replace(/\{oldest\}/g, oldest);
 
-    // Arbitrary-entity tokens: {entity:ID}, {entity:ID:attribute},
-    // {entity:ID:friendly_name}. Reads the live state; blank when unavailable.
-    if (out.indexOf('{entity:') !== -1 && this._hass) {
-      out = out.replace(/\{entity:([^:}]+)(?::([^}]+))?\}/g, (m, id, attr) => {
-        const st = this._hass.states[id];
-        if (!st) return '';
-        if (!attr) return st.state != null ? String(st.state) : '';
-        const v = st.attributes ? st.attributes[attr] : undefined;
-        return v != null ? String(v) : '';
-      });
+    // {entity:…} (bare state, as tables always showed it), plus v245's {count:rs} / {ago:…} and
+    // filters, through the shared engine. Blank when unavailable.
+    if (out.indexOf('{') !== -1 && this._hass) {
+      out = out.replace(/\{entity:([^}|:]+)(:[^}|]*)?(\|[^}]*)?\}/g, (m, id, attr, filt) =>
+        `{entity:${id}${attr || ':raw'}${attr && !/:raw$/.test(attr) ? ':raw' : ''}${filt || ''}}`);
+      out = renderTemplate(out, this._hass, this._tplCtx()).text;
     }
     return out;
   }
@@ -7565,8 +7669,9 @@ class SEEDCard extends HTMLElement {
 
   updateStates() {
     if (!this._hass) return;
-    // v241: right-side header text follows its entities (after this pass, so rebuilt headers count)
-    Promise.resolve().then(() => { try { this._refreshTitleRights(); } catch (e) {} });
+    // v241/v245: right-side text + title templates follow their entities (after this pass, so
+    // rebuilt headers count)
+    Promise.resolve().then(() => { try { this._refreshTemplates(); } catch (e) {} });
     // v239: after this pass, copy the refreshed header into an open section pop-up's title bar
     if (this._secPopupOpen) Promise.resolve().then(() => { try { this._refreshSecPopupTitle(); } catch (e) {} });
 
@@ -8092,7 +8197,7 @@ class SEEDCardEditor extends HTMLElement {
     const size = optNumber(src[k('title_right_size')]);
     return `
         <div class="seed-ed-group-div">Right side${tpl ? `<span class="seed-ed-reset-btn ed-tr-reset" ${d.replace('%', k('title_right'))} title="Remove the right-side text"><ha-icon icon="mdi:backup-restore"></ha-icon>Clear</span>` : ''}</div>
-        <span class="seed-ed-hint">Text on the right of the header, side by side with ${sid ? 'the right-hand count' : 'the "last changed" time'}. <code>{entity:sensor.x}</code> shows its state as HA formats it ("1.84 kW"); <code>{entity:sensor.x:attribute}</code> an attribute; <code>{entity:sensor.x:raw}</code> the bare state. Hidden while any of its entities is unavailable or unknown.</span>
+        <span class="seed-ed-hint">Text on the right of the header, side by side with ${sid ? 'the right-hand count' : 'the "last changed" time'}. Hidden while any of its entities is unavailable or unknown. ${HEADER_TOKENS_HINT}</span>
         <div class="seed-ed-checkbox-row">
           <input type="checkbox" class="ed-tr" ${d.replace('%', k('title_right_show'))} ${show ? 'checked' : ''} ${tpl ? '' : 'disabled'} />
           <input type="text" class="ed-tr" ${d.replace('%', k('title_right'))} value="${escapeHtml(tpl)}" placeholder="e.g. {entity:sensor.power}" style="flex:1 1 200px;min-width:150px;" />
@@ -13092,8 +13197,9 @@ class SEEDCardEditor extends HTMLElement {
             <input type="checkbox" id="ed-show-title" ${showTitleText ? 'checked' : ''} />
             <label for="ed-show-title">Show</label>
           </div>
-          <input type="text" id="ed-title" value="${this._config.title || ''}" placeholder="e.g. SEED" style="flex:1 1 200px;min-width:150px;" />
+          <input type="text" id="ed-title" value="${escapeHtml(this._config.title || '')}" placeholder="e.g. SEED" style="flex:1 1 200px;min-width:150px;" />
         </div>
+        ${String(this._config.title || '').indexOf('{') !== -1 ? `<span class="seed-ed-hint">${HEADER_TOKENS_HINT}</span>` : ''}
         ${showTitleText ? `
         <div class="seed-ed-checkbox-row">
           <span style="font-size:var(--ltek-fs-body); color:var(--ltek-c-label);">Count in title:</span>

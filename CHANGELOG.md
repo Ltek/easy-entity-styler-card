@@ -5,6 +5,32 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.245
+
+- **Header templates (EES-FEATURE-GAPS 9.1).** The card title, section and group names, the
+  right-side text, and a rule's right-side text all accept one fixed set of tokens:
+  - `{entity:ID}` gives the state as HA formats it; `{entity:ID:attr}` gives an attribute;
+    `{entity:ID:raw}` gives the bare state.
+  - `{count:rule_set_id}` gives how many entities one of the card's Rule Sets matches, e.g.
+    `Open Shades - {count:rs_open}`.
+  - `{ago:ID}` / `{ago:ID1,ID2}` gives the time since `last_changed`, using the most recent of
+    several: "Just now" / "N mins ago" / "N hrs ago".
+  - **Filters** (`round(n)`, `div(n)`, `map(a=Text,b=Text,*=Other)`) chain after `|`, e.g.
+    `{entity:sensor.dist:raw|div(5280)|round(1)} mi`.
+  - There are no conditionals; those belong in Header Rules.
+- **Titles update live** with state changes. Cards that show `{ago:…}` share **one** 30-second
+  timer, which stops when the last of them leaves the page, so "5 mins ago" moves on even when
+  nothing changes.
+- **Behaviour details.**
+  - A title or name without `{` renders exactly as before.
+  - A token whose entity is unavailable is blank in a title. On the right side it hides the whole
+    text, as before.
+  - Token values are escaped.
+- **Entity Table titles** gain the same `{count:…}`, `{ago:…}` and filters. Their own
+  `{entity:ID}` still shows the bare state, as tables always did.
+- Test: `/shared/user/code/_tests/entity-card-templates.test.mjs` (11 checks; 10 fail against
+  v244), now part of the publish gate.
+
 ## v2026.11.20.244
 
 - **Any card as the title bar (EES-FEATURE-GAPS item 9, Option A).** Set it under Card Header →
