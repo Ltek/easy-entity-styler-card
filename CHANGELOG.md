@@ -5,6 +5,16 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.250
+
+- **Title bar height.** `card_title_height` (px) sets a minimum height for the title bar, with its
+  content centred. This is button-card's fixed `height:` on a header. Set it under Card Header →
+  *Title bar spacing*. Without it, the title bar sizes to its content as before.
+- With this, the 14 non-person headers from EES-FEATURE-GAPS item 9 render natively, without
+  button-card. Rendered next to their originals in HA, with the test entities off and on: header
+  height, total height, icon, icon colour and text all match. The one exception is AirScape's run mode
+  while off, which the original draws fully transparent.
+
 ## v2026.11.20.249
 
 - **An entity's picture as the title icon (EES-FEATURE-GAPS 9.6).** Card Header → Title Icon →
