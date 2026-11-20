@@ -5,6 +5,21 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.246
+
+- **Rules can set the title (EES-FEATURE-GAPS 9.2).** A header rule has a *Title* (`set_title`)
+  that replaces the card title, section name, group name or table title while it applies. Tokens
+  work in it, e.g. `Door Locks - {count:rs_unlocked} Unlocked`. A set's `default:` supplies the title
+  when no rule matches. It updates live.
+- **Rule order.** As for every rule output, rules apply in order and the last matching one wins, so
+  put the most specific rule last. Example: Garage "Door 1 Open", then "Door 2 Open", then "Both Open".
+- **A condition can name its own entity** (`entity:` on a condition, or the entity box on a
+  header-rule condition row). That makes rules like "PS4 is playing AND the TV isn't off" possible.
+  A rule whose conditions all name their entities needs no bound entity. A named entity that doesn't
+  exist never matches.
+- Test: `/shared/user/code/_tests/entity-card-set-title.test.mjs` (8 checks; 7 fail against v245),
+  now part of the publish gate.
+
 ## v2026.11.20.245
 
 - **Header templates (EES-FEATURE-GAPS 9.1).** The card title, section and group names, the

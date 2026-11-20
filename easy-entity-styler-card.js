@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.20.245
+// Version: v2026.11.20.246
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.20.245';
+const BUILD_NUMBER = 'v2026.11.20.246';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -769,6 +769,8 @@ function evalCondition(entityId, cond, hass, fallbackRef) {
   // colors instead of white).
   const STATE_OPS = ['is_on', 'is_off', 'truthy', 'unavailable'];
   const ref = cond.ref || (STATE_OPS.includes(cond.op) ? { source: 'state' } : (fallbackRef || { source: 'state' }));
+  // v246: a condition that names its own entity tests that one
+  if (cond.entity) { if (!hass || !hass.states || !hass.states[cond.entity]) return false; entityId = cond.entity; }
   return applyOp(resolveValueRef(entityId, ref, hass), cond);
 }
 
@@ -1052,6 +1054,8 @@ function normalizeCondition(c) {
   if (Array.isArray(c.all)) return { all: c.all.map(normalizeCondition) };
   if (Array.isArray(c.any)) return { any: c.any.map(normalizeCondition) };
   const out = { op: c.op || 'eq' };
+  // v246: a condition may name its OWN entity (header rules: "PS4 is on AND the TV isn't off")
+  if (typeof c.entity === 'string' && c.entity.trim()) out.entity = c.entity.trim();
   if (c.ref) out.ref = normalizeValueRef(c.ref);
   // Array-field condition: names the element field to test (attribute-array
   // rows). Preserved only when set, so entity conditions stay byte-stable.
@@ -1646,7 +1650,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.20.245: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.20.246: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -1800,7 +1804,7 @@ function normalizeFrameRef(f) {
 // Modeled 1:1 on Frame Styles: read-only Built-In + shared System library.
 // ---------------------------------------------------------------------------
 const HEADER_RULE_OUTPUT_KEYS = [
-  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary', 'set_right'
+  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary', 'set_right', 'set_title'
 ];
 // v2026.11.19.242 (EES-FEATURE-GAPS 3a): what a rule TESTS. Absent = the bound entity (as before).
 //   { type: 'entities', entities: [ids], match?: 'all' }  `when` is tested on each; any (default) or all
@@ -1817,6 +1821,13 @@ function normalizeHeaderRuleSource(src) {
   return null;
 }
 // A count test for rule_set sources: { op: gt|ge|eq|ne|lt|le, value } (default "> 0").
+// v246: does a condition (tree) name every entity it tests, so it needs no bound entity?
+function conditionNamesEntities(c) {
+  if (!c) return false;
+  if (Array.isArray(c.all)) return c.all.length > 0 && c.all.every(conditionNamesEntities);
+  if (Array.isArray(c.any)) return c.any.length > 0 && c.any.every(conditionNamesEntities);
+  return !!c.entity;
+}
 function countConditionPasses(when, n) {
   const op = (when && when.op) || 'gt';
   const v = Number(when && when.value != null ? when.value : 0);
@@ -1845,6 +1856,8 @@ function normalizeHeaderRule(r) {
   }
   // v242: right-side header text (literal text and {entity:…} tokens), and what the rule tests
   if (typeof r.set_right === 'string' && r.set_right.trim()) out.set_right = r.set_right;
+  // v246: the header's title (tokens allowed); first matching rule wins, like every output
+  if (typeof r.set_title === 'string' && r.set_title.trim()) out.set_title = r.set_title;
   const src = normalizeHeaderRuleSource(r.source);
   if (src) {
     out.source = src;
@@ -3602,7 +3615,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.20.245: card-level links to one section.
+// v2026.11.20.246: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3620,7 +3633,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.20.245: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.20.246: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3653,7 +3666,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.20.245: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.20.246: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3673,7 +3686,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.20.245: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.20.246: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3696,7 +3709,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.20.245 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.20.246 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3718,7 +3731,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.20.245 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.20.246 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3741,7 +3754,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.20.245: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.20.246: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -5712,7 +5725,7 @@ class SEEDCard extends HTMLElement {
       const secondaryHtml = hrs.secondaryText
         ? `<div class="seed-section-secondary">${escapeHtml(String(hrs.secondaryText))}</div>` : '';
       headerHtml = `
-        <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${String(groupName || '').indexOf('{') === -1 ? escapeHtml(String(groupName)) : this._titleTplHtml(groupName, mirrorChild ? mirrorChild.id : section.id)}${secondaryHtml}</div>
+        <div class="seed-section-name"${nameStyle ? ` style="${nameStyle}"` : ''}>${(String(groupName || '').indexOf('{') === -1 && !this._rulesMaySetTitle(mirrorChild || section, (mirrorChild || section).id)) ? escapeHtml(String(groupName)) : this._titleTplHtml(groupName, mirrorChild ? mirrorChild.id : section.id)}${secondaryHtml}</div>
         ${this._titleRightHtml(section, '', section.id)}
         <div class="seed-section-icon"${iconStyle ? ` style="${iconStyle}"` : ''}><ha-icon icon="${iconGlyph}"></ha-icon></div>
       `;
@@ -5778,16 +5791,30 @@ class SEEDCard extends HTMLElement {
   // returned exactly as before (raw), so existing titles are byte-identical; a template's output
   // is escaped and wrapped in a span the live refresh can find.
   _titleTplHtml(raw, key) {
-    const str = raw == null ? '' : String(raw);
-    if (str.indexOf('{') === -1) return str;
+    const ruled = this._rulesMaySetTitle(key === '__card__' ? this._config : this._findSectionById(key), key);
+    const str = ruled ? String(this._tplSource(key) || '') : (raw == null ? '' : String(raw));
+    if (!ruled && str.indexOf('{') === -1) return str;
     const r = renderTemplate(str, this._hass, this._tplCtx());
     return `<span class="ees-tpl" data-ees-tpl="${escapeHtml(key)}">${escapeHtml(r.text)}</span>`;
   }
   // The template behind a data-ees-tpl key (rules may replace it: see v246 set_title).
   _tplSource(key) {
-    if (key === '__card__') return this._config.title;
+    if (key === '__card__') {
+      const t = this._rulesMaySetTitle(this._config, '__card__') ? this._resolveCardTitleStyle().titleText : null;
+      return t != null ? t : this._config.title;
+    }
     const sec = this._findSectionById(key);
-    return sec ? sec.name : '';
+    if (!sec) return '';
+    const t = this._rulesMaySetTitle(sec, key) ? this._resolveHeaderStyle(sec).titleText : null;
+    return t != null ? t : sec.name;
+  }
+  // whether a header rule applied here can produce a title (then the title is always wrapped so the
+  // live refresh can follow it, even while it is plain text)
+  _rulesMaySetTitle(src, id) {
+    const refs = id === '__card__' ? this._config.header_rule_refs : (src && src.header_rule_refs);
+    if (!Array.isArray(refs) || !refs.length) return false;
+    const byId = this._headerSetsById();
+    return refs.some(r => { const set = byId[r.ref]; return set && ((set.default && set.default.set_title) || (set.rules || []).some(x => x.set_title)); });
   }
   _refreshTemplates() {
     this.querySelectorAll('[data-ees-tpl]').forEach(el => {
@@ -5801,7 +5828,7 @@ class SEEDCard extends HTMLElement {
     const c = this._config || {};
     const any = (o, keys) => keys.some(k => tplUsesAgo(o && o[k]));
     const walk = (list) => (list || []).some(x => any(x, ['name', 'title_right']) || walk(x && x.children));
-    const rules = (c.header_rules || []).some(h => (h.rules || []).concat(h.default ? [h.default] : []).some(r => any(r, ['set_right', 'set_title'])));
+    const rules = (c.header_rules || []).some(h => (h.rules || []).concat(h.default ? [h.default] : []).some(r => any(r, ['set_right', 'set_title'])));   // set_title: v246
     return any(c, ['title', 'card_title_right']) || walk(c.sections) || rules;
   }
 
@@ -5881,7 +5908,7 @@ class SEEDCard extends HTMLElement {
     const close = '<button type="button" class="ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>';
     const bar = c.card_popup_title === false
       ? `<button type="button" class="ees-popup-close ees-popup-x" aria-label="Close"><ha-icon icon="mdi:close"></ha-icon></button>`
-      : `<div class="ees-popup-title"><span class="ees-popup-title-text">${String(c.title || '').indexOf('{') === -1 ? escapeHtml(String(c.title || '')) : this._titleTplHtml(c.title, '__card__')}${this._cardTitleCountHtml()}</span>${this._titleRightHtml(c, 'card_', '__card__')}${close}</div>`;
+      : `<div class="ees-popup-title"><span class="ees-popup-title-text">${(String(c.title || '').indexOf('{') === -1 && !this._rulesMaySetTitle(c, '__card__')) ? escapeHtml(String(c.title || '')) : this._titleTplHtml(c.title, '__card__')}${this._cardTitleCountHtml()}</span>${this._titleRightHtml(c, 'card_', '__card__')}${close}</div>`;
     const body = `<div class="easy-entity-styler-card-body">${sectionsHtml}</div>`;
     const dialog = `
         <dialog class="ees-popup ees-card-popup size-${size}"${vars.length ? ` style="${vars.join(';')};"` : ''}>
@@ -6951,7 +6978,8 @@ class SEEDCard extends HTMLElement {
       return { hit, entId: hits[0] || entId };
     }
     const hasEnt = entId && hass && hass.states[entId];
-    return { hit: !!hasEnt && evalCondition(entId, rule.when, hass), entId };
+    if (!hasEnt && !conditionNamesEntities(rule.when)) return { hit: false, entId };
+    return { hit: evalCondition(entId, rule.when, hass), entId };
   }
   // v242: matches of a card Rule Set, cached for one hass snapshot (many headers may ask).
   _ruleSetCount(ref) {
@@ -7008,6 +7036,7 @@ class SEEDCard extends HTMLElement {
         else if (k === 'set_icon_size') { out.iconSize = src[k]; }
         else if (k === 'set_text_size') { out.textSize = src[k]; }
         else if (k === 'set_right') { out.rightText = src[k]; }
+        else if (k === 'set_title') { out.titleText = src[k]; }
       });
     };
     refs.forEach(ref => {
@@ -7050,7 +7079,8 @@ class SEEDCard extends HTMLElement {
     const ids = this._getActivityEntities(section);
     const titleP = parts.title || {};
     const countP = parts.count || {};
-    const titleStr = this._activityTitleText(section, count, ids, titleP.template, titleP.zero_text);
+    const ruleTitle = hrs && hrs.titleText != null ? hrs.titleText : null;   // v246
+    const titleStr = this._activityTitleText(section, count, ids, ruleTitle != null ? ruleTitle : titleP.template, ruleTitle != null ? null : titleP.zero_text);
     const countStr = this._activityTitleText(section, count, ids, countP.template || '{count}', countP.zero_text);
 
     const partStyle = (p) => [
@@ -7149,7 +7179,10 @@ class SEEDCard extends HTMLElement {
     // so the card-wide fallback resolves to exactly this section's hoisted nodes.
     const q = (sel) => sectionEl.querySelector(sel) || this.querySelector(sel);
     const titleEl = q(`[data-at-title="${section.id}"]`);
-    if (titleEl) titleEl.textContent = this._activityTitleText(section, count, undefined, (parts.title || {}).template, (parts.title || {}).zero_text);
+    const ruleTitle = this._resolveHeaderStyle(section).titleText;   // v246
+    if (titleEl) titleEl.textContent = ruleTitle != null
+      ? this._activityTitleText(section, count, undefined, ruleTitle, null)
+      : this._activityTitleText(section, count, undefined, (parts.title || {}).template, (parts.title || {}).zero_text);
     const countEl = q(`[data-at-count="${section.id}"]`);
     if (countEl) countEl.textContent = this._activityTitleText(section, count, undefined, (parts.count || {}).template || '{count}', (parts.count || {}).zero_text);
     (parts.extra || []).forEach((ep, i) => {
@@ -10726,6 +10759,7 @@ class SEEDCardEditor extends HTMLElement {
       <div class="seed-ed-rule seed-ed-cond-row">
         <select class="at-input at-structural at-cond-what" data-at-sid="${sid}" data-at-path="${cpath}" data-at-what="${what}">${this._atOpts(this._AT_COND_WHAT, what)}</select>
         ${attrField}
+        ${(typeof sid === 'string' && (sid.startsWith('hdr:') || sid.startsWith('hrl:'))) ? `<input type="text" class="at-input" list="ees-all-entities" data-at-sid="${sid}" data-at-path="${cpath}.entity" value="${escapeHtml(cond.entity || '')}" placeholder="entity (blank = bound)" title="Test this entity instead of the bound one" style="width:150px;" />` : ''}
         <select class="at-input" data-at-sid="${sid}" data-at-path="${cpath}.op">${this._atOpts(this._AT_OPS, cond.op)}</select>
         <input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${cpath}.value" value="${escapeHtml(cond.value ?? '')}" placeholder="${ph}" style="width:90px;" />
         ${del}
@@ -11229,6 +11263,7 @@ class SEEDCardEditor extends HTMLElement {
     if (Number(rule.set_icon_size) > 0) chips.push(`<span class="seed-ed-hdr-rule-chip">${Number(rule.set_icon_size)}px icon</span>`);
     if (Number(rule.set_text_size) > 0) chips.push(`<span class="seed-ed-hdr-rule-chip">${Number(rule.set_text_size)}px text</span>`);
     if (sec.enabled) chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="mdi:subtitles-outline"></ha-icon>2nd</span>`);
+    if (rule.set_title) chips.push(`<span class="seed-ed-hdr-rule-chip">“${escapeHtml(rule.set_title)}”</span>`);
     if (rule.set_right) chips.push(`<span class="seed-ed-hdr-rule-chip">→ ${escapeHtml(rule.set_right)}</span>`);
     if (rule.source && rule.source.type === 'rule_set') chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="mdi:filter-variant"></ha-icon>${escapeHtml(rule.source.ref || '?')}</span>`);
     if (rule.source && rule.source.type === 'entities') chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="mdi:format-list-bulleted"></ha-icon>${(rule.source.entities || []).length} entities</span>`);
@@ -11252,6 +11287,9 @@ class SEEDCardEditor extends HTMLElement {
           </div>
           <div class="seed-ed-font-row">
             ${this._atColorField(sid, `${path}.set_text_color`, 'Text color', rule.set_text_color || '')}
+          </div>
+          <div class="seed-ed-font-row">
+            <label style="flex:1;">Title<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_title" value="${escapeHtml(rule.set_title || '')}" placeholder="e.g. Door Locks - {count:rs_unlocked} Unlocked" style="width:100%;" /></label>
           </div>
           <div class="seed-ed-font-row">
             <label style="flex:1;">Right-side text<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_right" value="${escapeHtml(rule.set_right || '')}" placeholder="e.g. Active, or {entity:sensor.x}" style="width:100%;" /></label>
