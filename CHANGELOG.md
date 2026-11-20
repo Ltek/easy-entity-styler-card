@@ -5,6 +5,32 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.242
+
+- **Header Rule Sets kept in the card (EES-FEATURE-GAPS 3a).** As well as the shared library, a card
+  can carry its own sets in `header_rules:`, so a pasted or copied card keeps its rules. In the
+  editor's Header Rules panel, *This card's Header Rules* has three actions: *Add card Header Rule*,
+  *Copy a library set into this card* (an independent copy), and delete. The last also removes the
+  set from any header that used it.
+  - Apply them like library sets. The header's Header Rules picker has a *This card* group.
+  - Ids are plain, e.g. `hr_x`. Library ids always start `lib:`.
+- **A rule can test more than the bound entity.** Each rule has a new *Test* setting:
+  - *A list of entities*, `source: {type: entities, entities: [...], match: all}`. The rule's
+    condition must hold for any entity (default) or all of them. Example: "either tuner isn't idle".
+  - *How many entities a Rule Set matches*, `source: {type: rule_set, ref: rs_x}`. The condition
+    becomes a count test (more than / at least / exactly / not / fewer than / at most N). Example:
+    "a Rule Set *switches ending `_privacy` that are on* has more than 0 matches".
+  - Counts are cached per state update, so many headers can share a Rule Set.
+- **A rule can set the right-side text** (`set_right`, plain text or `{entity:…}` tokens). This is
+  how "Active" / "All Idle" is shown. While it applies, it replaces the header's `title_right`
+  template, and a set's `default:` supplies the text when no rule matches. `title_right_color` and
+  `title_right_size` now also work when only rules supply the text.
+- `CARD_DESIGN_SYSTEM.md`: a written exception to "always link" for card-local Frame Styles and
+  Header Rule Sets.
+- Test: `/shared/user/code/_tests/entity-card-header-rules.test.mjs` (13 checks; 12 fail against
+  v241), now part of the publish gate. It is built from the three originals: Live TV, Camera Admin and
+  Internet Connectivity.
+
 ## v2026.11.19.241
 
 - **Text on the right of any header (EES-FEATURE-GAPS 3b).** The card title and every section

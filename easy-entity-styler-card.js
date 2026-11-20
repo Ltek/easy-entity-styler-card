@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.19.241
+// Version: v2026.11.20.242
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.19.241';
+const BUILD_NUMBER = 'v2026.11.20.242';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1646,7 +1646,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.19.241: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.20.242: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -1800,8 +1800,32 @@ function normalizeFrameRef(f) {
 // Modeled 1:1 on Frame Styles: read-only Built-In + shared System library.
 // ---------------------------------------------------------------------------
 const HEADER_RULE_OUTPUT_KEYS = [
-  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary'
+  'set_icon_color', 'set_icon', 'set_text_color', 'set_icon_size', 'set_text_size', 'set_secondary', 'set_right'
 ];
+// v2026.11.19.242 (EES-FEATURE-GAPS 3a): what a rule TESTS. Absent = the bound entity (as before).
+//   { type: 'entities', entities: [ids], match?: 'all' }  `when` is tested on each; any (default) or all
+//   { type: 'rule_set', ref: 'rs_x' }                    `when` is a COUNT test ({op, value}) on how many
+//                                                         entities the card's Rule Set matches now
+function normalizeHeaderRuleSource(src) {
+  if (!src || typeof src !== 'object') return null;
+  if (src.type === 'rule_set') return { type: 'rule_set', ref: src.ref ? String(src.ref) : '' };
+  if (src.type === 'entities') {
+    const list = (Array.isArray(src.entities) ? src.entities : String(src.entities || '').split(','))
+      .map(x => String(x).trim()).filter(Boolean);
+    return { type: 'entities', entities: list, ...(src.match === 'all' ? { match: 'all' } : {}) };
+  }
+  return null;
+}
+// A count test for rule_set sources: { op: gt|ge|eq|ne|lt|le, value } (default "> 0").
+function countConditionPasses(when, n) {
+  const op = (when && when.op) || 'gt';
+  const v = Number(when && when.value != null ? when.value : 0);
+  switch (op) {
+    case 'eq': return n === v; case 'ne': return n !== v;
+    case 'lt': return n < v;   case 'le': return n <= v;
+    case 'ge': return n >= v;  default: return n > v;
+  }
+}
 // Normalize one rule: a condition (`when`) + a sparse set of outputs. Outputs
 // are kept ONLY when set, so byte-stable. set_secondary is a value-ref object.
 function normalizeHeaderRule(r) {
@@ -1819,7 +1843,24 @@ function normalizeHeaderRule(r) {
   if (r.set_secondary && typeof r.set_secondary === 'object' && r.set_secondary.enabled) {
     out.set_secondary = normalizeSecondaryInfo(r.set_secondary);
   }
+  // v242: right-side header text (literal text and {entity:…} tokens), and what the rule tests
+  if (typeof r.set_right === 'string' && r.set_right.trim()) out.set_right = r.set_right;
+  const src = normalizeHeaderRuleSource(r.source);
+  if (src) {
+    out.source = src;
+    // a count test keeps only op + value
+    if (src.type === 'rule_set') out.when = { op: (r.when && r.when.op) || 'gt', value: Number(r.when && r.when.value != null ? r.when.value : 0) };
+  }
   return out;
+}
+// v242: the card's OWN header rule sets (card-local, like frame_presets). Each needs a stable id.
+function normalizeLocalHeaderRules(list) {
+  if (!Array.isArray(list)) return [];
+  return list.filter(h => h && typeof h === 'object').map(h => {
+    const n = normalizeHeaderRuleSet(h);
+    n.id = (h.id && !String(h.id).startsWith('lib:')) ? String(h.id) : ('hr_' + uid());
+    return n;
+  });
 }
 // Normalize a whole set: id/name + ordered rules + optional default outputs.
 function normalizeHeaderRuleSet(hs) {
@@ -3560,7 +3601,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.19.241: card-level links to one section.
+// v2026.11.20.242: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3578,7 +3619,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.19.241: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.20.242: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3611,7 +3652,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.19.241: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.20.242: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3631,7 +3672,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.19.241: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.20.242: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3654,7 +3695,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.19.241 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.20.242 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3668,9 +3709,10 @@ function titleRightKeys(c, prefix = '') {
   const k = (n) => prefix + n;
   const out = {};
   const tpl = typeof c[k('title_right')] === 'string' ? c[k('title_right')] : '';
-  if (!tpl.trim()) return out;
-  out[k('title_right')] = tpl;
-  if (c[k('title_right_show')] === false) out[k('title_right_show')] = false;
+  // v242: a Header Rule can supply the text (set_right) with no template, so the look keys stand
+  // on their own; show:false and the template still need something to act on.
+  if (tpl.trim()) out[k('title_right')] = tpl;
+  if (c[k('title_right_show')] === false && tpl.trim()) out[k('title_right_show')] = false;
   if (typeof c[k('title_right_color')] === 'string' && c[k('title_right_color')].trim()) out[k('title_right_color')] = c[k('title_right_color')].trim();
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
@@ -3950,6 +3992,7 @@ class SEEDCard extends HTMLElement {
       ...cardPopupKeys(config),
       ...cardTitleBarKeys(config),
       ...titleRightKeys(config, 'card_'),
+      ...((Array.isArray(config.header_rules) && config.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(config.header_rules) } : {}),
       rule_sets,
       sections
     };
@@ -3965,6 +4008,7 @@ class SEEDCard extends HTMLElement {
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
+    if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     this._config = merged;
     DEBUG = !!merged.debug;
     if (this._hass) {
@@ -5595,11 +5639,25 @@ class SEEDCard extends HTMLElement {
   }
 
   // v241: the right-side header text. `src` is the card config (prefix 'card_') or a section.
+  // v242: a Header Rule's set_right replaces the template while that rule (or the set's fallback)
+  // applies. Returns the text, or null to hide.
+  _titleRightText(src, prefix, id) {
+    const hrs = id === '__card__' ? this._resolveCardTitleStyle() : this._resolveHeaderStyle(src);
+    if (hrs && hrs.rightText != null) return renderTitleRight(String(hrs.rightText), this._hass);
+    return renderTitleRight(src && src[prefix + 'title_right'], this._hass);
+  }
+  // whether any header rule applied here can produce right-side text (so the span must exist)
+  _rulesMayGiveRight(src, id) {
+    const refs = id === '__card__' ? this._config.header_rule_refs : (src && src.header_rule_refs);
+    if (!Array.isArray(refs) || !refs.length) return false;
+    const byId = this._headerSetsById();
+    return refs.some(r => { const set = byId[r.ref]; return set && ((set.default && set.default.set_right) || (set.rules || []).some(x => x.set_right)); });
+  }
   _titleRightHtml(src, prefix, id) {
     const k = (n) => prefix + n;
     const tpl = src && src[k('title_right')];
-    if (!tpl || src[k('title_right_show')] === false) return '';
-    const txt = renderTitleRight(tpl, this._hass);
+    if ((!tpl && !this._rulesMayGiveRight(src, id)) || src[k('title_right_show')] === false) return '';
+    const txt = this._titleRightText(src, prefix, id);
     const st = [
       src[k('title_right_color')] ? `color:${src[k('title_right_color')]};` : '',
       optNumber(src[k('title_right_size')]) !== null ? `font-size:calc(${optNumber(src[k('title_right_size')])}px * var(--seed-scale, 1));` : '',
@@ -5613,7 +5671,7 @@ class SEEDCard extends HTMLElement {
       const src = id === '__card__' ? this._config : this._findSectionById(id);
       const prefix = id === '__card__' ? 'card_' : '';
       if (!src) return;
-      const txt = renderTitleRight(src[prefix + 'title_right'], this._hass);
+      const txt = this._titleRightText(src, prefix, id);
       el.textContent = txt || '';
       el.style.display = txt === null ? 'none' : '';
     });
@@ -6678,7 +6736,34 @@ class SEEDCard extends HTMLElement {
     const lib = headerLibraryMap((this._config && this._config.header_library_scope) || 'system');
     Object.keys(lib).forEach(slug => { map['lib:' + slug] = lib[slug]; });
     if (!map[BUILTIN_HEADER_ID]) map[BUILTIN_HEADER_ID] = builtinHeaderRuleSet();
+    // v242: the card's own sets, by plain id (library ids always carry lib:)
+    ((this._config && this._config.header_rules) || []).forEach(h => { if (h && h.id) map[h.id] = h; });
     return map;
+  }
+  // v242: does one header rule match, and which entity do its outputs read from?
+  _headerRuleMatch(rule, entId) {
+    const hass = this._hass;
+    const src = rule.source;
+    if (src && src.type === 'rule_set') {
+      return { hit: !!src.ref && countConditionPasses(rule.when, this._ruleSetCount(src.ref)), entId };
+    }
+    if (src && src.type === 'entities') {
+      const list = (src.entities || []).filter(id => hass && hass.states[id]);
+      const hits = list.filter(id => evalCondition(id, rule.when, hass));
+      const hit = src.match === 'all' ? (list.length > 0 && hits.length === list.length) : hits.length > 0;
+      return { hit, entId: hits[0] || entId };
+    }
+    const hasEnt = entId && hass && hass.states[entId];
+    return { hit: !!hasEnt && evalCondition(entId, rule.when, hass), entId };
+  }
+  // v242: matches of a card Rule Set, cached for one hass snapshot (many headers may ask).
+  _ruleSetCount(ref) {
+    if (this._rsCountHass !== this._hass) { this._rsCountHass = this._hass; this._rsCountMap = {}; }
+    if (!(ref in this._rsCountMap)) {
+      const rs = this._ruleSetsById()[ref];
+      this._rsCountMap[ref] = rs ? evalRuleSetMembers(rs, this._hass).length : 0;
+    }
+    return this._rsCountMap[ref];
   }
   // The entity a section's header rules evaluate against when a ref doesn't
   // name its own: the section's first resolved entity (its "primary").
@@ -6725,6 +6810,7 @@ class SEEDCard extends HTMLElement {
         else if (k === 'set_text_color') { out.textColor = src[k]; }
         else if (k === 'set_icon_size') { out.iconSize = src[k]; }
         else if (k === 'set_text_size') { out.textSize = src[k]; }
+        else if (k === 'set_right') { out.rightText = src[k]; }
       });
     };
     refs.forEach(ref => {
@@ -6738,8 +6824,8 @@ class SEEDCard extends HTMLElement {
       let matched = false;
       (set.rules || []).forEach(rule => {
         const entId = ref.entity || rule.when_entity || set.default_entity || this._sectionHeaderEntityId(section);
-        const hasEnt = entId && this._hass && this._hass.states[entId];
-        if (hasEnt && evalCondition(entId, rule.when, this._hass)) { applyOutputs(rule, entId); matched = true; }
+        const m = this._headerRuleMatch(rule, entId);
+        if (m.hit) { applyOutputs(rule, m.entId); matched = true; }
       });
       // Fall back to the set's default outputs when no rule in it matched.
       if (!matched && set.default) applyOutputs(set.default, bound);
@@ -7818,6 +7904,7 @@ class SEEDCardEditor extends HTMLElement {
       ...cardPopupKeys(cfg),
       ...cardTitleBarKeys(cfg),
       ...titleRightKeys(cfg, 'card_'),
+      ...((Array.isArray(cfg.header_rules) && cfg.header_rules.length) ? { header_rules: normalizeLocalHeaderRules(cfg.header_rules) } : {}),
       rule_sets,
       sections
     };
@@ -7831,6 +7918,7 @@ class SEEDCardEditor extends HTMLElement {
     stripCardPopupKeys(merged);
     stripCardTitleBarKeys(merged);
     stripTitleRightKeys(merged, 'card_');
+    if (!(Array.isArray(merged.header_rules) && merged.header_rules.length)) delete merged.header_rules;
     return JSON.parse(JSON.stringify(merged));
   }
 
@@ -8165,6 +8253,13 @@ class SEEDCardEditor extends HTMLElement {
     if (idx !== -1) return { list: this._config.rule_sets, idx, kind: 'rule_set' };
     idx = (this._config.frame_presets || []).findIndex(f => f.id === sid);
     if (idx !== -1) return { list: this._config.frame_presets, idx, kind: 'frame_preset' };
+    // v242: the card's own Header Rule Set (hrl:<id>) — edited in place, saved with the card
+    if (typeof sid === 'string' && sid.startsWith('hrl:')) {
+      const id = sid.slice(4);
+      const list = this._config.header_rules || [];
+      const i = list.findIndex(h => h && h.id === id);
+      if (i !== -1) return { list, idx: i, kind: 'header_local' };
+    }
     // Header Rule Set library entry (hdr:<slug>): edits target a DRAFT (deep
     // copy), seeded lazily from the shared-library entry. Nothing is written to
     // the store until the user clicks Save (mirrors the Frame Style drafts).
@@ -8304,6 +8399,11 @@ class SEEDCardEditor extends HTMLElement {
       this._fireConfigChanged();
     } else if (t.kind === 'frame_preset') {
       t.list[t.idx] = normalizeFramePreset(t.list[t.idx]);
+      this._fireConfigChanged();
+    } else if (t.kind === 'header_local') {
+      const keepId = t.list[t.idx].id;
+      t.list[t.idx] = normalizeHeaderRuleSet(t.list[t.idx]);
+      t.list[t.idx].id = keepId;
       this._fireConfigChanged();
     } else {
       t.list[t.idx] = t.kind === 'rule_set'
@@ -10852,8 +10952,11 @@ class SEEDCardEditor extends HTMLElement {
     const refs = Array.isArray(section.header_rule_refs) ? section.header_rule_refs : [];
     const lib = headerLibraryMap((this._config && this._config.header_library_scope) || 'system');
     const libSlugs = Object.keys(lib).sort();
+    const localSets = (this._config && this._config.header_rules) || [];
     const nameOf = id => {
       if (id === BUILTIN_HEADER_ID) return 'Built-In';
+      const loc = localSets.find(h => h.id === id);
+      if (loc) return (loc.name || loc.id) + ' (this card)';
       if (typeof id === 'string' && id.startsWith('lib:')) { const slug = id.slice(4); const s = lib[slug]; return (s ? (s.name || slug) : slug) + ' (System)'; }
       return id;
     };
@@ -10891,6 +10994,7 @@ class SEEDCardEditor extends HTMLElement {
     }).join('');
     const addOpts = `<option value="">— add a Header Rule Set —</option>`
       + `<option value="${BUILTIN_HEADER_ID}">Built-In</option>`
+      + (localSets.length ? `<optgroup label="This card">${localSets.map(h => `<option value="${escapeHtml(h.id)}">${escapeHtml(h.name || h.id)}</option>`).join('')}</optgroup>` : '')
       + (libSlugs.length ? `<optgroup label="System">${libSlugs.map(slug => `<option value="lib:${escapeHtml(slug)}">${escapeHtml(lib[slug].name || slug)}</option>`).join('')}</optgroup>` : '');
     return `
       <details class="seed-ed-substyle${flush ? ' seed-ed-substyle-flush' : ''}">
@@ -10924,6 +11028,9 @@ class SEEDCardEditor extends HTMLElement {
     if (Number(rule.set_icon_size) > 0) chips.push(`<span class="seed-ed-hdr-rule-chip">${Number(rule.set_icon_size)}px icon</span>`);
     if (Number(rule.set_text_size) > 0) chips.push(`<span class="seed-ed-hdr-rule-chip">${Number(rule.set_text_size)}px text</span>`);
     if (sec.enabled) chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="mdi:subtitles-outline"></ha-icon>2nd</span>`);
+    if (rule.set_right) chips.push(`<span class="seed-ed-hdr-rule-chip">→ ${escapeHtml(rule.set_right)}</span>`);
+    if (rule.source && rule.source.type === 'rule_set') chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="mdi:filter-variant"></ha-icon>${escapeHtml(rule.source.ref || '?')}</span>`);
+    if (rule.source && rule.source.type === 'entities') chips.push(`<span class="seed-ed-hdr-rule-chip"><ha-icon icon="mdi:format-list-bulleted"></ha-icon>${(rule.source.entities || []).length} entities</span>`);
     const summaryChips = chips.length ? `<span class="seed-ed-hdr-rule-chips">${chips.join('')}</span>` : '<span class="seed-ed-hint" style="opacity:0.6;">no outputs set</span>';
     return `
       <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-hdr-rule" data-panel="hdrrule-${slug}-${idx}">
@@ -10937,13 +11044,16 @@ class SEEDCardEditor extends HTMLElement {
         <div class="seed-ed-substyle-body">
           ${previewing ? this._hdrRulePreviewHtml(rule) : ''}
           ${rule.when_entity ? `<div class="seed-ed-hdr-ent-legacy"><span class="seed-ed-hint"><ha-icon icon="mdi:information-outline"></ha-icon> This rule has a per-rule entity (legacy). It's honored unless the card/section binds its own. Clear it to use the set's default entity instead.</span>${this._atEntityPicker(sid, `${path}.when_entity`, 'Entity', rule.when_entity, 'Blank = use the set default')}</div>` : ''}
-          ${this._atRuleWhenEditor(sid, `${path}.when`, rule.when)}
+          ${this._atHeaderRuleSource(sid, path, rule)}
           <div class="seed-ed-font-row">
             ${this._atColorField(sid, `${path}.set_icon_color`, 'Icon color', rule.set_icon_color || '')}
             <label>Icon (mdi)<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_icon" value="${escapeHtml(rule.set_icon || '')}" placeholder="mdi:…" style="width:130px;" /></label>
           </div>
           <div class="seed-ed-font-row">
             ${this._atColorField(sid, `${path}.set_text_color`, 'Text color', rule.set_text_color || '')}
+          </div>
+          <div class="seed-ed-font-row">
+            <label style="flex:1;">Right-side text<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}.set_right" value="${escapeHtml(rule.set_right || '')}" placeholder="e.g. Active, or {entity:sensor.x}" style="width:100%;" /></label>
           </div>
           ${this._atSlider(sid, `${path}.set_icon_size`, 'Icon size (px)', rule.set_icon_size ?? 0, 0, 48, 1, 'Default')}
           ${this._atSlider(sid, `${path}.set_text_size`, 'Text size (px)', rule.set_text_size ?? 0, 0, 48, 1, 'Default')}
@@ -10957,6 +11067,39 @@ class SEEDCardEditor extends HTMLElement {
           </div>` : ''}
         </div>
       </details>`;
+  }
+
+  // v242: what a header rule tests, plus its condition. The condition editor changes with the source:
+  // a Rule Set source tests a COUNT of matches; the others test an entity state.
+  _atHeaderRuleSource(sid, path, rule) {
+    const src = rule.source || null;
+    const type = src ? src.type : '';
+    const rsOpts = (this._config.rule_sets || []).map(r => [r.id, r.name || r.id]);
+    const head = `
+          <div class="seed-ed-font-row">
+            <label>Test<select class="at-input at-structural" data-at-sid="${sid}" data-at-path="${path}.source.type">${this._atOpts([
+              ['', 'The bound entity'], ['entities', 'A list of entities'], ['rule_set', 'How many entities a Rule Set matches']], type)}</select></label>
+          </div>`;
+    if (type === 'rule_set') {
+      const w = rule.when || {};
+      return head + `
+          <div class="seed-ed-font-row">
+            <label>Rule Set<select class="at-input at-structural" data-at-sid="${sid}" data-at-path="${path}.source.ref">${this._atOpts([['', '— choose —'], ...rsOpts], src.ref || '')}</select></label>
+            <label>matches<select class="at-input" data-at-sid="${sid}" data-at-path="${path}.when.op">${this._atOpts([['gt', 'more than'], ['ge', 'at least'], ['eq', 'exactly'], ['ne', 'not'], ['lt', 'fewer than'], ['le', 'at most']], w.op || 'gt')}</select></label>
+            <input type="number" class="at-input" data-at-sid="${sid}" data-at-path="${path}.when.value" value="${Number(w.value ?? 0)}" min="0" style="width:70px;" />
+          </div>
+          ${rsOpts.length ? '' : '<span class="seed-ed-hint">This card has no Rule Sets yet. Add one under Filter Rules, e.g. "switches named *_privacy that are on".</span>'}
+          <span class="seed-ed-hint">Rule Sets belong to this card, so a library Header Rule that tests one only works on cards that have it.</span>`;
+    }
+    if (type === 'entities') {
+      return head + `
+          <div class="seed-ed-font-row">
+            <label style="flex:1;">Entities<input type="text" class="at-input at-input-multi" data-at-sid="${sid}" data-at-path="${path}.source.entities" value="${escapeHtml((src.entities || []).join(', '))}" placeholder="sensor.tuner0, sensor.tuner1" style="width:100%;" /></label>
+            <label>Match<select class="at-input" data-at-sid="${sid}" data-at-path="${path}.source.match">${this._atOpts([['', 'any of them'], ['all', 'all of them']], src.match || '')}</select></label>
+          </div>
+          ${this._atRuleWhenEditor(sid, `${path}.when`, rule.when)}`;
+    }
+    return head + this._atRuleWhenEditor(sid, `${path}.when`, rule.when);
   }
 
   // A static preview of ONE header rule's look — the rule's outputs force-applied
@@ -11054,6 +11197,37 @@ class SEEDCardEditor extends HTMLElement {
     </div>`;
   }
 
+  // v242: one of the card's own Header Rule Sets (saved with the card, no Save/Discard).
+  _atLocalHeaderSetEditor(set) {
+    const sid = 'hrl:' + set.id;
+    const rules = set.rules || [];
+    const usesRef = refs => Array.isArray(refs) && refs.some(r => r && r.ref === set.id);
+    const walk = list => (list || []).reduce((n, x) => n + (usesRef(x && x.header_rule_refs) ? 1 : 0) + walk(x && x.children), 0);
+    const usedBy = (usesRef(this._config.header_rule_refs) ? 1 : 0) + walk(this._config.sections);
+    const nRules = rules.length;
+    return `
+      <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-lib-row" data-panel="hrlset-${escapeHtml(set.id)}">
+        <summary class="seed-ed-substyle-sum">
+          <span class="seed-ed-lib-name" style="flex:1;">${escapeHtml(set.name || set.id)}<span class="seed-ed-lib-sub">this card · ${nRules} rule${nRules === 1 ? '' : 's'}${set.default_entity ? ' · 🔗 ' + escapeHtml(set.default_entity) : ''}</span></span>
+          <span class="seed-ed-hint">${usedBy} use${usedBy === 1 ? '' : 's'}</span>
+        </summary>
+        <div class="seed-ed-substyle-body">
+          <div class="seed-ed-fx-actions">
+            <ha-icon class="seed-ed-icon-btn hrl-delete" data-hrl-id="${escapeHtml(set.id)}" icon="mdi:trash-can-outline" title="Delete from this card"></ha-icon>
+          </div>
+          <div class="seed-ed-font-row">
+            <label style="flex:1;">Name<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="name" value="${escapeHtml(set.name || '')}" style="width:100%;" /></label>
+          </div>
+          ${this._atHeaderEntBinding(sid, 'default_entity', set.default_entity || '', {
+            label: 'Default entity', checkboxLabel: 'Bind a Default Entity (optional)',
+            blankLabel: 'No default — the card/section binds one, or the rules test their own source.' })}
+          ${rules.map((r, i) => this._atHeaderRuleRow(sid, `rules.${i}`, r, i)).join('')}
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm at-add" data-at-sid="${sid}" data-at-list="rules" data-at-new="hdrrule"><ha-icon icon="mdi:plus"></ha-icon>Add rule</div>
+          <span class="seed-ed-hint">If no rule matches, the set's fallback applies. Set it in YAML as <code>default:</code> (same outputs as a rule).</span>
+        </div>
+      </details>`;
+  }
+
   // Top-level "Header Rule Sets" library panel (mirrors Frame Styles).
   _atHeaderRuleSetsPanel() {
     const lib = headerLibraryMap((this._config && this._config.header_library_scope) || 'system');
@@ -11071,6 +11245,14 @@ class SEEDCardEditor extends HTMLElement {
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-add"><ha-icon icon="mdi:plus"></ha-icon>Add Header Rule</div>
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hdr-import"><ha-icon icon="mdi:import"></ha-icon>Import Rule</div>
         </div>
+        <div class="seed-ed-group-div">This card's Header Rules</div>
+        <span class="seed-ed-hint">Saved with this card, so a copied card keeps them. Apply them like library sets, from the header's Header Rules list.</span>
+        <div class="seed-ed-add-row">
+          <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hrl-add"><ha-icon icon="mdi:plus"></ha-icon>Add card Header Rule</div>
+          ${slugs.length ? `<select id="hrl-copy" class="at-input"><option value="">Copy a library set into this card…</option>${slugs.map(sl => `<option value="${escapeHtml(sl)}">${escapeHtml(lib[sl].name || sl)}</option>`).join('')}</select>` : ''}
+        </div>
+        ${(this._config.header_rules || []).length ? `<div class="seed-ed-lib-list">${(this._config.header_rules || []).map(h => this._atLocalHeaderSetEditor(h)).join('')}</div>` : ''}
+        <div class="seed-ed-group-div">Library</div>
         <div class="seed-ed-lib-list">${blocks}</div>
 
         <div id="hdr-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
@@ -16226,6 +16408,34 @@ class SEEDCardEditor extends HTMLElement {
         }
       });
     });
+
+    // v242: the card's own Header Rule Sets
+    const hrlAdd = this.querySelector('#hrl-add');
+    if (hrlAdd) hrlAdd.addEventListener('click', () => {
+      this._config.header_rules = (this._config.header_rules || []).concat([{ id: 'hr_' + uid(), name: 'Card Header Rules', rules: [{ when: { op: 'is_on' } }] }]);
+      this._fireConfigChanged(); this._rendered = false; this.renderEditor();
+    });
+    const hrlCopy = this.querySelector('#hrl-copy');
+    if (hrlCopy) hrlCopy.addEventListener('change', () => {
+      const lib = headerLibraryMap(this._headerScope());
+      const src = lib[hrlCopy.value]; if (!src) return;
+      const copy = JSON.parse(JSON.stringify(normalizeHeaderRuleSet(src)));
+      copy.id = 'hr_' + uid(); copy.name = (src.name || hrlCopy.value) + ' (card copy)';
+      this._config.header_rules = (this._config.header_rules || []).concat([copy]);
+      this._fireConfigChanged(); this._rendered = false; this.renderEditor();
+    });
+    this.querySelectorAll('.hrl-delete').forEach(el => el.addEventListener('click', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!this._confirmDelete('Delete this card Header Rule set? Headers using it go back to their plain look.')) return;
+      const id = el.dataset.hrlId;
+      this._config.header_rules = (this._config.header_rules || []).filter(h => h.id !== id);
+      const strip = (o) => { if (o && Array.isArray(o.header_rule_refs)) { o.header_rule_refs = o.header_rule_refs.filter(r => r.ref !== id); if (!o.header_rule_refs.length) delete o.header_rule_refs; } };
+      strip(this._config);
+      const walk = (list) => (list || []).forEach(x => { strip(x); walk(x && x.children); });
+      walk(this._config.sections);
+      if (!this._config.header_rules.length) delete this._config.header_rules;
+      this._fireConfigChanged(); this._rendered = false; this.renderEditor();
+    }));
 
     // v241: right-side header text
     this.querySelectorAll('.ed-tr').forEach(el => {
