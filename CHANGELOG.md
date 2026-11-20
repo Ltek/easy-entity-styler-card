@@ -5,6 +5,19 @@ resets. Newest first.
 
 ---
 
+## v2026.11.20.243
+
+- **Fixed: an embedded card with its own `card_mod` lost its top padding (EES-FEATURE-GAPS item
+  8).** Embedded cards now mount through Home Assistant's own `hui-card` wrapper, the same way HA's
+  stacks and expander-card do.
+  - **Cause:** before, each child was created bare, and card-mod then inserted a `<card-mod>` element
+    as the first child of its `ha-card`. HA's `.card-content:not(:first-child)` rule then removed the
+    card content's top padding.
+  - **Also new:** a child's own `visibility:` conditions now apply, as they do on a dashboard.
+  - **Older frontends:** those without `hui-card` keep the direct mount.
+- Test: `/shared/user/code/_tests/entity-card-embed-mount.test.mjs` (3 checks), now part of the
+  publish gate.
+
 ## v2026.11.20.242
 
 - **Header Rule Sets kept in the card (EES-FEATURE-GAPS 3a).** As well as the shared library, a card
