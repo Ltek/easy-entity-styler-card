@@ -96,6 +96,8 @@ background:
   opacity: 0.6
 ```
 
+While you edit a shared style, the card preview in HA's editor shows your unsaved changes. Switch it between **Saved** and **Edited** next to Save / Discard. Other cards keep the saved style until you press Save.
+
 *Storage key:* `ltek_frame_library`
 
 ### Header Rules

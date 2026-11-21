@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.21.254
+// Version: v2026.11.21.255
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.21.254';
+const BUILD_NUMBER = 'v2026.11.21.255';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1420,6 +1420,18 @@ function boostGlowGroup(key, grp, b) {
   }
   return grp;
 }
+// v255: unsaved library Frame Style edits, shown on the card in HA's editor preview. The editor publishes
+// its dirty drafts here; a preview card overlays them on the library while mode is 'edited'. Nothing is
+// stored: drafts live only while the editor is open.
+const _FRAME_PREVIEW = { drafts: {}, mode: 'edited', pending: false };
+function _framePreviewNotify() {
+  if (_FRAME_PREVIEW.pending) return;
+  _FRAME_PREVIEW.pending = true;
+  _raf(() => {
+    _FRAME_PREVIEW.pending = false;
+    try { window.dispatchEvent(new CustomEvent('ees-frame-preview')); } catch (e) {}
+  });
+}
 function normalizeFramePresets(list) {
   return Array.isArray(list) ? list.map(normalizeFramePreset) : [];
 }
@@ -1741,7 +1753,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.21.254: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.21.255: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3711,7 +3723,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.21.254: card-level links to one section.
+// v2026.11.21.255: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3729,7 +3741,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.21.254: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.21.255: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3762,7 +3774,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.21.254: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.21.255: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3782,7 +3794,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.21.254: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.21.255: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3808,7 +3820,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.21.254 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.21.255 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3830,7 +3842,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.21.254 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.21.255 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3848,7 +3860,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.254 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.21.255 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3872,7 +3884,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.254 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.21.255 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3917,7 +3929,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.21.254: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.21.255: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4172,6 +4184,13 @@ class SEEDCard extends HTMLElement {
   static _libListenerCount() { return _libListenerCount(); }
 
   connectedCallback() {
+    // v255: follow unsaved library Frame Style edits while this is the editor's preview
+    if (!this._onFramePreview) this._onFramePreview = () => {
+      if (!this._config || !this._rendered || !this._isEditorPreview()) return;
+      this.updateGlow();
+      if (this._config.card_frame) this.updateCardGlow();
+    };
+    window.addEventListener('ees-frame-preview', this._onFramePreview);
     if (this._rendered) _agoWatch(this, this._usesAgo());
     if (!this._libDetached) return;
     this._libDetached = false;
@@ -4181,6 +4200,7 @@ class SEEDCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    if (this._onFramePreview) window.removeEventListener('ees-frame-preview', this._onFramePreview);
     _agoWatch(this, false);
     if (this._updateTimer) { clearTimeout(this._updateTimer); this._updateTimer = null; }
     // v237: a card leaving the page takes its pop-up with it
@@ -4400,7 +4420,24 @@ class SEEDCard extends HTMLElement {
     Object.keys(lib).forEach(slug => { const id = 'lib:' + slug; if (!map[id]) map[id] = lib[slug]; });
     // The read-only Built-In is always available as a fallback frame.
     if (!map[BUILTIN_FRAME_ID]) map[BUILTIN_FRAME_ID] = builtinFramePreset();
+    // v255: in HA's editor preview, unsaved library edits (see _FRAME_PREVIEW)
+    if (_FRAME_PREVIEW.mode === 'edited' && this._isEditorPreview()) {
+      Object.keys(_FRAME_PREVIEW.drafts).forEach(slug => { map['lib:' + slug] = _FRAME_PREVIEW.drafts[slug]; });
+    }
     return map;
+  }
+
+  // v255: is this card HA's preview of the card being edited? HA marks it `preview`; the edit dialog is
+  // also looked for up the (shadow) tree, in case a build doesn't set the flag.
+  _isEditorPreview() {
+    if (this.preview === true) return true;
+    let n = this;
+    for (let i = 0; n && i < 60; i++) {
+      const tag = n.tagName;
+      if (tag === 'HUI-DIALOG-EDIT-CARD' || tag === 'HUI-CARD-PREVIEW') return true;
+      n = n.parentNode || (n.host || null);
+    }
+    return false;
   }
 
   // True if any section/card frame ref points at a library preset (lib:…), so
@@ -8543,6 +8580,7 @@ class SEEDCardEditor extends HTMLElement {
   }
 
   connectedCallback() {
+    if (this._frameDrafts) this._publishFramePreview();   // v255: back from YAML mode etc.
     if (!this._edLibDetached) return;
     this._edLibDetached = false;
     if (this._hass) this._ensureEditorLibraries(this._hass);
@@ -8550,6 +8588,8 @@ class SEEDCardEditor extends HTMLElement {
   }
 
   disconnectedCallback() {
+    // v255: the editor closed, so the preview goes back to the saved library
+    _FRAME_PREVIEW.drafts = {}; _framePreviewNotify();
     // Only the listeners: a pending debounced library SAVE (_libEditTimer) must still run.
     _offLibListeners(this._onFrameLibChange);
     _offLibListeners(this._onHeaderLibChange);
@@ -8909,6 +8949,17 @@ class SEEDCardEditor extends HTMLElement {
     return null;
   }
 
+  // v255: hand the dirty drafts to the card preview (see _FRAME_PREVIEW).
+  _publishFramePreview() {
+    const drafts = {};
+    Object.keys(this._frameDrafts || {}).forEach(slug => {
+      const d = this._frameDrafts[slug];
+      if (d && d.dirty && d.fx) { const n = normalizeFramePreset(d.fx); n.id = 'lib:' + slug; drafts[slug] = n; }
+    });
+    _FRAME_PREVIEW.drafts = drafts;
+    _framePreviewNotify();
+  }
+
   // ---- Frame Style dirty-draft helpers (keyed by slug) ----
   // Return the draft for a slug, seeding it from the stored preset on first use.
   _frameDraftFor(slug) {
@@ -8939,7 +8990,7 @@ class SEEDCardEditor extends HTMLElement {
     SEED_FRAME_LIBRARY[scope === 'system' ? 'system' : 'user'].map = map;
     this._libEchoJSON = JSON.stringify(map);
     saveFrameLibrary(this._hass, scope, map)
-      .then(() => { d.dirty = false; this.renderEditor(); })
+      .then(() => { d.dirty = false; this._publishFramePreview(); this.renderEditor(); })
       .catch(err => { console.error('[easy-entity-styler-card] save frame failed', err); window.alert('Could not save the Frame Style.'); });
   }
   // Discard a draft → reseed from the stored preset.
@@ -8947,6 +8998,7 @@ class SEEDCardEditor extends HTMLElement {
     const map = frameLibraryMap(this._config.frame_library_scope);
     if (map && map[slug]) this._frameDrafts[slug] = { fx: JSON.parse(JSON.stringify(map[slug])), dirty: false };
     else delete this._frameDrafts[slug];
+    this._publishFramePreview();
     this.renderEditor();
   }
 
@@ -9008,6 +9060,7 @@ class SEEDCardEditor extends HTMLElement {
       norm.id = 'lib:' + t.slug;
       const d = this._frameDrafts[t.slug];
       if (d) { d.fx = norm; d.dirty = true; }
+      this._publishFramePreview();
       this.renderEditor();
       return;
     } else if (t.kind === 'header_lib') {
@@ -9092,6 +9145,7 @@ class SEEDCardEditor extends HTMLElement {
         const row = root.querySelector(`.seed-ed-fx-saverow[data-fx-saverow="${t.slug}"]`);
         if (row) row.classList.add('seed-ed-fx-saverow-dirty');
       } else if (d) { d.dirty = true; }
+      this._publishFramePreview();   // v255: the card preview follows live slider / colour edits
       // Repaint the live preview swatch in place so slider/color edits show
       // immediately (structural checkboxes already refresh via _atApply's
       // re-render; live scalar edits must repaint here or the swatch goes stale).
@@ -9740,6 +9794,7 @@ class SEEDCardEditor extends HTMLElement {
           <span class="seed-ed-hint">${usedBy} use${usedBy === 1 ? '' : 's'}</span>
         </summary>
         <div class="seed-ed-substyle-body">
+          ${isLib ? this._atFrameSaveRow(fid.slice(4)) : ''}
           <div class="seed-ed-fx-actions">
             ${isBuiltin
               ? `<span class="at-input" style="flex:1; opacity:0.7;">${escapeHtml(fx.name || 'Built-In')}</span>`
@@ -9758,10 +9813,7 @@ class SEEDCardEditor extends HTMLElement {
             : `<div class="seed-ed-font-row"><label style="flex:1;">Note<input type="text" class="at-input" data-at-sid="${fid}" data-at-path="note" value="${escapeHtml(fx.note || '')}" placeholder="optional note (e.g. where you use this)" style="width:100%;" /></label></div>`}
           <div class="seed-ed-preview-swatch" data-fx-preview="${fid}"><span>Preview</span></div>
           ${isBuiltin ? '' : `
-          <div class="seed-ed-group-title">Glow</div>
-          <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="glow" ${hasGlow ? 'checked' : ''}/> Enable glow</label>
-          </div>
+          ${this._fxGrpOpen(fid, 'glow', 'Glow', hasGlow, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="glow" ${hasGlow ? 'checked' : ''}/> Enable glow</label>`)}
           ${hasGlow ? `<div class="seed-ed-font-row">
             <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="glow.follow_icon" ${g.follow_icon ? 'checked' : ''}/> Follow icon color</label>
             <label><input type="checkbox" class="at-check" data-at-sid="${fid}" data-at-path="glow.borders_only" ${g.borders_only ? 'checked' : ''}/> Borders only</label>
@@ -9770,11 +9822,9 @@ class SEEDCardEditor extends HTMLElement {
           ${this._atSliderNum(fid, 'glow.intensity', 'Regular strength (×)', g.intensity ?? 1.0, 0.1, 3, 0.05, 1)}
           ${this._atActiveStrength(fid, fx, 'glow')}
           ${this._atShowEditor(fid, fx, 'glow')}` : ''}
+          ${this._fxGrpClose(hasGlow)}
 
-          <div class="seed-ed-group-title">Shadow</div>
-          <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="shadow" ${hasShadow ? 'checked' : ''}/> Enable drop-shadow</label>
-          </div>
+          ${this._fxGrpOpen(fid, 'shadow', 'Shadow', hasShadow, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="shadow" ${hasShadow ? 'checked' : ''}/> Enable drop-shadow</label>`)}
           ${hasShadow ? `<div class="seed-ed-font-row">
             <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="shadow.follow_icon" ${sh.follow_icon ? 'checked' : ''}/> Follow icon color</label>
           </div>
@@ -9786,11 +9836,9 @@ class SEEDCardEditor extends HTMLElement {
           ${this._atSliderNum(fid, 'shadow.opacity', 'Opacity', sh.opacity ?? 0.35, 0, 1, 0.05, 0.35)}
           ${this._atActiveStrength(fid, fx, 'shadow')}
           ${this._atShowEditor(fid, fx, 'shadow')}` : ''}
+          ${this._fxGrpClose(hasShadow)}
 
-          <div class="seed-ed-group-title">Border</div>
-          <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="border" ${hasBorder ? 'checked' : ''}/> Enable border</label>
-          </div>
+          ${this._fxGrpOpen(fid, 'border', 'Border', hasBorder, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="border" ${hasBorder ? 'checked' : ''}/> Enable border</label>`)}
           ${hasBorder ? `<div class="seed-ed-font-row">
             <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="border.follow_icon" ${bd.follow_icon ? 'checked' : ''}/> Follow icon color</label>
           </div>
@@ -9813,11 +9861,9 @@ class SEEDCardEditor extends HTMLElement {
           ${Array.isArray(bd.radii) ? [['0', 'Top left'], ['1', 'Top right'], ['2', 'Bottom right'], ['3', 'Bottom left']]
             .map(([i, l]) => this._atSlider(fid, `border.radii.${i}`, `${l} (px)`, bd.radii[Number(i)], 0, 24, 1)).join('') : ''}
           ${this._atShowEditor(fid, fx, 'border')}` : ''}
+          ${this._fxGrpClose(hasBorder)}
 
-          <div class="seed-ed-group-title">Background</div>
-          <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="background" ${fx.background ? 'checked' : ''}/> Set background</label>
-          </div>
+          ${this._fxGrpOpen(fid, 'background', 'Background', !!fx.background, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="background" ${fx.background ? 'checked' : ''}/> Set background</label>`)}
           ${fx.background ? `<div class="seed-ed-font-row">
             <label>Mode
               <select class="fx-bg-mode at-structural" data-fx-id="${fid}">
@@ -9830,8 +9876,9 @@ class SEEDCardEditor extends HTMLElement {
           ${bgMode === 'custom' ? this._atColorControl(fid, 'background.color', 'Color', (fx.background && fx.background.color) || '', { seedHex: '#1c1c1c', defaultLabel: 'Transparent' }) : ''}
           ${bgMode !== 'transparent' ? this._atSliderNum(fid, 'background.opacity', 'Opacity', (fx.background && fx.background.opacity != null) ? fx.background.opacity : 1, 0, 1, 0.05, 1) : ''}
           ${this._atShowEditor(fid, fx, 'background')}` : ''}
+          ${this._fxGrpClose(!!fx.background)}
 
-          <div class="seed-ed-group-title">Edges (Border / Gradient)</div>
+          ${this._fxGrpOpen(fid, 'edges', 'Edges (Border / Gradient)', true, '')}
           <span class="seed-ed-hint">Each edge is a <b>Solid line</b> or a <b>Gradient</b> (stops + patterns; a <code>match</code> color follows the border/icon color). Turn on "All edges the same" for one editor applied to every side, or leave off for independent per-side control.</span>
           <div class="seed-ed-font-row">
             <label><input type="checkbox" class="fx-edges-allsame at-structural" data-fx-id="${fid}" ${fx.edges && fx.edges.all_same ? 'checked' : ''}/> All edges the same</label>
@@ -9839,11 +9886,9 @@ class SEEDCardEditor extends HTMLElement {
           ${(fx.edges && fx.edges.all_same)
             ? this._atEdgeSideEditor(fid, fx, 'top', 'All edges')
             : this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}
+          ${this._fxGrpClose(true)}
 
-          <div class="seed-ed-group-title">Condition (optional)</div>
-          <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> ${FRAME_SHOW_GROUPS.some(k => fx[k] && fx[k].show) ? 'Active when…' : 'Only apply when…'}</label>
-          </div>
+          ${this._fxGrpOpen(fid, 'when', 'Condition (optional)', condActive, `<label class="fx-grp-toggle"><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> ${FRAME_SHOW_GROUPS.some(k => fx[k] && fx[k].show) ? 'Active when…' : 'Only apply when…'}</label>`)}
           ${condActive ? `<div class="seed-ed-font-row">
             <label>Based on
               <select class="fx-when-kind at-structural" data-fx-id="${fid}">
@@ -9868,11 +9913,22 @@ class SEEDCardEditor extends HTMLElement {
               </select>
             </label>
           </div>`}` : ''}
+          ${this._fxGrpClose(condActive)}
           `}
-          ${isLib ? this._atFrameSaveRow(fid.slice(4)) : ''}
         </div>
       </details>`;
   }
+
+  // v255: one option group of a Frame Style (Glow, Shadow, …). While enabled it is collapsible (closed
+  // by default, open state kept across re-renders by data-panel); while off it is just its title row,
+  // so the list stays short and the Preview stays in view.
+  _fxGrpOpen(fid, key, title, enabled, toggle) {
+    const head = `<span class="seed-ed-group-title seed-ed-fxg-title">${escapeHtml(title)}</span>${toggle}`;
+    return enabled
+      ? `<details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-fxg" data-panel="fxg-${fid}-${key}"><summary class="seed-ed-substyle-sum seed-ed-fxg-head">${head}</summary><div class="seed-ed-substyle-body">`
+      : `<div class="seed-ed-fxg seed-ed-fxg-off"><div class="seed-ed-fxg-head">${head}</div>`;
+  }
+  _fxGrpClose(enabled) { return enabled ? '</div></details>' : '</div>'; }
 
   // v252: a slider with a number box beside it and a reset to its default. Both inputs write the same
   // path live; the reset re-renders.
@@ -9934,11 +9990,16 @@ class SEEDCardEditor extends HTMLElement {
   _atFrameSaveRow(slug) {
     const d = this._frameDrafts[slug];
     const dirty = !!(d && d.dirty);
-    return `<div class="seed-ed-fx-saverow${dirty ? ' seed-ed-fx-saverow-dirty' : ''}" data-fx-saverow="${escapeHtml(slug)}">
+    // v255: sits at the TOP of the style (sticky), with a switch for what the card preview shows
+    const m = _FRAME_PREVIEW.mode;
+    return `<div class="seed-ed-fx-saverow seed-ed-fx-saverow-top${dirty ? ' seed-ed-fx-saverow-dirty' : ''}" data-fx-saverow="${escapeHtml(slug)}">
       <span class="seed-ed-hint seed-ed-fx-unsaved"><ha-icon icon="mdi:content-save-alert"></ha-icon> Unsaved — shared Frame Style; Save applies it to every card that uses it.</span>
       <div class="seed-ed-font-row" style="gap:8px;">
         <div class="seed-ed-add-btn seed-ed-add-btn-sm fx-save-draft" data-fx-slug="${escapeHtml(slug)}"><ha-icon icon="mdi:content-save"></ha-icon>Save</div>
         <div class="seed-ed-add-btn seed-ed-add-btn-sm fx-discard-draft" data-fx-slug="${escapeHtml(slug)}"><ha-icon icon="mdi:undo"></ha-icon>Discard</div>
+        <span class="seed-ed-fx-prevswitch" title="What the card preview shows">Card preview
+          <span class="fx-prev-mode${m === 'saved' ? ' on' : ''}" data-mode="saved">Saved</span><span class="fx-prev-mode${m !== 'saved' ? ' on' : ''}" data-mode="edited">Edited</span>
+        </span>
       </div>
     </div>`;
   }
@@ -13085,6 +13146,21 @@ class SEEDCardEditor extends HTMLElement {
            live scalar edit flip everything by toggling one class — and fixes the
            old bug where Discard could never enable on a live edit. */
         .seed-ed-fx-saverow { margin-top: 10px; padding-top: 8px; border-top: 1px solid #333; }
+        /* v255: Save / Discard at the top of a Frame Style, kept in view while scrolling its options */
+        .seed-ed-fx-saverow-top { position: sticky; top: 0; z-index: 3; margin: 0 0 8px; padding: 6px 0;
+          border-top: none; border-bottom: 1px solid #333; background: var(--card-background-color, #1c1c1c); }
+        .seed-ed-fx-saverow-top.seed-ed-fx-saverow-dirty { border-bottom-color: var(--ltek-c-error); }
+        .seed-ed-fx-prevswitch { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--ltek-fs-small, 12px); color: var(--ltek-c-label); }
+        .seed-ed-fx-saverow:not(.seed-ed-fx-saverow-dirty) .seed-ed-fx-prevswitch { display: none; }
+        .fx-prev-mode { padding: 2px 8px; border: 1px solid var(--ltek-c-accent, #2196F3); cursor: pointer; }
+        .fx-prev-mode:first-of-type { border-radius: 6px 0 0 6px; } .fx-prev-mode:last-of-type { border-radius: 0 6px 6px 0; border-left: none; }
+        .fx-prev-mode.on { background: var(--ltek-c-accent, #2196F3); color: var(--text-primary-color, #fff); }
+        /* v255: collapsible Frame Style option groups */
+        .seed-ed-fxg { margin-top: 6px; }
+        .seed-ed-fxg-head { display: flex; align-items: center; gap: 12px; }
+        .seed-ed-fxg-head .seed-ed-fxg-title { margin: 0; flex: 0 0 auto; }
+        .seed-ed-fxg-head .fx-grp-toggle { font-size: var(--ltek-fs-body); color: var(--ltek-c-label); font-weight: normal; }
+        .seed-ed-fxg-off { padding: 8px 0; border-bottom: 1px solid #333; }
         .seed-ed-fx-saverow-dirty { border-top-color: var(--ltek-c-error); }
         .seed-ed-fx-unsaved { display: flex; align-items: center; gap:var(--ltek-sp-2); margin-bottom: 6px; color: var(--ltek-c-error); font-weight: var(--ltek-fw-semibold); }
         .seed-ed-fx-unsaved ha-icon { --mdc-icon-size:var(--ltek-icon-sm); }
@@ -15058,6 +15134,7 @@ class SEEDCardEditor extends HTMLElement {
           if (el.checked) { fx[key] = defaults[key]; }
           else { delete fx[key]; }
         });
+        if (el.checked) { const g = this.querySelector(`details[data-panel="fxg-${sid}-${key}"]`); if (g) g.open = true; }   // v255
       });
     });
 
@@ -15106,6 +15183,16 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
+    // v255: Card preview Saved / Edited
+    this.querySelectorAll('.fx-prev-mode').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        _FRAME_PREVIEW.mode = el.dataset.mode === 'saved' ? 'saved' : 'edited';
+        this.querySelectorAll('.fx-prev-mode').forEach(o => o.classList.toggle('on', o.dataset.mode === _FRAME_PREVIEW.mode));
+        _framePreviewNotify();
+      });
+    });
+
     // Frame preset "Only apply when…" master toggle. Enable seeds an entity
     // condition (the default kind); disable clears every condition field.
     this.querySelectorAll('.fx-when-toggle').forEach(el => {
@@ -15115,6 +15202,7 @@ class SEEDCardEditor extends HTMLElement {
           if (el.checked) { fx.when = { op: 'eq', value: '' }; fx.when_entity = fx.when_entity || ''; }
           else { delete fx.when; delete fx.when_entity; delete fx.when_kind; delete fx.when_section; delete fx.when_source; }
         });
+        if (el.checked) { const g = this.querySelector(`details[data-panel="fxg-${fid}-when"]`); if (g) g.open = true; }   // v255
       });
     });
 

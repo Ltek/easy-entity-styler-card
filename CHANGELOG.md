@@ -5,6 +5,18 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.255
+
+- **Frame Style editor is shorter.** Glow, Shadow, Border, Background, Edges and Condition are each a
+  collapsible group. They start closed, with the Enable box in the group's header, so the Preview
+  swatch stays in view. A group you switch on opens, and open groups stay open when the editor redraws.
+- **Save / Discard at the top** of a shared Frame Style, kept in view while you scroll its options.
+- **See unsaved edits on the real card.** While a shared style has unsaved changes, the card in HA's
+  editor preview shows them live, including while you drag a slider. **Card preview: Saved / Edited**
+  next to Save / Discard switches it between the stored and the edited version. Other cards on the
+  dashboard keep the saved style. Closing the editor or pressing Discard puts the preview back.
+  Card-local styles already showed edits live, so they have no switch.
+
 ## v2026.11.21.254
 
 - **Show or hide each part.** Glow, Shadow, Border and Background each now have:
