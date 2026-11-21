@@ -5,6 +5,14 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.260
+
+- **Fixed: turning on Edges made a *Theme (inherit)* background disappear** when the theme's card
+  background is a gradient or image. Edge lines and that background are both CSS background images,
+  so the edges replaced it. With edges on, the theme background is now drawn on its own layer and the
+  edge lines on a layer above it. With opacity below 1, the edges now stay at full strength (in v258
+  the faded background covered them). Custom-colour backgrounds are unchanged.
+
 ## v2026.11.21.259
 
 - **Sort chips on the library lists:** **A–Z** (default), **Z–A**, **In use** (most uses on this card

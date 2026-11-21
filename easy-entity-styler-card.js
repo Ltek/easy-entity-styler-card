@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.21.259
+// Version: v2026.11.21.260
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.21.259';
+const BUILD_NUMBER = 'v2026.11.21.260';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1753,7 +1753,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.21.259: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.21.260: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3723,7 +3723,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.21.259: card-level links to one section.
+// v2026.11.21.260: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3743,7 +3743,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.21.259: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.21.260: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3776,7 +3776,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.21.259: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.21.260: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3796,7 +3796,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.21.259: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.21.260: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3822,7 +3822,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.21.259 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.21.260 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3844,7 +3844,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.21.259 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.21.260 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3862,7 +3862,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.259 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.21.260 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3886,7 +3886,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.259 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.21.260 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3931,7 +3931,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.21.259: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.21.260: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4686,14 +4686,7 @@ class SEEDCard extends HTMLElement {
         el.style.backgroundColor = fx.background === 'theme' ? '' : (fx.background != null ? fx.background : 'transparent');
         if (fx.bgLayer) { el.style.backgroundColor = 'transparent'; el.style.setProperty('--sec-bg', 'transparent'); }
         this._setBgLayer(el, fx.bgLayer);   // v258
-        if (fx.edge) {
-          el.style.backgroundImage = fx.edge.image;
-          el.style.backgroundSize = fx.edge.size;
-          el.style.backgroundPosition = fx.edge.position;
-          el.style.backgroundRepeat = fx.edge.repeat;
-        } else {
-          el.style.backgroundImage = '';
-        }
+        this._applyEdge(el, fx.edge, !!fx.bgLayer);   // v260
       } else {
         el.style.boxShadow = 'none';
         el.style.backgroundImage = '';
@@ -4703,6 +4696,7 @@ class SEEDCard extends HTMLElement {
         el.style.setProperty('--sec-border-right', 'none');
         el.style.setProperty('--sec-border-radius', '0');
         this._setBgLayer(el, null);
+        this._applyEdge(el, null, false);
       }
     });
   }
@@ -4721,6 +4715,10 @@ class SEEDCard extends HTMLElement {
     const fx = this._config.card_frame
       ? this._resolveFrame(this._config.card_frame, null, { expanded: wrapper.tagName !== 'DETAILS' || wrapper.open })
       : null;
+    // v260: the card paints a theme background with the `background` shorthand, so for a gradient /
+    // image theme it IS a background-image, and edge lines (also background-images) replaced it. With
+    // edges, the theme background goes on the ::before layer and the edges on ::after above it.
+    if (fx && fx.edge && fx.background === 'theme' && !fx.bgLayer) fx.bgLayer = { opacity: 1 };
     if (fx) {
       wrapper.style.boxShadow = fx.boxShadow;
       const bv = fx.borderVars;
@@ -4736,12 +4734,7 @@ class SEEDCard extends HTMLElement {
       else if (fx.background != null) wrapper.style.setProperty('--seed-card-bg', fx.background);
       else wrapper.style.removeProperty('--seed-card-bg');
       this._setBgLayer(wrapper, fx.bgLayer);
-      if (fx.edge) {
-        wrapper.style.backgroundImage = fx.edge.image;
-        wrapper.style.backgroundSize = fx.edge.size;
-        wrapper.style.backgroundPosition = fx.edge.position;
-        wrapper.style.backgroundRepeat = fx.edge.repeat;
-      } else { wrapper.style.backgroundImage = ''; }
+      this._applyEdge(wrapper, fx.edge, !!fx.bgLayer);   // v260
     } else {
       wrapper.style.boxShadow = 'none';
       wrapper.style.backgroundImage = '';
@@ -4751,7 +4744,26 @@ class SEEDCard extends HTMLElement {
       wrapper.style.borderRight = 'none';
       wrapper.style.removeProperty('--seed-card-bg');
       this._setBgLayer(wrapper, null);
+      this._applyEdge(wrapper, null, false);
     }
+  }
+
+  // v260: edge lines. Normally the element's own background-image. Above a faded background layer
+  // (::before, painted over the element's own background) they move to ::after, or they'd be covered.
+  _applyEdge(el, edge, onLayer) {
+    const vars = ['--ees-edge-img', '--ees-edge-size', '--ees-edge-pos', '--ees-edge-rep'];
+    if (edge && onLayer) {
+      el.style.backgroundImage = '';
+      el.style.setProperty(vars[0], edge.image); el.style.setProperty(vars[1], edge.size);
+      el.style.setProperty(vars[2], edge.position); el.style.setProperty(vars[3], edge.repeat);
+      el.classList.add('ees-edge-layer');
+      return;
+    }
+    if (el.classList.contains('ees-edge-layer')) { el.classList.remove('ees-edge-layer'); vars.forEach(v => el.style.removeProperty(v)); }
+    if (edge) {
+      el.style.backgroundImage = edge.image; el.style.backgroundSize = edge.size;
+      el.style.backgroundPosition = edge.position; el.style.backgroundRepeat = edge.repeat;
+    } else el.style.backgroundImage = '';
   }
 
   // v258: a see-through theme background, as a faded ::before layer behind the content.
@@ -5062,6 +5074,10 @@ class SEEDCard extends HTMLElement {
         .ees-bg-layer { position: relative; isolation: isolate; }
         .ees-bg-layer::before { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
           background: var(--ha-card-background, var(--card-background-color, #1c1c1c)); opacity: var(--ees-bg-op, 1); }
+        /* v260: edge lines above that layer */
+        .ees-bg-layer.ees-edge-layer::after { content: ""; position: absolute; inset: 0; border-radius: inherit; z-index: -1; pointer-events: none;
+          background-image: var(--ees-edge-img); background-size: var(--ees-edge-size);
+          background-position: var(--ees-edge-pos); background-repeat: var(--ees-edge-rep); }
         .easy-entity-styler-card-summary {
           list-style: none;
           cursor: pointer;
@@ -5726,7 +5742,7 @@ class SEEDCard extends HTMLElement {
         const bv = fx.borderVars;
         sectionBorderOverride += `--sec-border-top:${bv ? bv.top : 'none'};--sec-border-bottom:${bv ? bv.bottom : 'none'};--sec-border-left:${bv ? bv.left : 'none'};--sec-border-right:${bv ? bv.right : 'none'};--sec-border-radius:${bv ? bv.radius : '0'};`;
         sectionBorderOverride += `--sec-bg:${fx.bgLayer ? 'transparent' : fx.background === 'theme' ? 'inherit' : (fx.background != null ? fx.background : 'transparent')};`;
-        if (fx.edge) {
+        if (fx.edge && !fx.bgLayer) {
           sectionBorderOverride += `background-image:${fx.edge.image};background-size:${fx.edge.size};background-position:${fx.edge.position};background-repeat:${fx.edge.repeat};`;
         }
       } else {
@@ -5938,7 +5954,7 @@ class SEEDCard extends HTMLElement {
       const bv = fx.borderVars;
       styleVars += `--sec-border-top:${bv ? bv.top : 'none'};--sec-border-bottom:${bv ? bv.bottom : 'none'};--sec-border-left:${bv ? bv.left : 'none'};--sec-border-right:${bv ? bv.right : 'none'};--sec-border-radius:${bv ? bv.radius : '0'};`;
       styleVars += `--sec-bg:${fx.bgLayer ? 'transparent' : fx.background === 'theme' ? 'inherit' : (fx.background != null ? fx.background : 'transparent')};`;
-      if (fx.edge) {
+      if (fx.edge && !fx.bgLayer) {
         styleVars += `background-image:${fx.edge.image};background-size:${fx.edge.size};background-position:${fx.edge.position};background-repeat:${fx.edge.repeat};`;
       }
     } else {
