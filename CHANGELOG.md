@@ -5,6 +5,14 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.258
+
+- **Fixed: background opacity with *Theme (inherit)*.** Below 1 the background disappeared completely
+  when the theme's card background is a gradient or an image. The fade used CSS `color-mix()`, which only
+  takes a plain colour, so the whole value was dropped. A see-through theme background is now drawn as a
+  faded layer behind the card or section, which works for any background. The content and border stay
+  fully opaque. Custom colours were not affected.
+
 ## v2026.11.21.257
 
 - **Frame Style editor:** the option groups (Glow, Shadow, Border, Background, Edges, Condition) now share
