@@ -5,6 +5,23 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.254
+
+- **Show or hide each part.** Glow, Shadow, Border and Background each now have:
+  - a **Show when / Hide when** choice;
+  - an **any of / all of** choice;
+  - the boxes **Always**, **When Active**, **When Expanded** and the new **When Collapsed**.
+
+  For example, *Hide when Collapsed* draws a border only while the card is open, and *Show when all of
+  Active + Collapsed* glows only when something is on and the card is closed. *Always* greys out the
+  other boxes; with Hide it means "never". The editor flags combinations that can never hold, such as
+  "all of Expanded + Collapsed". Stored as `mode: hide` and `match: all` in the part's `show:`, written
+  only when used, so v253 settings are unchanged.
+- **Regular and Active strength.** Glow and Shadow show **Regular strength** and **Active strength**
+  (× regular) next to each other. Active strength is the same value as v253's "Stronger when active".
+- **Background opacity.** A custom-colour or theme background can now be see-through (`opacity`, 0–1).
+  It's written only below 1.
+
 ## v2026.11.21.253
 
 - **Show options per part.** Glow, Shadow, Border and Background each have their own **Always / When

@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.21.253
+// Version: v2026.11.21.254
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.21.253';
+const BUILD_NUMBER = 'v2026.11.21.254';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1320,6 +1320,8 @@ function normalizeFramePreset(fx) {
       ? { mode: 'custom', color: String(bg.color != null ? bg.color : '#1c1c1c') }
       : { mode };
     if (bg.show) out.background.show = normalizeShow(bg.show, false);
+    // v254: see-through background (0 = clear, 1 = solid). Written only below 1; not for 'transparent'.
+    { const o = Number(bg.opacity); if (mode !== 'transparent' && bg.opacity != null && Number.isFinite(o) && o < 1) out.background.opacity = Math.max(0, Math.round(o * 100) / 100); }
   }
   if (fx.edges) out.edges = normalizeEdges(fx.edges);
   // Conditional application. Two kinds:
@@ -1358,6 +1360,10 @@ const FRAME_BOOST_GROUPS = ['glow', 'shadow'];
 function normalizeShow(g, boostable) {
   g = g || {};
   const out = { always: g.always === true, expanded: g.expanded === true, active: g.active === true };
+  // v254: When Collapsed, Hide-when mode and All-match. Written only when used, so v253 blocks stay as they are.
+  if (g.collapsed === true) out.collapsed = true;
+  if (g.mode === 'hide') out.mode = 'hide';
+  if (g.match === 'all') out.match = 'all';
   if (boostable) {
     const b = Number(g.active_boost);
     out.active_boost = Number.isFinite(b) ? Math.max(1, Math.min(3, Math.round(b * 10) / 10)) : GLOW_BOOST_DEFAULT;
@@ -1387,6 +1393,21 @@ function migrateGlowWhen(fx) {
   if (out.border && typeof out.border === 'object' && !out.border.show) out.border = { ...out.border, show: { always: true } };
   if (out.background && typeof out.background === 'object' && !out.background.show) out.background = { ...out.background, show: { always: true } };
   return out;
+}
+// v254: does a part with this `show` block draw now?
+//   Show when (default): drawn when the ticked boxes hold (any of them, or all with match: all).
+//   Hide when:           drawn unless they hold.
+// Always wins over the other boxes: Show + Always = always drawn, Hide + Always = never drawn. With no box
+// ticked, nothing "holds": Show draws nothing, Hide draws always.
+function frameShowHolds(sh, st) {
+  if (sh.always) return true;
+  const ticked = ['active', 'expanded', 'collapsed'].filter(k => sh[k]);
+  if (!ticked.length) return false;
+  return sh.match === 'all' ? ticked.every(k => st[k]) : ticked.some(k => st[k]);
+}
+function frameShowDrawn(sh, st) {
+  const holds = frameShowHolds(sh, st);
+  return sh.mode === 'hide' ? !holds : holds;
 }
 // Scale a copied glow / shadow group by the active boost.
 function boostGlowGroup(key, grp, b) {
@@ -1720,7 +1741,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.21.253: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.21.254: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3690,7 +3711,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.21.253: card-level links to one section.
+// v2026.11.21.254: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3708,7 +3729,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.21.253: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.21.254: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3741,7 +3762,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.21.253: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.21.254: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3761,7 +3782,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.21.253: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.21.254: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3787,7 +3808,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.21.253 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.21.254 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3809,7 +3830,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.21.253 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.21.254 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3827,7 +3848,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.253 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.21.254 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3851,7 +3872,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.253 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.21.254 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3896,7 +3917,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.21.253: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.21.254: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4475,7 +4496,7 @@ class SEEDCard extends HTMLElement {
         if (!grp) return;
         const sh = (grp.show && FRAME_SHOW_GROUPS.includes(g)) ? normalizeShow(grp.show, FRAME_BOOST_GROUPS.includes(g)) : null;
         if (!sh) { if (!condMet) return; }
-        else if (!(sh.always || (sh.expanded && expanded) || (sh.active && active))) return;
+        else if (!frameShowDrawn(sh, { active, expanded, collapsed: !expanded })) return;
         let copy = JSON.parse(JSON.stringify(grp));
         delete copy.show;
         if (sh && active && sh.active_boost) copy = boostGlowGroup(g, copy, sh.active_boost);
@@ -4534,6 +4555,14 @@ class SEEDCard extends HTMLElement {
       out.background = mode === 'theme' ? 'theme'
         : mode === 'transparent' ? 'transparent'
         : (acc.background.color || 'transparent');
+      // v254: background opacity. A see-through theme background is the theme's card colour mixed with
+      // transparent, applied as a plain colour (so it no longer means "inherit").
+      const op = acc.background.opacity;
+      if (op != null && op < 1 && mode !== 'transparent') {
+        out.background = mode === 'theme'
+          ? `color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) ${Math.round(op * 100)}%, transparent)`
+          : this._hexToRgba(out.background, op);
+      }
     }
     // 'match' edge stops resolve to the frame's border color if it has one,
     // else the section/icon color — so a gradient border follows the accent.
@@ -9738,7 +9767,8 @@ class SEEDCardEditor extends HTMLElement {
             <label><input type="checkbox" class="at-check" data-at-sid="${fid}" data-at-path="glow.borders_only" ${g.borders_only ? 'checked' : ''}/> Borders only</label>
           </div>
           ${g.follow_icon ? '' : this._atColorControl(fid, 'glow.color', 'Color', g.color, { seedHex: '#2196F3', defaultLabel: 'Accent' })}
-          ${this._atSliderNum(fid, 'glow.intensity', 'Glow strength (×)', g.intensity ?? 1.0, 0.1, 3, 0.05, 1)}
+          ${this._atSliderNum(fid, 'glow.intensity', 'Regular strength (×)', g.intensity ?? 1.0, 0.1, 3, 0.05, 1)}
+          ${this._atActiveStrength(fid, fx, 'glow')}
           ${this._atShowEditor(fid, fx, 'glow')}` : ''}
 
           <div class="seed-ed-group-title">Shadow</div>
@@ -9754,6 +9784,7 @@ class SEEDCardEditor extends HTMLElement {
           ${this._atSliderNum(fid, 'shadow.blur', 'Blur (px)', sh.blur ?? 12, 0, 60, 1, 12)}
           ${this._atSliderNum(fid, 'shadow.spread', 'Spread (px)', sh.spread ?? 0, -20, 40, 1, 0)}
           ${this._atSliderNum(fid, 'shadow.opacity', 'Opacity', sh.opacity ?? 0.35, 0, 1, 0.05, 0.35)}
+          ${this._atActiveStrength(fid, fx, 'shadow')}
           ${this._atShowEditor(fid, fx, 'shadow')}` : ''}
 
           <div class="seed-ed-group-title">Border</div>
@@ -9797,6 +9828,7 @@ class SEEDCardEditor extends HTMLElement {
             </label>
           </div>
           ${bgMode === 'custom' ? this._atColorControl(fid, 'background.color', 'Color', (fx.background && fx.background.color) || '', { seedHex: '#1c1c1c', defaultLabel: 'Transparent' }) : ''}
+          ${bgMode !== 'transparent' ? this._atSliderNum(fid, 'background.opacity', 'Opacity', (fx.background && fx.background.opacity != null) ? fx.background.opacity : 1, 0, 1, 0.05, 1) : ''}
           ${this._atShowEditor(fid, fx, 'background')}` : ''}
 
           <div class="seed-ed-group-title">Edges (Border / Gradient)</div>
@@ -9861,19 +9893,38 @@ class SEEDCardEditor extends HTMLElement {
   // v253 (item 11): when one group (glow / shadow / border / background) shows, under that group.
   _atShowEditor(fid, fx, g) {
     const sh = effectiveShow(fx, g);
-    const what = { glow: 'glow', shadow: 'shadow', border: 'border', background: 'background' }[g];
+    const hide = sh.mode === 'hide', all = sh.match === 'all';
     const box = (k, label, extra = '') => `<label${extra ? ' style="opacity:0.5;"' : ''}><input type="checkbox" class="fx-show" data-fx-id="${fid}" data-g="${g}" data-k="${k}" ${sh[k] ? 'checked' : ''} ${extra}/> ${label}</label>`;
-    const boost = FRAME_BOOST_GROUPS.includes(g) && sh.active;
+    const off = sh.always ? 'disabled title="Always is ticked"' : '';
+    const sel = (k, opts, cur) => `<select class="at-input fx-show-sel" data-fx-id="${fid}" data-g="${g}" data-k="${k}">${this._atOpts(opts, cur)}</select>`;
+    const ticked = ['active', 'expanded', 'collapsed'].filter(k => sh[k]);
+    const name = { glow: 'glow', shadow: 'shadow', border: 'border', background: 'background' }[g];
+    let hint = '';
+    if (!sh.always && !ticked.length) hint = hide ? `No box ticked: this ${name} always shows.` : `No box ticked: this ${name} never shows.`;
+    else if (sh.always && hide) hint = `Hide when Always: this ${name} never shows.`;
+    else if (!sh.always && all && sh.expanded && sh.collapsed) hint = `Expanded and Collapsed can't both hold, so with "all of" this ${name} ${hide ? 'always' : 'never'} shows.`;
     return `
           <div class="seed-ed-font-row">
-            <span class="seed-ed-hint">Show</span>
-            ${box('always', 'Always')}
-            ${box('expanded', 'When Expanded', sh.always ? 'disabled title="Always is ticked"' : '')}
-            ${box('active', 'When Active')}
+            ${sel('mode', [['show', 'Show when'], ['hide', 'Hide when']], hide ? 'hide' : 'show')}
+            ${sel('match', [['any', 'any of'], ['all', 'all of']], all ? 'all' : 'any')}
           </div>
-          ${!sh.always && !sh.expanded && !sh.active ? `<span class="seed-ed-hint">No box ticked: this ${what} never shows.</span>` : ''}
-          ${sh.active && !framePresetHasCondition(fx) ? `<span class="seed-ed-hint">Set 'Only apply when…' below to define Active.</span>` : ''}
-          ${boost ? this._atSliderNum(fid, `${g}.show.active_boost`, `Stronger when active (×)`, sh.active_boost, 1, 3, 0.1, GLOW_BOOST_DEFAULT, 'fx-show-boost') : ''}`;
+          <div class="seed-ed-font-row">
+            ${box('always', 'Always')}
+            ${box('active', 'When Active', off)}
+            ${box('expanded', 'When Expanded', off)}
+            ${box('collapsed', 'When Collapsed', off)}
+          </div>
+          ${hint ? `<span class="seed-ed-hint">${hint}</span>` : ''}
+          ${sh.active && !framePresetHasCondition(fx) ? `<span class="seed-ed-hint">Set 'Only apply when…' below to define Active.</span>` : ''}`;
+  }
+
+  // v254: the Active strength slider for glow / shadow (a multiple of the regular strength), shown when
+  // the part can be drawn while the style is active.
+  _atActiveStrength(fid, fx, g) {
+    const sh = effectiveShow(fx, g);
+    const canDrawActive = [true, false].some(ex => frameShowDrawn(sh, { active: true, expanded: ex, collapsed: !ex }));
+    if (!canDrawActive || !(sh.active || sh.mode === 'hide')) return '';
+    return this._atSliderNum(fid, `${g}.show.active_boost`, 'Active strength (× regular)', sh.active_boost, 1, 3, 0.1, GLOW_BOOST_DEFAULT, 'fx-show-boost');
   }
 
   // Save/Discard row for a lib: Frame Style. Edits live in this._frameDrafts[slug]
@@ -15022,6 +15073,18 @@ class SEEDCardEditor extends HTMLElement {
     });
     this.querySelectorAll('.fx-show').forEach(el => {
       el.addEventListener('change', () => writeShow(el.dataset.fxId, el.dataset.g, { [el.dataset.k]: el.checked }));
+    });
+    // v254: Show / Hide and any / all. The defaults (show, any) are stored as absent.
+    this.querySelectorAll('.fx-show-sel').forEach(el => {
+      el.addEventListener('change', () => this._atApply(el.dataset.fxId, fx => {
+        const g = el.dataset.g, k = el.dataset.k;
+        if (!fx[g]) return;
+        const fresh = !fx[g].show;
+        const b = effectiveShow(fx, g);
+        if (fresh && FRAME_BOOST_GROUPS.includes(g)) b.active_boost = GLOW_BOOST_DEFAULT;
+        if (el.value === 'hide' || el.value === 'all') b[k] = el.value; else delete b[k];
+        fx[g].show = b;
+      }));
     });
     this.querySelectorAll('input.fx-show-boost').forEach(el => {
       el.addEventListener('change', () => writeShow(el.dataset.atSid, el.dataset.atPath.split('.')[0], { active_boost: Number(el.value) }));
