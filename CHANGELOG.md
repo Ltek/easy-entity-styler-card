@@ -5,6 +5,16 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.251
+
+- **Faster on big HA installs.** A Cards, Group or Entity List section no longer scans and sorts every
+  entity in Home Assistant on each update just to pick its header-rule entity. With 1,500 entities and
+  52 cards on one view, that was about 1,300 full sorts per 10 state changes.
+- An Entity List section's header-rule entity is now its own first member. It used to be the most recently
+  changed entity in all of HA, so a header rule without its own `entity:` could match the wrong thing.
+- Activity tables sort once per update instead of once per caller, and compute each row's sort keys once
+  instead of on every comparison. The order is unchanged.
+
 ## v2026.11.20.250
 
 - **Title bar height.** `card_title_height` (px) sets a minimum height for the title bar, with its
