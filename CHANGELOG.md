@@ -5,6 +5,25 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.252
+
+- **Glow modes** (EES-FEATURE-GAPS item 11). Under a Frame Style's glow and shadow, the glow can now
+  show **Always**, **When Expanded** and/or **When Active**. While active, it can be stronger:
+  **Active glow strength**, ×1–×3, default ×1.6.
+  - `glow_when: {always, expanded, active, active_boost}` on the Frame Style.
+  - Expanded means the card is open on the card frame, or that section is open on a section frame. A
+    frame that can't collapse counts as open.
+  - The glow fades in and out over 150 ms, with no re-render.
+  - Once the block is set, the style's condition (relabelled **Active when…**) gates only the glow and
+    shadow. Its border, background and edges always apply.
+- **Nothing changes for existing styles.** Without the block, a conditional glow behaves as before (it
+  reads as *When Active*, with no boost), and an unconditional one as *Always*. Only a style you change
+  gets the block. A new library style starts with every box off, so no glow.
+- The glow and shadow sliders (strength, blur, spread, opacity) now have a number box and a reset.
+  Glow strength goes down to ×0.1.
+- **Fixed:** exporting a Frame Style dropped its condition but kept a v247 entity-list / Rule Set
+  source. Unticking *Only apply when…* also left that source in place, so the condition came back.
+
 ## v2026.11.21.251
 
 - **Faster on big HA installs.** A Cards, Group or Entity List section no longer scans and sorts every

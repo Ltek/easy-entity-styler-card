@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.21.251
+// Version: v2026.11.21.252
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.21.251';
+const BUILD_NUMBER = 'v2026.11.21.252';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1318,6 +1318,8 @@ function normalizeFramePreset(fx) {
       : { mode };
   }
   if (fx.edges) out.edges = normalizeEdges(fx.edges);
+  // v252 (EES-FEATURE-GAPS item 11): when the glow / shadow shows. Written only once the user sets it.
+  if (fx.glow_when && typeof fx.glow_when === 'object') out.glow_when = normalizeGlowWhen(fx.glow_when);
   // Conditional application. Two kinds:
   //  - entity (default): `when` (condition) + `when_entity` (watched entity id)
   //  - section membership: `when_kind` = 'section_has_entities' | 'section_empty'
@@ -1342,6 +1344,37 @@ function normalizeFramePreset(fx) {
     }
   }
   return out;
+}
+// v252: glow modes. The glow / shadow shows when ANY ticked box holds; while the preset is active it is
+// multiplied by active_boost (1-3). `always` wins over `expanded`.
+const GLOW_BOOST_DEFAULT = 1.6;
+function normalizeGlowWhen(g) {
+  g = g || {};
+  const b = Number(g.active_boost);
+  return { always: g.always === true, expanded: g.expanded === true, active: g.active === true,
+    active_boost: Number.isFinite(b) ? Math.max(1, Math.min(3, Math.round(b * 10) / 10)) : GLOW_BOOST_DEFAULT };
+}
+// True when a preset carries a condition of its own (what "Active" means).
+function framePresetHasCondition(fx) {
+  return !!(fx && (fx.when || fx.when_source || fx.when_kind === 'section_has_entities' || fx.when_kind === 'section_empty'));
+}
+// The block the editor shows for a preset. With no block: a conditional preset reads as Active, an
+// unconditional one as Always, which is exactly what it does today.
+function effectiveGlowWhen(fx) {
+  if (fx && fx.glow_when) return normalizeGlowWhen(fx.glow_when);
+  const cond = framePresetHasCondition(fx);
+  return { always: !cond, expanded: false, active: cond, active_boost: GLOW_BOOST_DEFAULT };
+}
+// Scale a copied glow / shadow group by the active boost.
+function boostGlowGroup(key, grp, b) {
+  if (!grp || !(b > 1)) return grp;
+  if (key === 'glow') grp.intensity = (Number(grp.intensity) || 1) * b;
+  else {
+    grp.blur = (Number(grp.blur) || 0) * b;
+    grp.opacity = Math.min(1, (grp.opacity != null ? Number(grp.opacity) : 0.35) * b);
+    grp.spread = (Number(grp.spread) || 0) + (b - 1) * 2;
+  }
+  return grp;
 }
 function normalizeFramePresets(list) {
   return Array.isArray(list) ? list.map(normalizeFramePreset) : [];
@@ -1393,6 +1426,7 @@ function portableFramePreset(fx, keepConditions) {
   if (!keepConditions) {
     delete norm.when; delete norm.when_entity;
     delete norm.when_kind; delete norm.when_section;
+    delete norm.when_source;   // v252: the v247 source is part of the condition too
   }
   return norm;
 }
@@ -1663,7 +1697,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.21.251: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.21.252: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3633,7 +3667,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.21.251: card-level links to one section.
+// v2026.11.21.252: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3651,7 +3685,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.21.251: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.21.252: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3684,7 +3718,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.21.251: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.21.252: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3704,7 +3738,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.21.251: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.21.252: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3730,7 +3764,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.21.251 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.21.252 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3752,7 +3786,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.21.251 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.21.252 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3770,7 +3804,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.251 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.21.252 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3794,7 +3828,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.251 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.21.252 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3839,7 +3873,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.21.251: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.21.252: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4386,8 +4420,10 @@ class SEEDCard extends HTMLElement {
   // last-writer-wins layering as _resolveFrame. Returns { <group>: {...} } or
   // null when nothing applies. This is the "current live look" — used both by
   // _resolveFrame (to render) and by "Capture as Preset" (to freeze it).
-  _flattenFrameToBundle(frameRef) {
+  // `ctx.expanded` (v252): whether the card / section this frame is on is open, for glow_when.expanded.
+  _flattenFrameToBundle(frameRef, ctx) {
     frameRef = frameRef || {};
+    const expanded = !!(ctx && ctx.expanded);
     const byId = this._framePresetsById();
     const disabled = new Set(frameRef.disabled || []);
     // Layers whose own condition is ignored HERE — they always apply on this
@@ -4407,18 +4443,33 @@ class SEEDCard extends HTMLElement {
       // Skip conditional presets that aren't active — UNLESS this application
       // opted to ignore the condition (then the layer always applies). The
       // per-location override (if any) rebinds the condition entity here.
-      if (!ignoreCond.has(id) && !this._framePresetActive(fx, overrides[id])) return;
-      ['glow', 'shadow', 'border', 'background', 'edges'].forEach(g => {
+      if (!fx.glow_when) {
+        if (!ignoreCond.has(id) && !this._framePresetActive(fx, overrides[id])) return;
+        ['glow', 'shadow', 'border', 'background', 'edges'].forEach(g => {
+          if (fx[g]) { acc[g] = JSON.parse(JSON.stringify(fx[g])); any = true; }
+        });
+        return;
+      }
+      // v252: with glow_when, the condition only decides "Active" for the glow and shadow; the
+      // border, background and edges always apply. A preset with no condition is never active
+      // (unless this location ignores conditions, which means "treat it as met").
+      const gw = normalizeGlowWhen(fx.glow_when);
+      const active = ignoreCond.has(id) || (framePresetHasCondition(fx) && this._framePresetActive(fx, overrides[id]));
+      const show = gw.always || (gw.expanded && expanded) || (gw.active && active);
+      ['border', 'background', 'edges'].forEach(g => {
         if (fx[g]) { acc[g] = JSON.parse(JSON.stringify(fx[g])); any = true; }
+      });
+      if (show) ['glow', 'shadow'].forEach(g => {
+        if (fx[g]) { acc[g] = boostGlowGroup(g, JSON.parse(JSON.stringify(fx[g])), active ? gw.active_boost : 1); any = true; }
       });
     });
     return any ? acc : null;
   }
 
-  _resolveFrame(frameRef, section) {
+  _resolveFrame(frameRef, section, ctx) {
     frameRef = frameRef || {};
     // Accumulate sparse groups (last writer wins) across the active layers.
-    const acc = this._flattenFrameToBundle(frameRef);
+    const acc = this._flattenFrameToBundle(frameRef, ctx);
     if (!acc) return null;
 
     const out = { boxShadow: 'none', borderVars: null, edge: null, background: null };
@@ -4533,7 +4584,8 @@ class SEEDCard extends HTMLElement {
       // of its glow/shadow/border/edges/background. When it resolves it drives
       // all of them (Replace). A stack that resolves to nothing (empty, or all
       // conditional presets inactive) leaves the section with no frame at all.
-      const fx = this._resolveFrame(section.frame, section);
+      // v252: a section that isn't a <details> (not collapsible) counts as expanded
+      const fx = this._resolveFrame(section.frame, section, { expanded: el.tagName !== 'DETAILS' || el.open });
       if (fx) {
         el.style.overflow = 'visible';
         el.style.boxShadow = fx.boxShadow;
@@ -4575,7 +4627,9 @@ class SEEDCard extends HTMLElement {
     // (border / glow / shadow / edges / background). When it resolves, it drives
     // them absolutely; when it resolves to nothing (no card_frame, or all
     // conditional presets inactive), the wrapper has no frame at all.
-    const fx = this._config.card_frame ? this._resolveFrame(this._config.card_frame, null) : null;
+    const fx = this._config.card_frame
+      ? this._resolveFrame(this._config.card_frame, null, { expanded: wrapper.tagName !== 'DETAILS' || wrapper.open })
+      : null;
     if (fx) {
       wrapper.style.boxShadow = fx.boxShadow;
       const bv = fx.borderVars;
@@ -4893,6 +4947,7 @@ class SEEDCard extends HTMLElement {
           ${cardBorderCss}
           ${cardRadiusCss}
           box-shadow: none;
+          transition: box-shadow 150ms ease;   /* v252: glow modes fade in / out */
           overflow: hidden;
           background: var(--seed-card-bg);
           /* v240: optional padding inside the frame (card_inner_pad_*); 0 = as before */
@@ -4998,6 +5053,7 @@ class SEEDCard extends HTMLElement {
           border-right: var(--sec-border-right, none);
           border-radius: var(--sec-border-radius, 0);
           box-shadow: none;
+          transition: box-shadow 150ms ease;   /* v252 */
           background-color: var(--sec-bg, transparent);
           overflow: hidden;
         }
@@ -7849,6 +7905,10 @@ class SEEDCard extends HTMLElement {
       if (slot) slot.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
     }
 
+    // v252: the card frame's "When Expanded" glow follows the card's own open state, with no re-render
+    const cardWrap = this.querySelector('details.easy-entity-styler-card-wrapper');
+    if (cardWrap && this._config.card_frame) cardWrap.addEventListener('toggle', () => this.updateCardGlow());
+
     this.querySelectorAll('details.seed-section').forEach(details => {
       details.addEventListener('toggle', () => {
         if (autoClose && details.open) {
@@ -9659,7 +9719,7 @@ class SEEDCardEditor extends HTMLElement {
             <label><input type="checkbox" class="at-check" data-at-sid="${fid}" data-at-path="glow.borders_only" ${g.borders_only ? 'checked' : ''}/> Borders only</label>
           </div>
           ${g.follow_icon ? '' : this._atColorControl(fid, 'glow.color', 'Color', g.color, { seedHex: '#2196F3', defaultLabel: 'Accent' })}
-          ${this._atSlider(fid, 'glow.intensity', 'Intensity', g.intensity ?? 1.0, 0.25, 3, 0.05)}` : ''}
+          ${this._atSliderNum(fid, 'glow.intensity', 'Glow strength (×)', g.intensity ?? 1.0, 0.1, 3, 0.05, 1)}` : ''}
 
           <div class="seed-ed-group-title">Shadow</div>
           <div class="seed-ed-font-row">
@@ -9671,9 +9731,10 @@ class SEEDCardEditor extends HTMLElement {
           ${sh.follow_icon ? '' : this._atColorControl(fid, 'shadow.color', 'Color', sh.color, { seedHex: '#000000', defaultLabel: 'Black' })}
           ${this._atSlider(fid, 'shadow.x', 'X offset (px)', sh.x ?? 0, -40, 40, 1)}
           ${this._atSlider(fid, 'shadow.y', 'Y offset (px)', sh.y ?? 4, -40, 40, 1)}
-          ${this._atSlider(fid, 'shadow.blur', 'Blur (px)', sh.blur ?? 12, 0, 60, 1)}
-          ${this._atSlider(fid, 'shadow.spread', 'Spread (px)', sh.spread ?? 0, -20, 40, 1)}
-          ${this._atSlider(fid, 'shadow.opacity', 'Opacity', sh.opacity ?? 0.35, 0, 1, 0.05)}` : ''}
+          ${this._atSliderNum(fid, 'shadow.blur', 'Blur (px)', sh.blur ?? 12, 0, 60, 1, 12)}
+          ${this._atSliderNum(fid, 'shadow.spread', 'Spread (px)', sh.spread ?? 0, -20, 40, 1, 0)}
+          ${this._atSliderNum(fid, 'shadow.opacity', 'Opacity', sh.opacity ?? 0.35, 0, 1, 0.05, 0.35)}` : ''}
+          ${(hasGlow || hasShadow) ? this._atGlowWhenEditor(fid, fx) : ''}
 
           <div class="seed-ed-group-title">Border</div>
           <div class="seed-ed-font-row">
@@ -9727,7 +9788,7 @@ class SEEDCardEditor extends HTMLElement {
 
           <div class="seed-ed-group-title">Condition (optional)</div>
           <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> Only apply when…</label>
+            <label><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> ${fx.glow_when ? 'Active when…' : 'Only apply when…'}</label>
           </div>
           ${condActive ? `<div class="seed-ed-font-row">
             <label>Based on
@@ -9757,6 +9818,38 @@ class SEEDCardEditor extends HTMLElement {
           ${isLib ? this._atFrameSaveRow(fid.slice(4)) : ''}
         </div>
       </details>`;
+  }
+
+  // v252: a slider with a number box beside it and a reset to its default. Both inputs write the same
+  // path live; the reset re-renders.
+  _atSliderNum(sid, path, label, cur, min, max, step, def) {
+    const v = Number.isFinite(Number(cur)) ? Number(cur) : def;
+    return `
+      <div class="seed-ed-slider-row">
+        <label>${label}</label>
+        <input type="range" class="at-input at-slider at-slider-pair" data-at-sid="${sid}" data-at-path="${path}"
+               min="${min}" max="${max}" step="${step}" value="${v}" />
+        <input type="number" class="at-input at-slider-num at-slider-pair" data-at-sid="${sid}" data-at-path="${path}"
+               min="${min}" max="${max}" step="${step}" value="${v}" style="width:64px;" />
+        <ha-icon class="seed-ed-icon-btn at-slider-reset" icon="mdi:restore" data-at-sid="${sid}" data-at-path="${path}" data-at-def="${def}" title="Reset to ${def}"></ha-icon>
+      </div>`;
+  }
+
+  // v252 (item 11): when the glow / shadow shows. Unticked boxes = no glow.
+  _atGlowWhenEditor(fid, fx) {
+    const gw = effectiveGlowWhen(fx);
+    const box = (k, label, extra = '') => `<label${extra ? ' style="opacity:0.5;"' : ''}><input type="checkbox" class="fx-glow-when" data-fx-id="${fid}" data-k="${k}" ${gw[k] ? 'checked' : ''} ${extra}/> ${label}</label>`;
+    return `
+          <div class="seed-ed-group-title">Glow and shadow show</div>
+          <div class="seed-ed-font-row">
+            ${box('always', 'Always')}
+            ${box('expanded', 'When Expanded', gw.always ? 'disabled title="Always is ticked"' : '')}
+            ${box('active', 'When Active')}
+          </div>
+          ${!gw.always && !gw.expanded && !gw.active ? '<span class="seed-ed-hint">No box ticked: this style shows no glow or shadow.</span>' : ''}
+          ${gw.active && !framePresetHasCondition(fx) ? `<span class="seed-ed-hint">Set 'Only apply when…' below to define Active.</span>` : ''}
+          ${gw.active ? this._atSliderNum(fid, 'glow_when.active_boost', 'Active glow strength (×)', gw.active_boost, 1, 3, 0.1, GLOW_BOOST_DEFAULT) : ''}
+          ${fx.glow_when ? '<span class="seed-ed-hint">The condition below now decides only when this style is Active. Its border, background and edges always apply.</span>' : ''}`;
   }
 
   // Save/Discard row for a lib: Frame Style. Edits live in this._frameDrafts[slug]
@@ -14893,6 +14986,29 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
+    // v252: glow mode boxes. The first change writes the whole block, starting from what the preset
+    // does today (conditional = Active, else Always), so ticking one box never turns another off.
+    this.querySelectorAll('.fx-glow-when').forEach(el => {
+      el.addEventListener('change', () => {
+        const fid = el.dataset.fxId, k = el.dataset.k;
+        this._atApply(fid, fx => { const b = effectiveGlowWhen(fx); b[k] = el.checked; fx.glow_when = b; });
+      });
+    });
+    // v252: slider + number box pairs stay in step; reset puts the default back.
+    this.querySelectorAll('.at-slider-pair').forEach(el => {
+      el.addEventListener('input', () => {
+        const row = el.closest('.seed-ed-slider-row');
+        if (row) row.querySelectorAll('.at-slider-pair').forEach(o => { if (o !== el) o.value = el.value; });
+      });
+    });
+    this.querySelectorAll('.at-slider-reset').forEach(el => {
+      el.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const def = Number(el.dataset.atDef);
+        this._atApply(el.dataset.atSid, sec => this._atSet(sec, el.dataset.atPath, def));
+      });
+    });
+
     // Frame preset "Only apply when…" master toggle. Enable seeds an entity
     // condition (the default kind); disable clears every condition field.
     this.querySelectorAll('.fx-when-toggle').forEach(el => {
@@ -14900,7 +15016,7 @@ class SEEDCardEditor extends HTMLElement {
         const fid = el.dataset.fxId;
         this._atApply(fid, fx => {
           if (el.checked) { fx.when = { op: 'eq', value: '' }; fx.when_entity = fx.when_entity || ''; }
-          else { delete fx.when; delete fx.when_entity; delete fx.when_kind; delete fx.when_section; }
+          else { delete fx.when; delete fx.when_entity; delete fx.when_kind; delete fx.when_section; delete fx.when_source; }
         });
       });
     });
@@ -15185,7 +15301,8 @@ class SEEDCardEditor extends HTMLElement {
       while (map[slug]) { slug = frameLibSlug(baseName + ' ' + n); n++; }
       map[slug] = normalizeFramePreset({
         name: n > 2 ? `${baseName} ${n - 1}` : baseName,
-        glow: { color: '#2196F3', intensity: 1.0, borders_only: false }
+        glow: { color: '#2196F3', intensity: 1.0, borders_only: false },
+        glow_when: { always: false, expanded: false, active: false, active_boost: GLOW_BOOST_DEFAULT }   // v252: glow off by default
       });
       this._libEchoJSON = null;
       saveFrameLibrary(this._hass, scope, map)
