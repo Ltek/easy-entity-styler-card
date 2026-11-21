@@ -62,6 +62,7 @@ Every option below is fully point-and-click in the visual editor.
 - **Entity name cleaner** — strip repeated text (e.g. "Living Room") card-wide or per section.
 - **Theme color or your own color, everywhere** — every color option is one control with four choices: **Default** (inherit), **Theme color** (a named theme variable, so the color follows your theme), **Custom color** (swatch), or **Custom CSS…** (any CSS color).
 - **Native entity icons** — a section can show each entity's own HA icon, with icon rules still overriding it per state.
+- **Light when closed** — a collapsed card (or a pop-up card that isn't open) builds its embedded cards the first time it opens, like expander-card, and keeps them after that. Tick *Build embedded cards while closed* (`card_preload_children: true`) to build them straight away.
 - **Frame Styles** and **Header Rules** — see **Libraries** below.
 
 ### Interaction

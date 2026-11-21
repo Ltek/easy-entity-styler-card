@@ -5,6 +5,20 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.256
+
+- **A closed card no longer builds its embedded cards** (EES-FEATURE-GAPS item 12). A collapsible card
+  that starts collapsed used to build every child card (logbooks, history graphs, auto-entities, …)
+  while closed, so it cost as much as an open one. It now builds them the first time it opens, as
+  expander-card does, and keeps them after it closes, so they keep their state. A header pop-up card
+  builds them when the pop-up opens.
+- Header rules, `{count:}` / `{entity:}` titles and *Expand when section has entities* keep working
+  while closed. They read Home Assistant's states, not the child cards. A card that opens itself
+  builds its children then.
+- **Build embedded cards while closed** (`card_preload_children: true`) gives the old behaviour, e.g. so
+  a camera stream is already running when you open the card. Expanded and non-collapsible cards are
+  unchanged.
+
 ## v2026.11.21.255
 
 - **Frame Style editor is shorter.** Glow, Shadow, Border, Background, Edges and Condition are each a
