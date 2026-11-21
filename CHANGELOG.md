@@ -5,6 +5,13 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.257
+
+- **Frame Style editor:** the option groups (Glow, Shadow, Border, Background, Edges, Condition) now share
+  one row style. Each has a single divider line above it, the same padding whether it's on or off, and
+  its title and Enable box centred on one line. Before, groups that were on were indented and spaced
+  differently from those that were off, and some rows had a doubled divider.
+
 ## v2026.11.21.256
 
 - **A closed card no longer builds its embedded cards** (EES-FEATURE-GAPS item 12). A collapsible card
