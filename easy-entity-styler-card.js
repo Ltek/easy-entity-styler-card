@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.21.252
+// Version: v2026.11.21.253
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.21.252';
+const BUILD_NUMBER = 'v2026.11.21.253';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1269,7 +1269,7 @@ function normalizeEdges(edges) {
 // (critical for layering — see _resolveFrame). Groups: glow / shadow / border /
 // background / edges, plus an optional `when`/`when_entity` condition.
 function normalizeFramePreset(fx) {
-  fx = fx || {};
+  fx = migrateGlowWhen(fx || {});
   const out = {
     id: fx.id || _fxId(),
     name: fx.name != null && String(fx.name).trim() ? String(fx.name) : 'Frame Style'
@@ -1281,7 +1281,8 @@ function normalizeFramePreset(fx) {
     color: fx.glow.color || '#2196F3',
     intensity: Number(fx.glow.intensity) || 1.0,
     borders_only: fx.glow.borders_only === true,
-    ...(fx.glow.follow_icon ? { follow_icon: true } : {})
+    ...(fx.glow.follow_icon ? { follow_icon: true } : {}),
+    ...(fx.glow.show ? { show: normalizeShow(fx.glow.show, true) } : {})
   };
   if (fx.shadow) out.shadow = {
     color: fx.shadow.color || '#000000',
@@ -1289,7 +1290,8 @@ function normalizeFramePreset(fx) {
     x: Number(fx.shadow.x) || 0, y: fx.shadow.y != null ? Number(fx.shadow.y) : 4,
     blur: fx.shadow.blur != null ? Number(fx.shadow.blur) : 12,
     spread: Number(fx.shadow.spread) || 0,
-    opacity: fx.shadow.opacity != null ? Number(fx.shadow.opacity) : 0.35
+    opacity: fx.shadow.opacity != null ? Number(fx.shadow.opacity) : 0.35,
+    ...(fx.shadow.show ? { show: normalizeShow(fx.shadow.show, true) } : {})
   };
   if (fx.border) out.border = {
     color: fx.border.color || '#2196F3',
@@ -1305,7 +1307,8 @@ function normalizeFramePreset(fx) {
     ...(Array.isArray(fx.border.radii) && fx.border.radii.length === 4 && fx.border.radii.every(r => optNumber(r) !== null)
       ? { radii: fx.border.radii.map(r => Math.max(0, Math.min(48, Number(r)))) } : {}),
     follow_icon: fx.border.follow_icon === true,
-    sides: Array.isArray(fx.border.sides) ? fx.border.sides.filter(s => ['top', 'bottom', 'left', 'right'].includes(s)) : ['top', 'bottom', 'left', 'right']
+    sides: Array.isArray(fx.border.sides) ? fx.border.sides.filter(s => ['top', 'bottom', 'left', 'right'].includes(s)) : ['top', 'bottom', 'left', 'right'],
+    ...(fx.border.show ? { show: normalizeShow(fx.border.show, false) } : {})
   };
   // Background: 'custom' (a solid color), 'transparent', or 'theme' (inherit
   // the HA card/theme background). Legacy values were a bare string or
@@ -1316,10 +1319,9 @@ function normalizeFramePreset(fx) {
     out.background = mode === 'custom'
       ? { mode: 'custom', color: String(bg.color != null ? bg.color : '#1c1c1c') }
       : { mode };
+    if (bg.show) out.background.show = normalizeShow(bg.show, false);
   }
   if (fx.edges) out.edges = normalizeEdges(fx.edges);
-  // v252 (EES-FEATURE-GAPS item 11): when the glow / shadow shows. Written only once the user sets it.
-  if (fx.glow_when && typeof fx.glow_when === 'object') out.glow_when = normalizeGlowWhen(fx.glow_when);
   // Conditional application. Two kinds:
   //  - entity (default): `when` (condition) + `when_entity` (watched entity id)
   //  - section membership: `when_kind` = 'section_has_entities' | 'section_empty'
@@ -1345,25 +1347,46 @@ function normalizeFramePreset(fx) {
   }
   return out;
 }
-// v252: glow modes. The glow / shadow shows when ANY ticked box holds; while the preset is active it is
-// multiplied by active_boost (1-3). `always` wins over `expanded`.
+// v253 (EES-FEATURE-GAPS item 11): each of glow, shadow, border and background has its own `show`:
+//   show: { always, expanded, active, active_boost }   (active_boost on glow / shadow only, 1-3)
+// The group shows when ANY ticked box holds; `always` wins over `expanded`. While the preset is active a
+// glow / shadow is multiplied by active_boost. A group with no `show` follows the preset's condition, as
+// before (and edges always do).
 const GLOW_BOOST_DEFAULT = 1.6;
-function normalizeGlowWhen(g) {
+const FRAME_SHOW_GROUPS = ['glow', 'shadow', 'border', 'background'];
+const FRAME_BOOST_GROUPS = ['glow', 'shadow'];
+function normalizeShow(g, boostable) {
   g = g || {};
-  const b = Number(g.active_boost);
-  return { always: g.always === true, expanded: g.expanded === true, active: g.active === true,
-    active_boost: Number.isFinite(b) ? Math.max(1, Math.min(3, Math.round(b * 10) / 10)) : GLOW_BOOST_DEFAULT };
+  const out = { always: g.always === true, expanded: g.expanded === true, active: g.active === true };
+  if (boostable) {
+    const b = Number(g.active_boost);
+    out.active_boost = Number.isFinite(b) ? Math.max(1, Math.min(3, Math.round(b * 10) / 10)) : GLOW_BOOST_DEFAULT;
+  }
+  return out;
 }
 // True when a preset carries a condition of its own (what "Active" means).
 function framePresetHasCondition(fx) {
   return !!(fx && (fx.when || fx.when_source || fx.when_kind === 'section_has_entities' || fx.when_kind === 'section_empty'));
 }
-// The block the editor shows for a preset. With no block: a conditional preset reads as Active, an
-// unconditional one as Always, which is exactly what it does today.
-function effectiveGlowWhen(fx) {
-  if (fx && fx.glow_when) return normalizeGlowWhen(fx.glow_when);
+// The boxes the editor shows for a group. With no `show`: a conditional preset reads as Active (no boost),
+// an unconditional one as Always, which is exactly what it does.
+function effectiveShow(fx, g) {
+  const grp = fx && fx[g];
+  const boostable = FRAME_BOOST_GROUPS.includes(g);
+  if (grp && grp.show) return normalizeShow(grp.show, boostable);
   const cond = framePresetHasCondition(fx);
-  return { always: !cond, expanded: false, active: cond, active_boost: GLOW_BOOST_DEFAULT };
+  return { always: !cond, expanded: false, active: cond, ...(boostable ? { active_boost: 1 } : {}) };
+}
+// v252 stored one preset-level `glow_when` for glow + shadow, with border / background always on. Move it
+// into the groups so v252 configs keep their look.
+function migrateGlowWhen(fx) {
+  if (!fx.glow_when || typeof fx.glow_when !== 'object') return fx;
+  const gw = fx.glow_when, out = { ...fx };
+  delete out.glow_when;
+  FRAME_BOOST_GROUPS.forEach(g => { if (out[g] && typeof out[g] === 'object' && !out[g].show) out[g] = { ...out[g], show: { ...gw } }; });
+  if (out.border && typeof out.border === 'object' && !out.border.show) out.border = { ...out.border, show: { always: true } };
+  if (out.background && typeof out.background === 'object' && !out.background.show) out.background = { ...out.background, show: { always: true } };
+  return out;
 }
 // Scale a copied glow / shadow group by the active boost.
 function boostGlowGroup(key, grp, b) {
@@ -1697,7 +1720,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.21.252: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.21.253: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3667,7 +3690,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.21.252: card-level links to one section.
+// v2026.11.21.253: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3685,7 +3708,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.21.252: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.21.253: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3718,7 +3741,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.21.252: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.21.253: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3738,7 +3761,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.21.252: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.21.253: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3764,7 +3787,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.21.252 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.21.253 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3786,7 +3809,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.21.252 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.21.253 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3804,7 +3827,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.252 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.21.253 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3828,7 +3851,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.252 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.21.253 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3873,7 +3896,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.21.252: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.21.253: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4443,24 +4466,20 @@ class SEEDCard extends HTMLElement {
       // Skip conditional presets that aren't active — UNLESS this application
       // opted to ignore the condition (then the layer always applies). The
       // per-location override (if any) rebinds the condition entity here.
-      if (!fx.glow_when) {
-        if (!ignoreCond.has(id) && !this._framePresetActive(fx, overrides[id])) return;
-        ['glow', 'shadow', 'border', 'background', 'edges'].forEach(g => {
-          if (fx[g]) { acc[g] = JSON.parse(JSON.stringify(fx[g])); any = true; }
-        });
-        return;
-      }
-      // v252: with glow_when, the condition only decides "Active" for the glow and shadow; the
-      // border, background and edges always apply. A preset with no condition is never active
-      // (unless this location ignores conditions, which means "treat it as met").
-      const gw = normalizeGlowWhen(fx.glow_when);
-      const active = ignoreCond.has(id) || (framePresetHasCondition(fx) && this._framePresetActive(fx, overrides[id]));
-      const show = gw.always || (gw.expanded && expanded) || (gw.active && active);
-      ['border', 'background', 'edges'].forEach(g => {
-        if (fx[g]) { acc[g] = JSON.parse(JSON.stringify(fx[g])); any = true; }
-      });
-      if (show) ['glow', 'shadow'].forEach(g => {
-        if (fx[g]) { acc[g] = boostGlowGroup(g, JSON.parse(JSON.stringify(fx[g])), active ? gw.active_boost : 1); any = true; }
+      // A group with its own `show` (v253) decides for itself; the rest follow the condition. "Ignore
+      // the condition here" means "treat it as met", so it also counts as Active.
+      const condMet = ignoreCond.has(id) || this._framePresetActive(fx, overrides[id]);
+      const active = ignoreCond.has(id) || (framePresetHasCondition(fx) && condMet);
+      ['glow', 'shadow', 'border', 'background', 'edges'].forEach(g => {
+        const grp = fx[g];
+        if (!grp) return;
+        const sh = (grp.show && FRAME_SHOW_GROUPS.includes(g)) ? normalizeShow(grp.show, FRAME_BOOST_GROUPS.includes(g)) : null;
+        if (!sh) { if (!condMet) return; }
+        else if (!(sh.always || (sh.expanded && expanded) || (sh.active && active))) return;
+        let copy = JSON.parse(JSON.stringify(grp));
+        delete copy.show;
+        if (sh && active && sh.active_boost) copy = boostGlowGroup(g, copy, sh.active_boost);
+        acc[g] = copy; any = true;
       });
     });
     return any ? acc : null;
@@ -9719,7 +9738,8 @@ class SEEDCardEditor extends HTMLElement {
             <label><input type="checkbox" class="at-check" data-at-sid="${fid}" data-at-path="glow.borders_only" ${g.borders_only ? 'checked' : ''}/> Borders only</label>
           </div>
           ${g.follow_icon ? '' : this._atColorControl(fid, 'glow.color', 'Color', g.color, { seedHex: '#2196F3', defaultLabel: 'Accent' })}
-          ${this._atSliderNum(fid, 'glow.intensity', 'Glow strength (×)', g.intensity ?? 1.0, 0.1, 3, 0.05, 1)}` : ''}
+          ${this._atSliderNum(fid, 'glow.intensity', 'Glow strength (×)', g.intensity ?? 1.0, 0.1, 3, 0.05, 1)}
+          ${this._atShowEditor(fid, fx, 'glow')}` : ''}
 
           <div class="seed-ed-group-title">Shadow</div>
           <div class="seed-ed-font-row">
@@ -9733,8 +9753,8 @@ class SEEDCardEditor extends HTMLElement {
           ${this._atSlider(fid, 'shadow.y', 'Y offset (px)', sh.y ?? 4, -40, 40, 1)}
           ${this._atSliderNum(fid, 'shadow.blur', 'Blur (px)', sh.blur ?? 12, 0, 60, 1, 12)}
           ${this._atSliderNum(fid, 'shadow.spread', 'Spread (px)', sh.spread ?? 0, -20, 40, 1, 0)}
-          ${this._atSliderNum(fid, 'shadow.opacity', 'Opacity', sh.opacity ?? 0.35, 0, 1, 0.05, 0.35)}` : ''}
-          ${(hasGlow || hasShadow) ? this._atGlowWhenEditor(fid, fx) : ''}
+          ${this._atSliderNum(fid, 'shadow.opacity', 'Opacity', sh.opacity ?? 0.35, 0, 1, 0.05, 0.35)}
+          ${this._atShowEditor(fid, fx, 'shadow')}` : ''}
 
           <div class="seed-ed-group-title">Border</div>
           <div class="seed-ed-font-row">
@@ -9760,7 +9780,8 @@ class SEEDCardEditor extends HTMLElement {
             <label><input type="checkbox" class="fx-radii-toggle" data-at-sid="${fid}" ${Array.isArray(bd.radii) ? 'checked' : ''}/> Different radius per corner</label>
           </div>
           ${Array.isArray(bd.radii) ? [['0', 'Top left'], ['1', 'Top right'], ['2', 'Bottom right'], ['3', 'Bottom left']]
-            .map(([i, l]) => this._atSlider(fid, `border.radii.${i}`, `${l} (px)`, bd.radii[Number(i)], 0, 24, 1)).join('') : ''}` : ''}
+            .map(([i, l]) => this._atSlider(fid, `border.radii.${i}`, `${l} (px)`, bd.radii[Number(i)], 0, 24, 1)).join('') : ''}
+          ${this._atShowEditor(fid, fx, 'border')}` : ''}
 
           <div class="seed-ed-group-title">Background</div>
           <div class="seed-ed-font-row">
@@ -9775,7 +9796,8 @@ class SEEDCardEditor extends HTMLElement {
               </select>
             </label>
           </div>
-          ${bgMode === 'custom' ? this._atColorControl(fid, 'background.color', 'Color', (fx.background && fx.background.color) || '', { seedHex: '#1c1c1c', defaultLabel: 'Transparent' }) : ''}` : ''}
+          ${bgMode === 'custom' ? this._atColorControl(fid, 'background.color', 'Color', (fx.background && fx.background.color) || '', { seedHex: '#1c1c1c', defaultLabel: 'Transparent' }) : ''}
+          ${this._atShowEditor(fid, fx, 'background')}` : ''}
 
           <div class="seed-ed-group-title">Edges (Border / Gradient)</div>
           <span class="seed-ed-hint">Each edge is a <b>Solid line</b> or a <b>Gradient</b> (stops + patterns; a <code>match</code> color follows the border/icon color). Turn on "All edges the same" for one editor applied to every side, or leave off for independent per-side control.</span>
@@ -9788,7 +9810,7 @@ class SEEDCardEditor extends HTMLElement {
 
           <div class="seed-ed-group-title">Condition (optional)</div>
           <div class="seed-ed-font-row">
-            <label><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> ${fx.glow_when ? 'Active when…' : 'Only apply when…'}</label>
+            <label><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> ${FRAME_SHOW_GROUPS.some(k => fx[k] && fx[k].show) ? 'Active when…' : 'Only apply when…'}</label>
           </div>
           ${condActive ? `<div class="seed-ed-font-row">
             <label>Based on
@@ -9822,34 +9844,36 @@ class SEEDCardEditor extends HTMLElement {
 
   // v252: a slider with a number box beside it and a reset to its default. Both inputs write the same
   // path live; the reset re-renders.
-  _atSliderNum(sid, path, label, cur, min, max, step, def) {
+  _atSliderNum(sid, path, label, cur, min, max, step, def, cls = '') {
     const v = Number.isFinite(Number(cur)) ? Number(cur) : def;
+    const c = cls ? ' ' + cls : '';
     return `
       <div class="seed-ed-slider-row">
         <label>${label}</label>
-        <input type="range" class="at-input at-slider at-slider-pair" data-at-sid="${sid}" data-at-path="${path}"
+        <input type="range" class="at-input at-slider at-slider-pair${c}" data-at-sid="${sid}" data-at-path="${path}"
                min="${min}" max="${max}" step="${step}" value="${v}" />
-        <input type="number" class="at-input at-slider-num at-slider-pair" data-at-sid="${sid}" data-at-path="${path}"
+        <input type="number" class="at-input at-slider-num at-slider-pair${c}" data-at-sid="${sid}" data-at-path="${path}"
                min="${min}" max="${max}" step="${step}" value="${v}" style="width:64px;" />
-        <ha-icon class="seed-ed-icon-btn at-slider-reset" icon="mdi:restore" data-at-sid="${sid}" data-at-path="${path}" data-at-def="${def}" title="Reset to ${def}"></ha-icon>
+        <ha-icon class="seed-ed-icon-btn at-slider-reset${c}" icon="mdi:restore" data-at-sid="${sid}" data-at-path="${path}" data-at-def="${def}" title="Reset to ${def}"></ha-icon>
       </div>`;
   }
 
-  // v252 (item 11): when the glow / shadow shows. Unticked boxes = no glow.
-  _atGlowWhenEditor(fid, fx) {
-    const gw = effectiveGlowWhen(fx);
-    const box = (k, label, extra = '') => `<label${extra ? ' style="opacity:0.5;"' : ''}><input type="checkbox" class="fx-glow-when" data-fx-id="${fid}" data-k="${k}" ${gw[k] ? 'checked' : ''} ${extra}/> ${label}</label>`;
+  // v253 (item 11): when one group (glow / shadow / border / background) shows, under that group.
+  _atShowEditor(fid, fx, g) {
+    const sh = effectiveShow(fx, g);
+    const what = { glow: 'glow', shadow: 'shadow', border: 'border', background: 'background' }[g];
+    const box = (k, label, extra = '') => `<label${extra ? ' style="opacity:0.5;"' : ''}><input type="checkbox" class="fx-show" data-fx-id="${fid}" data-g="${g}" data-k="${k}" ${sh[k] ? 'checked' : ''} ${extra}/> ${label}</label>`;
+    const boost = FRAME_BOOST_GROUPS.includes(g) && sh.active;
     return `
-          <div class="seed-ed-group-title">Glow and shadow show</div>
           <div class="seed-ed-font-row">
+            <span class="seed-ed-hint">Show</span>
             ${box('always', 'Always')}
-            ${box('expanded', 'When Expanded', gw.always ? 'disabled title="Always is ticked"' : '')}
+            ${box('expanded', 'When Expanded', sh.always ? 'disabled title="Always is ticked"' : '')}
             ${box('active', 'When Active')}
           </div>
-          ${!gw.always && !gw.expanded && !gw.active ? '<span class="seed-ed-hint">No box ticked: this style shows no glow or shadow.</span>' : ''}
-          ${gw.active && !framePresetHasCondition(fx) ? `<span class="seed-ed-hint">Set 'Only apply when…' below to define Active.</span>` : ''}
-          ${gw.active ? this._atSliderNum(fid, 'glow_when.active_boost', 'Active glow strength (×)', gw.active_boost, 1, 3, 0.1, GLOW_BOOST_DEFAULT) : ''}
-          ${fx.glow_when ? '<span class="seed-ed-hint">The condition below now decides only when this style is Active. Its border, background and edges always apply.</span>' : ''}`;
+          ${!sh.always && !sh.expanded && !sh.active ? `<span class="seed-ed-hint">No box ticked: this ${what} never shows.</span>` : ''}
+          ${sh.active && !framePresetHasCondition(fx) ? `<span class="seed-ed-hint">Set 'Only apply when…' below to define Active.</span>` : ''}
+          ${boost ? this._atSliderNum(fid, `${g}.show.active_boost`, `Stronger when active (×)`, sh.active_boost, 1, 3, 0.1, GLOW_BOOST_DEFAULT, 'fx-show-boost') : ''}`;
   }
 
   // Save/Discard row for a lib: Frame Style. Edits live in this._frameDrafts[slug]
@@ -14886,7 +14910,7 @@ class SEEDCardEditor extends HTMLElement {
     };
     // Controls with dedicated handlers below (they mutate object shape, not a
     // scalar, so the generic scalar-set bind must NOT touch them).
-    const DEDICATED = ['at-group-kind', 'at-cond-what', 'at-cond-kind', 'at-width-mode', 'at-width-val', 'at-gradient-toggle', 'at-color-mode', 'at-icon-kind', 'at-icon-glyph', 'at-zero-mode', 'at-col-italic'];
+    const DEDICATED = ['at-group-kind', 'at-cond-what', 'at-cond-kind', 'at-width-mode', 'at-width-val', 'at-gradient-toggle', 'at-color-mode', 'at-icon-kind', 'at-icon-glyph', 'at-zero-mode', 'at-col-italic', 'fx-show-boost'];
     this.querySelectorAll('.at-input[data-at-path], .at-check[data-at-path]').forEach(el => {
       if (DEDICATED.some(c => el.classList.contains(c))) return;
       bind(el);
@@ -14974,8 +14998,8 @@ class SEEDCardEditor extends HTMLElement {
       el.addEventListener('change', () => {
         const sid = el.dataset.atSid, key = el.dataset.fxKey;
         const defaults = {
-          glow: { color: '#2196F3', intensity: 1.0, borders_only: false },
-          shadow: { color: '#000000', x: 0, y: 4, blur: 12, spread: 0, opacity: 0.35 },
+          glow: { color: '#2196F3', intensity: 1.0, borders_only: false, show: { always: false, expanded: false, active: false, active_boost: GLOW_BOOST_DEFAULT } },
+          shadow: { color: '#000000', x: 0, y: 4, blur: 12, spread: 0, opacity: 0.35, show: { always: false, expanded: false, active: false, active_boost: GLOW_BOOST_DEFAULT } },
           border: { color: '#2196F3', width: 1, radius: 12, corners: [true, true, true, true], follow_icon: false, sides: ['top', 'bottom', 'left', 'right'] },
           background: { mode: 'custom', color: '#1c1c1c' }
         };
@@ -14986,14 +15010,23 @@ class SEEDCardEditor extends HTMLElement {
       });
     });
 
-    // v252: glow mode boxes. The first change writes the whole block, starting from what the preset
-    // does today (conditional = Active, else Always), so ticking one box never turns another off.
-    this.querySelectorAll('.fx-glow-when').forEach(el => {
-      el.addEventListener('change', () => {
-        const fid = el.dataset.fxId, k = el.dataset.k;
-        this._atApply(fid, fx => { const b = effectiveGlowWhen(fx); b[k] = el.checked; fx.glow_when = b; });
-      });
+    // v253: show boxes per group. The first change writes the group's whole block, starting from what
+    // it does today (conditional = Active, else Always), so ticking one box never turns another off.
+    // A new block on glow / shadow gets the default boost (an implied block has none).
+    const writeShow = (fid, g, patch) => this._atApply(fid, fx => {
+      if (!fx[g]) return;
+      const fresh = !fx[g].show;
+      const b = effectiveShow(fx, g);
+      if (fresh && FRAME_BOOST_GROUPS.includes(g) && !('active_boost' in patch)) b.active_boost = GLOW_BOOST_DEFAULT;
+      fx[g].show = { ...b, ...patch };
     });
+    this.querySelectorAll('.fx-show').forEach(el => {
+      el.addEventListener('change', () => writeShow(el.dataset.fxId, el.dataset.g, { [el.dataset.k]: el.checked }));
+    });
+    this.querySelectorAll('input.fx-show-boost').forEach(el => {
+      el.addEventListener('change', () => writeShow(el.dataset.atSid, el.dataset.atPath.split('.')[0], { active_boost: Number(el.value) }));
+    });
+
     // v252: slider + number box pairs stay in step; reset puts the default back.
     this.querySelectorAll('.at-slider-pair').forEach(el => {
       el.addEventListener('input', () => {
@@ -15005,6 +15038,7 @@ class SEEDCardEditor extends HTMLElement {
       el.addEventListener('click', (ev) => {
         ev.stopPropagation();
         const def = Number(el.dataset.atDef);
+        if (el.classList.contains('fx-show-boost')) { writeShow(el.dataset.atSid, el.dataset.atPath.split('.')[0], { active_boost: def }); return; }
         this._atApply(el.dataset.atSid, sec => this._atSet(sec, el.dataset.atPath, def));
       });
     });
@@ -15301,8 +15335,8 @@ class SEEDCardEditor extends HTMLElement {
       while (map[slug]) { slug = frameLibSlug(baseName + ' ' + n); n++; }
       map[slug] = normalizeFramePreset({
         name: n > 2 ? `${baseName} ${n - 1}` : baseName,
-        glow: { color: '#2196F3', intensity: 1.0, borders_only: false },
-        glow_when: { always: false, expanded: false, active: false, active_boost: GLOW_BOOST_DEFAULT }   // v252: glow off by default
+        glow: { color: '#2196F3', intensity: 1.0, borders_only: false,
+          show: { always: false, expanded: false, active: false, active_boost: GLOW_BOOST_DEFAULT } }   // glow off by default
       });
       this._libEchoJSON = null;
       saveFrameLibrary(this._hass, scope, map)

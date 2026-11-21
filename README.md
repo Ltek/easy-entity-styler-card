@@ -81,14 +81,16 @@ Both this card and the **Color Light & Scene Manager** card share the same two s
 ### Frame Styles
 Named, reusable frame bundles — borders, glow, shadow, background, and per-side edge lines. Each style is **sparse** (it stores only the properties you set), so you can layer an ordered list on a section or the whole card and the last one wins per property. Styles can be **conditional** — applied only when an entity is in a given state, or when a section currently has / has no visible entities.
 
-A style's glow and shadow can show **Always**, **When Expanded** (the card or section is open) and/or **When Active** (its condition holds), with an **Active glow strength** that makes the glow stronger while active. Once you set these, the condition only decides "active", and the style's border, background and edges always apply.
+Each of a style's **glow, shadow, border and background** has its own **Show** boxes: **Always**, **When Expanded** (the card or section is open) and **When Active** (the style's condition holds). Glow and shadow also have **Stronger when active** (×1–×3). A part with no boxes set follows the condition, as before.
 
 ```yaml
-glow_when:
-  always: false
-  expanded: true
-  active: true
-  active_boost: 1.6   # 1–3
+glow:
+  color: '#2196F3'
+  intensity: 1
+  show: { expanded: true, active: true, active_boost: 1.6 }
+border:
+  color: '#2196F3'
+  show: { always: true }
 ```
 
 *Storage key:* `ltek_frame_library`

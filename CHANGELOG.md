@@ -5,6 +5,19 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.253
+
+- **Show options per part.** Glow, Shadow, Border and Background each have their own **Always / When
+  Expanded / When Active** boxes, under that part in the Frame Style editor. Glow and Shadow each have
+  their own **Stronger when active** (×1–×3, default ×1.6). These replace v252's single "Glow and
+  shadow show" block.
+  - Stored as `show:` inside the part, e.g. `glow: {…, show: {expanded: true, active: true, active_boost: 1.6}}`.
+  - A part with no `show` follows the style's condition, as before v252. Edges always do.
+- **v252 configs keep their look:** a `glow_when` block is moved into the glow and shadow, and the border
+  and background get *Always*, which is what v252 did.
+- Turning on Glow or Shadow in the editor starts with every box off, so it shows nothing until you
+  pick when.
+
 ## v2026.11.21.252
 
 - **Glow modes** (EES-FEATURE-GAPS item 11). Under a Frame Style's glow and shadow, the glow can now
