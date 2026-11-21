@@ -5,6 +5,15 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.259
+
+- **Sort chips on the library lists:** **A–Z** (default), **Z–A**, **In use** (most uses on this card
+  first) and **Not in use**.
+  - On Frame Styles, Header Rules (the card's own and the library) and Entity Filter Rules.
+  - Each list keeps its own choice, remembered in the browser, not in the card config.
+  - Built-In stays first.
+  - Sorting changes only what the editor shows, never the order in your config.
+
 ## v2026.11.21.258
 
 - **Fixed: background opacity with *Theme (inherit)*.** Below 1 the background disappeared completely

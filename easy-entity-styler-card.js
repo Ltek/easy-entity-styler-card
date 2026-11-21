@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.21.258
+// Version: v2026.11.21.259
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.21.258';
+const BUILD_NUMBER = 'v2026.11.21.259';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1753,7 +1753,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.21.258: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.21.259: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3723,7 +3723,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.21.258: card-level links to one section.
+// v2026.11.21.259: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3743,7 +3743,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.21.258: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.21.259: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3776,7 +3776,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.21.258: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.21.259: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3796,7 +3796,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.21.258: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.21.259: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3822,7 +3822,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.21.258 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.21.259 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3844,7 +3844,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.21.258 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.21.259 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3862,7 +3862,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.258 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.21.259 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3886,7 +3886,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.258 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.21.259 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3931,7 +3931,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.21.258: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.21.259: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -9640,9 +9640,48 @@ class SEEDCardEditor extends HTMLElement {
   // ------- Global "Entity Rule Sets" panel (reusable named filters) -------
   // Reuses the exact filter rule-builder; each set's include/exclude rules edit
   // at paths relative to the rule-set object (resolved by _atTarget via its id).
+  // v259: sort chips for the library lists. The choice is per list, kept in the browser (not the
+  // card config). Built-In entries stay first whatever the order.
+  _LIB_SORTS = [['az', 'A–Z'], ['za', 'Z–A'], ['used', 'In use'], ['unused', 'Not in use']];
+  _libSortMode(key) {
+    if (!this._libSortState) {
+      try { this._libSortState = JSON.parse(localStorage.getItem('ees-lib-sort') || '{}') || {}; } catch (e) { this._libSortState = {}; }
+    }
+    const m = this._libSortState[key];
+    return this._LIB_SORTS.some(([k]) => k === m) ? m : 'az';
+  }
+  _libSortChips(key) {
+    const cur = this._libSortMode(key);
+    return `<div class="seed-ed-sort-chips" data-lib-sort="${key}"><span class="seed-ed-hint">Sort</span>${this._LIB_SORTS.map(([k, l]) =>
+      `<span class="ees-sort-chip${k === cur ? ' on' : ''}" data-lib-sort="${key}" data-sort="${k}" role="button" tabindex="0">${l}</span>`).join('')}</div>`;
+  }
+  // items: [{ name, uses, html }] -> the html, in the list's chosen order
+  _libSorted(key, items) {
+    const m = this._libSortMode(key);
+    const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base', numeric: true });
+    const cmp = {
+      az: byName,
+      za: (a, b) => byName(b, a),
+      used: (a, b) => (b.uses - a.uses) || byName(a, b),
+      unused: (a, b) => ((a.uses > 0) - (b.uses > 0)) || byName(a, b),
+    }[m];
+    return items.slice().sort(cmp).map(x => x.html).join('');
+  }
+  // How many places in this card apply a Frame Style id / a Header Rule ref (groups included).
+  _fxUseCount(id) {
+    const has = fr => !!(fr && Array.isArray(fr.presets) && fr.presets.includes(id));
+    const walk = list => (list || []).reduce((n, x) => n + (has(x && x.frame) ? 1 : 0) + walk(x && x.children), 0);
+    return (has(this._config.card_frame) ? 1 : 0) + walk(this._config.sections);
+  }
+  _hdrUseCount(refId) {
+    const has = refs => Array.isArray(refs) && refs.some(r => r && r.ref === refId);
+    const walk = list => (list || []).reduce((n, x) => n + (has(x && x.header_rule_refs) ? 1 : 0) + walk(x && x.children), 0);
+    return (has(this._config.header_rule_refs) ? 1 : 0) + walk(this._config.sections);
+  }
+
   _atRuleSetsPanel() {
     const sets = this._config.rule_sets || [];
-    const setBlocks = sets.map((rs, i) => {
+    const setItems = sets.map((rs, i) => {
       const rid = rs.id;
       const usedBy = this._ruleSetUsedBy(rid);
       const badgeUse = this._ruleSetUsedByBadge(rid);
@@ -9655,7 +9694,7 @@ class SEEDCardEditor extends HTMLElement {
       if (badgeUse) rsSubParts.push(`${badgeUse} badge${badgeUse === 1 ? '' : 's'}`);
       if (!usedBy && !badgeUse) rsSubParts.push('unused');
       const rsSub = rsSubParts.join(', ');
-      return `
+      const rowHtml = `
         <details class="seed-ed-substyle seed-ed-substyle-flush seed-ed-lib-row" data-panel="ruleset-${rid}">
           <summary class="seed-ed-substyle-sum">
             <span class="seed-ed-lib-name" style="flex:1;">${escapeHtml(rs.name || 'Rule Set')}<span class="seed-ed-lib-sub">${escapeHtml(rsSub)}</span></span>
@@ -9671,7 +9710,9 @@ class SEEDCardEditor extends HTMLElement {
             </div>
           </div>
         </details>`;
-    }).join('');
+      return { name: rs.name || 'Rule Set', uses: usedBy + badgeUse, html: rowHtml };
+    });
+    const setBlocks = this._libSorted('rs', setItems);
 
     return `
       <details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>
@@ -9692,6 +9733,7 @@ class SEEDCardEditor extends HTMLElement {
         <div class="seed-ed-add-row">
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="rs-add"><ha-icon icon="mdi:plus"></ha-icon>Add Filter Rule</div>
         </div>
+        ${sets.length > 1 ? this._libSortChips('rs') : ''}
         ${setBlocks ? `<div class="seed-ed-lib-list">${setBlocks}</div>` : '<span class="seed-ed-hint">No rule sets yet. Add one, then assign it to a section.</span>'}
       </details>`;
   }
@@ -10693,9 +10735,11 @@ class SEEDCardEditor extends HTMLElement {
     const libSlugs = Object.keys(lib).sort();
     const builtinBlock = this._atFramePresetEditor(builtinFramePreset());
     // Show the DRAFT for any lib preset with unsaved edits so the editor reflects them.
-    const libBlocks = libSlugs.map(slug => this._atFramePresetEditor(this._frameDisplayPreset(slug) || lib[slug])).join('');
-    const legacyBlocks = fxs.map(fx => this._atFramePresetEditor(fx)).join('');
-    const blocks = builtinBlock + libBlocks + legacyBlocks;
+    // v259: library and card-local styles sort together; Built-In stays first
+    const fxItems = libSlugs.map(slug => { const fx = this._frameDisplayPreset(slug) || lib[slug];
+      return { name: fx.name || slug, uses: this._fxUseCount('lib:' + slug), html: this._atFramePresetEditor(fx) }; })
+      .concat(fxs.map(fx => ({ name: fx.name || '', uses: this._fxUseCount(fx.id), html: this._atFramePresetEditor(fx) })));
+    const blocks = builtinBlock + this._libSorted('fx', fxItems);
     return `
       <details class="seed-ed-sections-panel seed-ed-collapsible-panel" open>
         <summary class="seed-ed-panel-summary">
@@ -10706,6 +10750,7 @@ class SEEDCardEditor extends HTMLElement {
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-add"><ha-icon icon="mdi:plus"></ha-icon>Add Frame Style</div>
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="fx-import"><ha-icon icon="mdi:import"></ha-icon>Import Style</div>
         </div>
+        ${this._libSortChips('fx')}
         <div class="seed-ed-lib-list">${blocks}</div>
 
         <div id="fx-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
@@ -12064,7 +12109,10 @@ class SEEDCardEditor extends HTMLElement {
     const slugs = Object.keys(lib).sort();
     // Show the DRAFT for any set with unsaved edits so the editor reflects them.
     const blocks = this._atHeaderSetEditor(builtinHeaderRuleSet())
-      + slugs.map(s => this._atHeaderSetEditor(this._headerDisplaySet(s) || lib[s])).join('');
+      + this._libSorted('hdr', slugs.map(sl => { const set = this._headerDisplaySet(sl) || lib[sl];
+        return { name: set.name || sl, uses: this._hdrUseCount('lib:' + sl), html: this._atHeaderSetEditor(set) }; }));   // v259
+    const localSets = this._config.header_rules || [];
+    const localBlocks = this._libSorted('hrl', localSets.map(h => ({ name: h.name || '', uses: this._hdrUseCount(h.id), html: this._atLocalHeaderSetEditor(h) })));
     return `
       <details class="seed-ed-sections-panel seed-ed-collapsible-panel">
         <summary class="seed-ed-panel-summary">
@@ -12081,8 +12129,10 @@ class SEEDCardEditor extends HTMLElement {
           <div class="seed-ed-add-btn seed-ed-add-btn-sm" id="hrl-add"><ha-icon icon="mdi:plus"></ha-icon>Add card Header Rule</div>
           ${slugs.length ? `<select id="hrl-copy" class="at-input"><option value="">Copy a library set into this card…</option>${slugs.map(sl => `<option value="${escapeHtml(sl)}">${escapeHtml(lib[sl].name || sl)}</option>`).join('')}</select>` : ''}
         </div>
-        ${(this._config.header_rules || []).length ? `<div class="seed-ed-lib-list">${(this._config.header_rules || []).map(h => this._atLocalHeaderSetEditor(h)).join('')}</div>` : ''}
+        ${localSets.length > 1 ? this._libSortChips('hrl') : ''}
+        ${localSets.length ? `<div class="seed-ed-lib-list">${localBlocks}</div>` : ''}
         <div class="seed-ed-group-div">Library</div>
+        ${this._libSortChips('hdr')}
         <div class="seed-ed-lib-list">${blocks}</div>
 
         <div id="hdr-portal" class="seed-ed-portal" style="display:none; margin-top:10px;">
@@ -13198,6 +13248,12 @@ class SEEDCardEditor extends HTMLElement {
         .fx-prev-mode { padding: 2px 8px; border: 1px solid var(--ltek-c-accent, #2196F3); cursor: pointer; }
         .fx-prev-mode:first-of-type { border-radius: 6px 0 0 6px; } .fx-prev-mode:last-of-type { border-radius: 0 6px 6px 0; border-left: none; }
         .fx-prev-mode.on { background: var(--ltek-c-accent, #2196F3); color: var(--text-primary-color, #fff); }
+        /* v259: library sort chips */
+        .seed-ed-sort-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 2px 0 8px; }
+        .seed-ed-sort-chips .seed-ed-hint { margin-right: 2px; }
+        .ees-sort-chip { padding: 2px 10px; border-radius: 999px; border: 1px solid var(--ltek-c-accent, var(--primary-color, #2196F3));
+          color: var(--ltek-c-accent, var(--primary-color, #2196F3)); font-size: var(--ltek-fs-small, 12px); cursor: pointer; user-select: none; }
+        .ees-sort-chip.on { background: var(--ltek-c-accent, var(--primary-color, #2196F3)); color: var(--text-primary-color, #fff); }
         /* v255/v257: Frame Style option groups. On or off, open or closed, every group is the same
            row: one divider ABOVE it, the same padding, title and Enable box on one centred line. The
            flush sub-panel and group-title rules it would inherit are reset here. */
@@ -15241,6 +15297,19 @@ class SEEDCardEditor extends HTMLElement {
         if (el.classList.contains('fx-show-boost')) { writeShow(el.dataset.atSid, el.dataset.atPath.split('.')[0], { active_boost: def }); return; }
         this._atApply(el.dataset.atSid, sec => this._atSet(sec, el.dataset.atPath, def));
       });
+    });
+
+    // v259: library sort chips
+    this.querySelectorAll('.ees-sort-chip').forEach(el => {
+      const pick = (ev) => {
+        ev.preventDefault(); ev.stopPropagation();
+        this._libSortMode(el.dataset.libSort);   // loads the saved choices
+        this._libSortState[el.dataset.libSort] = el.dataset.sort;
+        try { localStorage.setItem('ees-lib-sort', JSON.stringify(this._libSortState)); } catch (e) {}
+        this._saveOpenState(); this._rendered = false; this.renderEditor();
+      };
+      el.addEventListener('click', pick);
+      el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') pick(ev); });
     });
 
     // v255: Card preview Saved / Edited
