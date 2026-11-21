@@ -5,6 +5,15 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.262
+
+- **Fixed: a logbook in a cards section with *Clear children* had its date row ("Today · …")
+  floating over the list,** with the rows showing through it, or two dates printed on top of each
+  other. HA's logbook draws that date row as an overlay painted with the theme's card colour, and
+  *Clear children* had made that colour transparent. It now only clears the card's own background
+  (`--ha-card-background`), so the embedded cards still draw no background and the date row is solid
+  again, as on a normal dashboard.
+
 ## v2026.11.21.261
 
 - **Colour choices are all in the colour dropdown.** The "Follow icon color" checkboxes are gone.
