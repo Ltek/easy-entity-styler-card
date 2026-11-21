@@ -5,6 +5,21 @@ resets. Newest first.
 
 ---
 
+## v2026.11.21.261
+
+- **Colour choices are all in the colour dropdown.** The "Follow icon color" checkboxes are gone.
+  - **Glow** and **Shadow**: Accent / Theme color / Custom color / Custom CSS / **Icon color** / **Border color**.
+  - **Border**: the same, with **Icon color** (it can't follow itself).
+  - **Edges** (solid colour and each gradient stop): *Match* is now called **Border color**, and
+    **Icon color** is new.
+  - Stored as before: `follow_icon` / `follow_border` on the part, and `match` / `icon` for edge colours.
+    Existing styles are unchanged.
+- **Border color** on Glow or Shadow uses the style's border, or the border of a style layered with it.
+  With no border at all, it falls back to the part's own colour.
+- **Border opacity** (0–1), written only below 1.
+- **Edges** has an **Enable edges** box in its header, like the other parts. Turning it on adds a
+  centre-fade line at the top and bottom, with one shared editor. Turning it off removes the edges.
+
 ## v2026.11.21.260
 
 - **Fixed: turning on Edges made a *Theme (inherit)* background disappear** when the theme's card

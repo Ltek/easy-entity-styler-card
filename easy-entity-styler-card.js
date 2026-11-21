@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.21.260
+// Version: v2026.11.21.261
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.21.260';
+const BUILD_NUMBER = 'v2026.11.21.261';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1282,11 +1282,14 @@ function normalizeFramePreset(fx) {
     intensity: Number(fx.glow.intensity) || 1.0,
     borders_only: fx.glow.borders_only === true,
     ...(fx.glow.follow_icon ? { follow_icon: true } : {}),
+    // v261: the glow takes the border's colour (icon colour wins if both are set)
+    ...(fx.glow.follow_border && !fx.glow.follow_icon ? { follow_border: true } : {}),
     ...(fx.glow.show ? { show: normalizeShow(fx.glow.show, true) } : {})
   };
   if (fx.shadow) out.shadow = {
     color: fx.shadow.color || '#000000',
     ...(fx.shadow.follow_icon ? { follow_icon: true } : {}),
+    ...(fx.shadow.follow_border && !fx.shadow.follow_icon ? { follow_border: true } : {}),   // v261
     x: Number(fx.shadow.x) || 0, y: fx.shadow.y != null ? Number(fx.shadow.y) : 4,
     blur: fx.shadow.blur != null ? Number(fx.shadow.blur) : 12,
     spread: Number(fx.shadow.spread) || 0,
@@ -1308,7 +1311,10 @@ function normalizeFramePreset(fx) {
       ? { radii: fx.border.radii.map(r => Math.max(0, Math.min(48, Number(r)))) } : {}),
     follow_icon: fx.border.follow_icon === true,
     sides: Array.isArray(fx.border.sides) ? fx.border.sides.filter(s => ['top', 'bottom', 'left', 'right'].includes(s)) : ['top', 'bottom', 'left', 'right'],
-    ...(fx.border.show ? { show: normalizeShow(fx.border.show, false) } : {})
+    ...(fx.border.show ? { show: normalizeShow(fx.border.show, false) } : {}),
+    // v261: see-through border (0-1), written only below 1
+    ...(fx.border.opacity != null && Number.isFinite(Number(fx.border.opacity)) && Number(fx.border.opacity) < 1
+      ? { opacity: Math.max(0, Math.round(Number(fx.border.opacity) * 100) / 100) } : {})
   };
   // Background: 'custom' (a solid color), 'transparent', or 'theme' (inherit
   // the HA card/theme background). Legacy values were a bare string or
@@ -1753,7 +1759,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.21.260: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.21.261: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -2297,11 +2303,12 @@ function migrateLegacyFrames(config) {
 // `matchColor` resolves any stop whose color is the literal 'match' to the
 // frame's border/icon color (ported from the Color card). Falls back to the
 // accent when not supplied, so a 'match' stop is never left invalid.
-function buildEdgeBackground(edges, matchColor) {
+function buildEdgeBackground(edges, matchColor, iconColor) {
   if (!edges) return null;
   const accent = matchColor || '#2196F3';
-  // 'match' → the border/icon accent; 'theme' → the HA theme divider color; else literal.
-  const col = c => (c === 'match' ? accent : (c === 'theme' ? 'var(--divider-color, #333)' : c));
+  // 'match' → the border colour (the icon colour when there is no border); 'icon' (v261) → the icon
+  // colour; 'theme' → the HA theme divider color; else literal.
+  const col = c => (c === 'match' ? accent : c === 'icon' ? (iconColor || accent) : (c === 'theme' ? 'var(--divider-color, #333)' : c));
   const imgs = [], sizes = [], positions = [];
   const sideDir = { top: 'to right', bottom: 'to right', left: 'to bottom', right: 'to bottom' };
   ['top', 'bottom', 'left', 'right'].forEach(side => {
@@ -3723,7 +3730,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.21.260: card-level links to one section.
+// v2026.11.21.261: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3743,7 +3750,7 @@ function cardSectionLinkKeys(c) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.21.260: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.21.261: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3776,7 +3783,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.21.260: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.21.261: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3796,7 +3803,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.21.260: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.21.261: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3822,7 +3829,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.21.260 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.21.261 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3844,7 +3851,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.21.260 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.21.261 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3862,7 +3869,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.260 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.21.261 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3886,7 +3893,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.21.260 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.21.261 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3931,7 +3938,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.21.260: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.21.261: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4561,16 +4568,19 @@ class SEEDCard extends HTMLElement {
       const sides = acc.glow.borders_only
         ? { top: bsides.includes('top'), bottom: bsides.includes('bottom'), left: bsides.includes('left'), right: bsides.includes('right') }
         : { top: true, bottom: true, left: true, right: true };
-      const gcolor = acc.glow.follow_icon ? iconCol : acc.glow.color;
+      const borderCol = acc.border ? (acc.border.follow_icon ? iconCol : acc.border.color) : null;
+      const gcolor = acc.glow.follow_icon ? iconCol : (acc.glow.follow_border && borderCol) ? borderCol : acc.glow.color;
       parts.push(this._buildGlowShadow(gcolor, sides, acc.glow.borders_only, acc.glow.intensity));
     }
     if (acc.shadow) {
-      const scolor = acc.shadow.follow_icon ? iconCol : acc.shadow.color;
+      const bCol = acc.border ? (acc.border.follow_icon ? iconCol : acc.border.color) : null;
+      const scolor = acc.shadow.follow_icon ? iconCol : (acc.shadow.follow_border && bCol) ? bCol : acc.shadow.color;   // v261
       parts.push(this._buildDropShadow(scolor, acc.shadow.x, acc.shadow.y, acc.shadow.blur, acc.shadow.spread, acc.shadow.opacity));
     }
     out.boxShadow = parts.filter(s => s && s !== 'none').join(', ') || 'none';
     if (acc.border) {
-      const bc = acc.border.follow_icon ? this._sectionIconColor(section) : acc.border.color;
+      const bc0 = acc.border.follow_icon ? this._sectionIconColor(section) : acc.border.color;
+      const bc = (acc.border.opacity != null && acc.border.opacity < 1) ? this._hexToRgba(bc0, acc.border.opacity) : bc0;   // v261
       const bw = acc.border.width, br = acc.border.radius;
       const on = side => acc.border.sides.includes(side);
       // Per-corner radius [TL, TR, BR, BL]: a false corner is square (0).
@@ -4607,7 +4617,7 @@ class SEEDCard extends HTMLElement {
     // 'match' edge stops resolve to the frame's border color if it has one,
     // else the section/icon color — so a gradient border follows the accent.
     const edgeMatch = (acc.border && !acc.border.follow_icon && acc.border.color) ? acc.border.color : iconCol;
-    if (acc.edges) out.edge = buildEdgeBackground(acc.edges, edgeMatch);
+    if (acc.edges) out.edge = buildEdgeBackground(acc.edges, edgeMatch, iconCol);
     return out;
   }
 
@@ -9300,17 +9310,21 @@ class SEEDCardEditor extends HTMLElement {
   _atColorControl(sid, path, label, cur, opts) {
     opts = opts || {};
     cur = cur == null ? '' : String(cur);
-    const mode = this._colorMode(cur);
+    // v261: opts.follow = { choices: ['icon', 'border'], cur: 'icon' | 'border' | '', hint } adds
+    // "Icon color" / "Border color" to the same dropdown (they set follow_icon / follow_border)
+    const fol = opts.follow || null;
+    const mode = (fol && fol.cur) ? 'follow_' + fol.cur : this._colorMode(cur);
     const hex = /^#[0-9a-fA-F]{6}$/.test(cur) ? cur : (opts.seedHex || '#2196F3');
     const themeVal = mode === 'theme' ? cur : (opts.seedTheme || 'var(--primary-color)');
     // 'css' seeds from the current value when it's already a non-hex colour, so
     // switching to CSS never throws away what's there. currentColor is the
     // neutral fallback (it means "whatever colour this text already is").
     const cssVal = (mode === 'css' && cur) ? cur : 'currentColor';
-    const modes = opts.defaultLabel
+    let modes = opts.defaultLabel
       ? this._COLOR_MODES.map(([v, l]) => [v, v === 'default' ? opts.defaultLabel : l])
       : this._COLOR_MODES;
-    const sel = `<select class="at-input at-structural at-color-mode" data-at-sid="${sid}" data-at-path="${path}" data-at-color-hex="${hex}" data-at-color-theme="${escapeHtml(themeVal)}" data-at-color-css="${escapeHtml(cssVal)}">${this._atOpts(modes, mode)}</select>`;
+    if (fol) modes = modes.concat(fol.choices.map(k => ['follow_' + k, k === 'icon' ? 'Icon color' : 'Border color']));
+    const sel = `<select class="at-input at-structural at-color-mode" data-at-sid="${sid}" data-at-path="${path}"${fol ? ' data-at-follow="1"' : ''} data-at-color-hex="${hex}" data-at-color-theme="${escapeHtml(themeVal)}" data-at-color-css="${escapeHtml(cssVal)}">${this._atOpts(modes, mode)}</select>`;
     let valField = '';
     if (mode === 'custom') {
       valField = `<input type="color" class="at-input" data-at-sid="${sid}" data-at-path="${path}" value="${hex}" title="Pick a color" />`;
@@ -9319,6 +9333,7 @@ class SEEDCardEditor extends HTMLElement {
     } else if (mode === 'css') {
       valField = `<input type="text" class="at-input" data-at-sid="${sid}" data-at-path="${path}" value="${escapeHtml(cur)}" placeholder="e.g. tomato" style="width:140px;" title="Any CSS color" />`;
     }
+    if (mode.startsWith('follow_')) valField = fol.hint ? `<span class="seed-ed-hint">${fol.hint}</span>` : '';
     const head = (label && !opts.inline) ? `<label>${label}${sel}</label>` : sel;
     return `<div class="seed-ed-color-field">${head}${valField}</div>`;
   }
@@ -9807,17 +9822,18 @@ class SEEDCardEditor extends HTMLElement {
         // Solid: color SOURCE dropdown — Match (border/icon color) / Theme
         // (theme divider color) / Custom (a hex picker shown only for Custom).
         const col = e.color || 'match';
-        const mode = col === 'match' ? 'match' : (col === 'theme' ? 'theme' : 'fixed');
+        const mode = col === 'match' ? 'match' : col === 'icon' ? 'icon' : (col === 'theme' ? 'theme' : 'fixed');
         body += `
           <div class="seed-ed-font-row">
             <label>Color<select class="fx-edge-solid-mode at-structural" data-fx-id="${fid}" data-fx-side="${side}">
-              <option value="match" ${mode === 'match' ? 'selected' : ''}>Match (border/icon color)</option>
+              <option value="match" ${mode === 'match' ? 'selected' : ''}>Border color</option>
+              <option value="icon" ${mode === 'icon' ? 'selected' : ''}>Icon color</option>
               <option value="theme" ${mode === 'theme' ? 'selected' : ''}>Theme</option>
               <option value="fixed" ${mode === 'fixed' ? 'selected' : ''}>Custom color</option>
             </select></label>
             ${mode === 'fixed' ? `<label>&nbsp;<input type="color" class="at-input" data-at-sid="${fid}" data-at-path="${b}.color" value="${/^#[0-9a-f]{6}$/i.test(col) ? col : '#2196F3'}" /></label>` : ''}
           </div>
-          <span class="seed-ed-hint"><b>Match</b> follows the border/icon color; <b>Theme</b> uses the theme divider color.</span>`;
+          <span class="seed-ed-hint"><b>Border color</b> follows the border (the icon colour if there is none); <b>Theme</b> uses the theme divider color.</span>`;
       } else {
         const curPattern = e.pattern || '';
         const patternOpts = EDGE_GRADIENT_PATTERN_LIST
@@ -9825,15 +9841,16 @@ class SEEDCardEditor extends HTMLElement {
         // Per-stop editor mirrors the Divider stop editor: a position SLIDER (live %),
         // a color picker, and a source-mode dropdown (Color / Match / Transparent).
         const stops = (e.stops || []).map((s, i) => {
-          const isMatch = s.color === 'match', isT = s.color === 'transparent';
+          const isMatch = s.color === 'match', isIcon = s.color === 'icon', isT = s.color === 'transparent';
           const posV = clamp(Number(s.pos) || 0, 0, 100);
           return `
           <div class="seed-ed-rule">
             <input type="range" class="at-input at-slider" data-at-sid="${fid}" data-at-path="${b}.stops.${i}.pos" min="0" max="100" step="1" value="${posV}" style="flex:1;" /><span class="at-slider-val">${posV}</span>
-            <input type="color" class="at-input" data-at-sid="${fid}" data-at-path="${b}.stops.${i}.color" value="${/^#[0-9a-f]{6}$/i.test(s.color || '') ? s.color : '#2196F3'}" ${(isMatch || isT) ? 'disabled' : ''} style="width:44px;" />
+            <input type="color" class="at-input" data-at-sid="${fid}" data-at-path="${b}.stops.${i}.color" value="${/^#[0-9a-f]{6}$/i.test(s.color || '') ? s.color : '#2196F3'}" ${(isMatch || isIcon || isT) ? 'disabled' : ''} style="width:44px;" />
             <select class="fx-edge-stop-mode" data-fx-id="${fid}" data-fx-side="${side}" data-fx-idx="${i}" title="Stop color source">
-              <option value="color" ${(!isMatch && !isT) ? 'selected' : ''}>Color</option>
-              <option value="match" ${isMatch ? 'selected' : ''}>Match</option>
+              <option value="color" ${(!isMatch && !isIcon && !isT) ? 'selected' : ''}>Color</option>
+              <option value="match" ${isMatch ? 'selected' : ''}>Border color</option>
+              <option value="icon" ${isIcon ? 'selected' : ''}>Icon color</option>
               <option value="transparent" ${isT ? 'selected' : ''}>Transp.</option>
             </select>
             <ha-icon class="seed-ed-icon-btn at-del" icon="mdi:close" data-at-sid="${fid}" data-at-list="${b}.stops" data-at-idx="${i}" title="Remove stop"></ha-icon>
@@ -9910,20 +9927,19 @@ class SEEDCardEditor extends HTMLElement {
           ${isBuiltin ? '' : `
           ${this._fxGrpOpen(fid, 'glow', 'Glow', hasGlow, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="glow" ${hasGlow ? 'checked' : ''}/> Enable glow</label>`)}
           ${hasGlow ? `<div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="glow.follow_icon" ${g.follow_icon ? 'checked' : ''}/> Follow icon color</label>
             <label><input type="checkbox" class="at-check" data-at-sid="${fid}" data-at-path="glow.borders_only" ${g.borders_only ? 'checked' : ''}/> Borders only</label>
           </div>
-          ${g.follow_icon ? '' : this._atColorControl(fid, 'glow.color', 'Color', g.color, { seedHex: '#2196F3', defaultLabel: 'Accent' })}
+          ${this._atColorControl(fid, 'glow.color', 'Color', g.color, { seedHex: '#2196F3', defaultLabel: 'Accent',
+            follow: { choices: ['icon', 'border'], cur: g.follow_icon ? 'icon' : g.follow_border ? 'border' : '', hint: (!g.follow_border || hasBorder) ? '' : 'No border in this style: uses a border layered with it.' } })}
           ${this._atSliderNum(fid, 'glow.intensity', 'Regular strength (×)', g.intensity ?? 1.0, 0.1, 3, 0.05, 1)}
           ${this._atActiveStrength(fid, fx, 'glow')}
           ${this._atShowEditor(fid, fx, 'glow')}` : ''}
           ${this._fxGrpClose(hasGlow)}
 
           ${this._fxGrpOpen(fid, 'shadow', 'Shadow', hasShadow, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="shadow" ${hasShadow ? 'checked' : ''}/> Enable drop-shadow</label>`)}
-          ${hasShadow ? `<div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="shadow.follow_icon" ${sh.follow_icon ? 'checked' : ''}/> Follow icon color</label>
-          </div>
-          ${sh.follow_icon ? '' : this._atColorControl(fid, 'shadow.color', 'Color', sh.color, { seedHex: '#000000', defaultLabel: 'Black' })}
+          ${hasShadow ? `
+          ${this._atColorControl(fid, 'shadow.color', 'Color', sh.color, { seedHex: '#000000', defaultLabel: 'Black',
+            follow: { choices: ['icon', 'border'], cur: sh.follow_icon ? 'icon' : sh.follow_border ? 'border' : '', hint: (!sh.follow_border || hasBorder) ? '' : 'No border in this style: uses a border layered with it.' } })}
           ${this._atSlider(fid, 'shadow.x', 'X offset (px)', sh.x ?? 0, -40, 40, 1)}
           ${this._atSlider(fid, 'shadow.y', 'Y offset (px)', sh.y ?? 4, -40, 40, 1)}
           ${this._atSliderNum(fid, 'shadow.blur', 'Blur (px)', sh.blur ?? 12, 0, 60, 1, 12)}
@@ -9934,11 +9950,11 @@ class SEEDCardEditor extends HTMLElement {
           ${this._fxGrpClose(hasShadow)}
 
           ${this._fxGrpOpen(fid, 'border', 'Border', hasBorder, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="border" ${hasBorder ? 'checked' : ''}/> Enable border</label>`)}
-          ${hasBorder ? `<div class="seed-ed-font-row">
-            <label><input type="checkbox" class="at-check at-structural" data-at-sid="${fid}" data-at-path="border.follow_icon" ${bd.follow_icon ? 'checked' : ''}/> Follow icon color</label>
-          </div>
-          ${bd.follow_icon ? '' : this._atColorControl(fid, 'border.color', 'Color', bd.color, { seedHex: '#2196F3', defaultLabel: 'Accent' })}
+          ${hasBorder ? `
+          ${this._atColorControl(fid, 'border.color', 'Color', bd.color, { seedHex: '#2196F3', defaultLabel: 'Accent',
+            follow: { choices: ['icon'], cur: bd.follow_icon ? 'icon' : '' } })}
           ${this._atSlider(fid, 'border.width', 'Width (px)', bd.width ?? 1, 1, 8, 1)}
+          ${this._atSliderNum(fid, 'border.opacity', 'Opacity', bd.opacity ?? 1, 0, 1, 0.05, 1)}
           ${this._atSlider(fid, 'border.radius', 'Radius (px)', bd.radius ?? 12, 0, 24, 1)}
           <div class="seed-ed-side-toggles">
             ${this._AT_EDGE_SIDES.map(([s, l]) => `<label><input type="checkbox" class="at-check fx-border-side" data-at-sid="${fid}" data-fx-side="${s}" ${sideOn(s) ? 'checked' : ''}/> ${l}</label>`).join('')}
@@ -9973,15 +9989,16 @@ class SEEDCardEditor extends HTMLElement {
           ${this._atShowEditor(fid, fx, 'background')}` : ''}
           ${this._fxGrpClose(!!fx.background)}
 
-          ${this._fxGrpOpen(fid, 'edges', 'Edges (Border / Gradient)', true, '')}
+          ${this._fxGrpOpen(fid, 'edges', 'Edges (Border / Gradient)', !!fx.edges, `<label class="fx-grp-toggle"><input type="checkbox" class="at-fx-obj-toggle" data-at-sid="${fid}" data-fx-key="edges" ${fx.edges ? 'checked' : ''}/> Enable edges</label>`)}
+          ${fx.edges ? `
           <span class="seed-ed-hint">Each edge is a <b>Solid line</b> or a <b>Gradient</b> (stops + patterns; a <code>match</code> color follows the border/icon color). Turn on "All edges the same" for one editor applied to every side, or leave off for independent per-side control.</span>
           <div class="seed-ed-font-row">
             <label><input type="checkbox" class="fx-edges-allsame at-structural" data-fx-id="${fid}" ${fx.edges && fx.edges.all_same ? 'checked' : ''}/> All edges the same</label>
           </div>
           ${(fx.edges && fx.edges.all_same)
             ? this._atEdgeSideEditor(fid, fx, 'top', 'All edges')
-            : this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}
-          ${this._fxGrpClose(true)}
+            : this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}` : ''}
+          ${this._fxGrpClose(!!fx.edges)}
 
           ${this._fxGrpOpen(fid, 'when', 'Condition (optional)', condActive, `<label class="fx-grp-toggle"><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> ${FRAME_SHOW_GROUPS.some(k => fx[k] && fx[k].show) ? 'Active when…' : 'Only apply when…'}</label>`)}
           ${condActive ? `<div class="seed-ed-font-row">
@@ -10126,7 +10143,9 @@ class SEEDCardEditor extends HTMLElement {
       const parts = [];
       if (fx.glow) {
         const g = fx.glow, blur = 12 * (g.intensity || 1), spread = -4 * (g.intensity || 1);
-        parts.push(`0 0 ${blur}px ${spread}px ${g.color}`);
+        const bcol = fx.border ? (fx.border.follow_icon ? iconColor : fx.border.color) : null;
+        const gc = g.follow_icon ? iconColor : (g.follow_border && bcol) ? bcol : g.color;   // v261
+        parts.push(`0 0 ${blur}px ${spread}px ${gc}`);
       }
       if (fx.shadow) {
         const s = fx.shadow;
@@ -10134,7 +10153,9 @@ class SEEDCardEditor extends HTMLElement {
       }
       el.style.boxShadow = parts.join(', ') || 'none';
       if (fx.border) {
-        const bc = fx.border.follow_icon ? iconColor : fx.border.color;
+        const bc0 = fx.border.follow_icon ? iconColor : fx.border.color;
+        const bop = fx.border.opacity;
+        const bc = (bop != null && bop < 1) ? `color-mix(in srgb, ${bc0} ${Math.round(bop * 100)}%, transparent)` : bc0;   // v261
         const on = s => (fx.border.sides || ['top', 'bottom', 'left', 'right']).includes(s);
         el.style.borderTop = on('top') ? `${fx.border.width}px solid ${bc}` : 'none';
         el.style.borderBottom = on('bottom') ? `${fx.border.width}px solid ${bc}` : 'none';
@@ -10156,7 +10177,7 @@ class SEEDCardEditor extends HTMLElement {
         el.style.backgroundColor = '#1a1a1a';
       }
       const edgeMatch = (fx.border && !fx.border.follow_icon && fx.border.color) ? fx.border.color : iconColor;
-      const edge = fx.edges ? buildEdgeBackground(fx.edges, edgeMatch) : null;
+      const edge = fx.edges ? buildEdgeBackground(fx.edges, edgeMatch, iconColor) : null;
       if (edge) {
         el.style.backgroundImage = edge.image; el.style.backgroundSize = edge.size;
         el.style.backgroundPosition = edge.position; el.style.backgroundRepeat = edge.repeat;
@@ -15215,6 +15236,21 @@ class SEEDCardEditor extends HTMLElement {
     this.querySelectorAll('.at-color-mode').forEach(el => {
       el.addEventListener('change', () => {
         const sid = el.dataset.atSid, path = el.dataset.atPath, mode = el.value;
+        // v261: Icon color / Border color set the group's follow flag; any other choice clears it
+        if (el.dataset.atFollow) {
+          const grpPath = path.split('.').slice(0, -1).join('.');
+          if (mode.startsWith('follow_')) {
+            this._atApply(sid, sec => { const g = this._atGet(sec, grpPath); if (!g) return; delete g.follow_icon; delete g.follow_border; g[mode.slice(7) === 'icon' ? 'follow_icon' : 'follow_border'] = true; });
+            return;
+          }
+          const pick = mode === 'theme' ? (el.dataset.atColorTheme || 'var(--primary-color)') : mode === 'css' ? (el.dataset.atColorCss || 'currentColor') : mode === 'default' || mode === 'unset' ? '' : (el.dataset.atColorHex || '#2196F3');
+          this._atApply(sid, sec => {
+            const g = this._atGet(sec, grpPath); if (g) { delete g.follow_icon; delete g.follow_border; }
+            const parts = path.split('.'); const key = parts.pop(); const parent = this._atGet(sec, parts.join('.'));
+            if (pick === '') { if (parent && typeof parent === 'object') delete parent[key]; } else this._atSet(sec, path, pick);
+          });
+          return;
+        }
         const val = mode === 'default' || mode === 'unset' ? ''
           : mode === 'theme' ? (el.dataset.atColorTheme || 'var(--primary-color)')
           : mode === 'css' ? (el.dataset.atColorCss || 'currentColor')
@@ -15260,7 +15296,11 @@ class SEEDCardEditor extends HTMLElement {
           glow: { color: '#2196F3', intensity: 1.0, borders_only: false, show: { always: false, expanded: false, active: false, active_boost: GLOW_BOOST_DEFAULT } },
           shadow: { color: '#000000', x: 0, y: 4, blur: 12, spread: 0, opacity: 0.35, show: { always: false, expanded: false, active: false, active_boost: GLOW_BOOST_DEFAULT } },
           border: { color: '#2196F3', width: 1, radius: 12, corners: [true, true, true, true], follow_icon: false, sides: ['top', 'bottom', 'left', 'right'] },
-          background: { mode: 'custom', color: '#1c1c1c' }
+          background: { mode: 'custom', color: '#1c1c1c' },
+          // v261: Edges switched on = one shared editor, a centre-fade line top and bottom
+          edges: { all_same: true,
+            top: { enabled: true, thickness: 1, gradient: true, pattern: 'center_fade', stops: JSON.parse(JSON.stringify(EDGE_GRADIENT_PATTERNS.center_fade)) },
+            bottom: { enabled: true, thickness: 1, gradient: true, pattern: 'center_fade', stops: JSON.parse(JSON.stringify(EDGE_GRADIENT_PATTERNS.center_fade)) } }
         };
         this._atApply(sid, fx => {
           if (el.checked) { fx[key] = defaults[key]; }
@@ -15424,6 +15464,7 @@ class SEEDCardEditor extends HTMLElement {
           if (!fx.edges || !fx.edges[side] || !Array.isArray(fx.edges[side].stops) || !fx.edges[side].stops[i]) return;
           const st = fx.edges[side].stops[i];
           if (mode === 'match') st.color = 'match';
+          else if (mode === 'icon') st.color = 'icon';   // v261
           else if (mode === 'transparent') st.color = 'transparent';
           else if (!/^#[0-9a-f]{6}$/i.test(st.color || '')) st.color = '#2196F3';
           delete fx.edges[side].pattern;   // manual edit → custom
@@ -15440,6 +15481,7 @@ class SEEDCardEditor extends HTMLElement {
           fx.edges = fx.edges || {};
           const cur = fx.edges[side] || { enabled: true, thickness: 1, gradient: false };
           if (mode === 'match') cur.color = 'match';
+          else if (mode === 'icon') cur.color = 'icon';   // v261
           else if (mode === 'theme') cur.color = 'theme';
           else if (!/^#[0-9a-f]{6}$/i.test(cur.color || '')) cur.color = '#2196F3';
           cur.gradient = false;
