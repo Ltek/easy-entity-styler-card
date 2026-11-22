@@ -5,6 +5,11 @@ resets. Newest first.
 
 ---
 
+## v2026.11.22.264
+
+- The **Try on this card** eye is now in each Frame Style's header row, next to the use count, so you
+  can try styles without opening them. Clicking it doesn't open or close the row.
+
 ## v2026.11.22.263
 
 - **Try on this card.** Every Frame Style has an eye icon that shows it on the card in HA's editor
