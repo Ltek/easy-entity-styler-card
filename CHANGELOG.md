@@ -5,6 +5,15 @@ resets. Newest first.
 
 ---
 
+## v2026.11.22.263
+
+- **Try on this card.** Every Frame Style has an eye icon that shows it on the card in HA's editor
+  preview, as the card frame, even if the card doesn't use it.
+  - Edits show live while you change it. It's drawn as if its condition holds, so an *Active* glow is
+    visible.
+  - Nothing is added to the card. Other cards don't change.
+  - One style at a time. Click the eye again, or close the editor, to stop.
+
 ## v2026.11.21.262
 
 - **Fixed: a logbook in a cards section with *Clear children* had its date row ("Today · …")
