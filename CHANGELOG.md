@@ -5,6 +5,20 @@ resets. Newest first.
 
 ---
 
+## v2026.11.23.265
+
+- **The card defines Active.** Card Appearance → Card Frame → **Card is Active when**: a section has
+  entities (its count is above 0), any or all of a list of entities, or a Rule Set count
+  (`card_active`). Frame Styles on the card (card frame and section frames) with no condition of
+  their own use it for *When Active* and Active strength. One shared library style can now mean
+  "a shade is open" on one card and "an entry is unlocked" on another.
+- A style's own condition still wins. If neither is set, the style is never Active, as before.
+- The style's condition group is now called **Active Condition**, with an **Own condition** box. When
+  it's off, a note says *When Active* follows each card.
+- **ⓘ help** next to both settings explains when to use which, with examples.
+- Section pickers for the card title count, *Expand when section has entities* and card Active now
+  include sections inside groups.
+
 ## v2026.11.22.264
 
 - The **Try on this card** eye is now in each Frame Style's header row, next to the use count, so you

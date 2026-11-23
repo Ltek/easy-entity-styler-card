@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.22.264
+// Version: v2026.11.23.265
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.22.264';
+const BUILD_NUMBER = 'v2026.11.23.265';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1760,7 +1760,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.22.264: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.23.265: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3731,7 +3731,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.22.264: card-level links to one section.
+// v2026.11.23.265: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3747,11 +3747,30 @@ function cardSectionLinkKeys(c) {
   }
   // v256 (EES-FEATURE-GAPS item 12): build embedded cards while the card is closed (old behaviour)
   if (c.card_preload_children === true) out.card_preload_children = true;
+  // v265: what makes this card Active, for Frame Styles that have no condition of their own
+  { const a = normalizeCardActive(c.card_active); if (a) out.card_active = a; }
   return out;
+}
+// v265: card_active
+//   { kind: 'section', section: <id> }                                   a section's count is above 0
+//   { kind: 'entities', entities: [...], match?: 'all', when: {op, value} } any / all of the entities match
+//   { kind: 'rule_set', ref: <id>, when: {op, value} }                   a Rule Set count test (default > 0)
+function normalizeCardActive(a) {
+  if (!a || typeof a !== 'object') return null;
+  if (a.kind === 'section') return { kind: 'section', section: String(a.section || '') };
+  if (a.kind === 'rule_set') return { kind: 'rule_set', ref: String(a.ref || ''),
+    when: { op: (a.when && a.when.op) || 'gt', value: Number(a.when && a.when.value != null ? a.when.value : 0) } };
+  if (a.kind === 'entities') {
+    const list = (Array.isArray(a.entities) ? a.entities : String(a.entities || '').split(','))
+      .map(x => String(x).trim()).filter(Boolean);
+    return { kind: 'entities', entities: list, ...(a.match === 'all' ? { match: 'all' } : {}),
+      when: a.when && a.when.op ? normalizeCondition(a.when) : { op: 'is_on' } };
+  }
+  return null;
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.22.264: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.23.265: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3784,7 +3803,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.22.264: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.23.265: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3804,7 +3823,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.22.264: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.23.265: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3830,7 +3849,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.22.264 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.23.265 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3852,7 +3871,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.22.264 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.23.265 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3870,7 +3889,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.22.264 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.23.265 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3894,7 +3913,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.22.264 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.23.265 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3939,7 +3958,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.22.264: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.23.265: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4049,7 +4068,7 @@ function stripCardPopupKeys(m) {
 }
 function stripCardSectionLinkKeys(m) {
   const keep = cardSectionLinkKeys(m);
-  ['card_count_section', 'card_expand_when_section', 'card_expand_mode', 'card_preload_children'].forEach(k => {
+  ['card_count_section', 'card_expand_when_section', 'card_expand_mode', 'card_preload_children', 'card_active'].forEach(k => {
     if (!(k in keep)) delete m[k]; else m[k] = keep[k];
   });
   return m;
@@ -4437,6 +4456,21 @@ class SEEDCard extends HTMLElement {
     return map;
   }
 
+  // v265: is this card Active (card_active)? Cached for one hass snapshot. No setting = never.
+  _cardActive() {
+    const a = this._config && this._config.card_active;
+    if (!a) return false;
+    if (this._caHass === this._hass && this._caCfg === a) return this._caVal;
+    let v = false;
+    try {
+      if (a.kind === 'section') v = !!a.section && this._sectionLiveCount(a.section) > 0;
+      else if (a.kind === 'rule_set') v = this._headerRuleMatch({ source: { type: 'rule_set', ref: a.ref }, when: a.when }, '').hit;
+      else if (a.kind === 'entities') v = this._headerRuleMatch({ source: { type: 'entities', entities: a.entities, ...(a.match ? { match: a.match } : {}) }, when: a.when }, '').hit;
+    } catch (e) { v = false; }
+    this._caHass = this._hass; this._caCfg = a; this._caVal = v;
+    return v;
+  }
+
   // v263: while the editor tries a style on, the preview card's frame is that style alone, drawn as if
   // its condition holds (so an "When Active" glow shows). Not stored anywhere.
   _tryOnRef() {
@@ -4545,7 +4579,8 @@ class SEEDCard extends HTMLElement {
       // A group with its own `show` (v253) decides for itself; the rest follow the condition. "Ignore
       // the condition here" means "treat it as met", so it also counts as Active.
       const condMet = ignoreCond.has(id) || this._framePresetActive(fx, overrides[id]);
-      const active = ignoreCond.has(id) || (framePresetHasCondition(fx) && condMet);
+      // v265: a style with its own condition uses it; one without follows the card's Active setting
+      const active = ignoreCond.has(id) || (framePresetHasCondition(fx) ? condMet : this._cardActive());
       ['glow', 'shadow', 'border', 'background', 'edges'].forEach(g => {
         const grp = fx[g];
         if (!grp) return;
@@ -4816,7 +4851,7 @@ class SEEDCard extends HTMLElement {
   // v233: the count a section shows in its own header, for any section type (the card title and
   // the card auto-expand read it). Mirrors the mirrored-header count logic.
   _sectionLiveCount(sectionId) {
-    const section = (this._config.sections || []).find(s => s.id === sectionId);
+    const section = this._allSectionsFlat().find(s => s.id === sectionId);   // v265: group children too
     if (!section) return 0;
     try {
       if (section.type === 'activity_table') {
@@ -8866,7 +8901,10 @@ class SEEDCardEditor extends HTMLElement {
 
   // v233: <option>s for picking a section the card links to (only types that have a count).
   _edCountSectionOptions(cur) {
-    const list = (this._config.sections || []).filter(s => s.type === 'entities' || s.type === 'activity_table');
+    // v265: sections inside groups count too
+    const flat = [];
+    (this._config.sections || []).forEach(s => { if (!s) return; flat.push(s); if (s.type === 'group') (s.children || []).forEach(c => c && flat.push(c)); });
+    const list = flat.filter(s => s.type === 'entities' || s.type === 'activity_table');
     return `<option value="" ${!cur ? 'selected' : ''}>None</option>` + list.map(s =>
       `<option value="${s.id}" ${cur === s.id ? 'selected' : ''}>${escapeHtml(s.name || 'Section')}</option>`).join('');
   }
@@ -10014,7 +10052,8 @@ class SEEDCardEditor extends HTMLElement {
             : this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}` : ''}
           ${this._fxGrpClose(!!fx.edges)}
 
-          ${this._fxGrpOpen(fid, 'when', 'Condition (optional)', condActive, `<label class="fx-grp-toggle"><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> ${FRAME_SHOW_GROUPS.some(k => fx[k] && fx[k].show) ? 'Active when…' : 'Only apply when…'}</label>`)}
+          ${this._fxGrpOpen(fid, 'when', 'Active Condition', condActive, `<label class="fx-grp-toggle"><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> Own condition</label>${this._infoBtn('active')}`)}
+          ${condActive ? '' : `<span class="seed-ed-hint seed-ed-fxg-note">Off: <b>When Active</b> follows the Active setting of each card that uses this style (Card Appearance → Card Frame).</span>`}
           ${condActive ? `<div class="seed-ed-font-row">
             <label>Based on
               <select class="fx-when-kind at-structural" data-fx-id="${fid}">
@@ -10043,6 +10082,67 @@ class SEEDCardEditor extends HTMLElement {
           `}
         </div>
       </details>`;
+  }
+
+  // v265: the card's Active setting (used by Frame Styles with no condition of their own)
+  _edCardActiveHtml() {
+    const a = this._config.card_active || null;
+    const kind = a ? a.kind : '';
+    const rsOpts = (this._config.rule_sets || []).map(r => [r.id, r.name || r.id]);
+    let body = '';
+    if (kind === 'section') {
+      body = `<div class="seed-ed-font-row"><label>Section<select class="at-input" data-at-sid="__card__" data-at-path="card_active.section">${this._edCountSectionOptions(a.section)}</select></label>
+        <span class="seed-ed-hint">Active while that section's count is above 0 (the count its title shows).</span></div>`;
+    } else if (kind === 'rule_set') {
+      const w = a.when || {};
+      body = `<div class="seed-ed-font-row">
+        <label>Rule Set<select class="at-input" data-at-sid="__card__" data-at-path="card_active.ref">${this._atOpts([['', '— choose —'], ...rsOpts], a.ref || '')}</select></label>
+        <label>Count<select class="at-input" data-at-sid="__card__" data-at-path="card_active.when.op">${this._atOpts([['gt', '>'], ['ge', '≥'], ['eq', '='], ['ne', '≠'], ['lt', '<'], ['le', '≤']], w.op || 'gt')}</select></label>
+        <input type="number" class="at-input" data-at-sid="__card__" data-at-path="card_active.when.value" value="${Number(w.value ?? 0)}" style="width:64px;" /></div>`;
+    } else if (kind === 'entities') {
+      const w = a.when || {};
+      body = `<div class="seed-ed-font-row">
+        <label style="flex:1;">Entities<input type="text" class="at-input at-input-multi" data-at-sid="__card__" data-at-path="card_active.entities" value="${escapeHtml((a.entities || []).join(', '))}" placeholder="cover.garage_1, cover.garage_2" style="width:100%;" /></label>
+        <label>Match<select class="at-input" data-at-sid="__card__" data-at-path="card_active.match">${this._atOpts([['', 'any of them'], ['all', 'all of them']], a.match || '')}</select></label></div>
+        <div class="seed-ed-font-row">
+        <select class="at-input" data-at-sid="__card__" data-at-path="card_active.when.op">${this._atOpts(this._AT_OPS, w.op || 'is_on')}</select>
+        <input type="text" class="at-input" data-at-sid="__card__" data-at-path="card_active.when.value" value="${escapeHtml(w.value ?? '')}" placeholder="value" style="width:110px;" /></div>`;
+    }
+    return `
+        <div class="seed-ed-group-div">Card is Active when${this._infoBtn('active')}</div>
+        <div class="seed-ed-font-row"><select id="ed-card-active-kind" class="at-input">${this._atOpts([
+          ['', 'Never (not set)'], ['section', 'A section has entities'], ['entities', 'Any / all of a list of entities'], ['rule_set', 'A Rule Set count']], kind)}</select></div>
+        ${body}
+        <span class="seed-ed-hint">Frame Styles on this card (card and sections) that have no Active Condition of their own use this for <b>When Active</b> and Active strength.</span>`;
+  }
+
+  // v265: an (i) button that opens a help pop-up
+  _infoBtn(key) {
+    return `<ha-icon class="seed-ed-icon-btn ees-info-btn" icon="mdi:information-outline" data-info="${key}" role="button" tabindex="0" title="When and how to use this"></ha-icon>`;
+  }
+  _infoHtml(key) {
+    if (key !== 'active') return '';
+    return `
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Active: when and how to use it</div>
+      <p>A Frame Style part (glow, shadow, border, background) can show <b>When Active</b>, and glow and shadow can be stronger while Active. What "Active" means is set in one of two places.</p>
+      <p><b>1. On the card</b> (Card Appearance → Card Frame → <i>Card is Active when</i>). Use this most of the time: it says what <i>this card</i> is about. For example, a Shades card is Active while its section counts an open shade; an Entries card while a door is open or a lock is unlocked. Every style on the card that has no condition of its own follows it, so one shared library style works on all your cards, each with its own meaning.</p>
+      <p><b>2. On the Frame Style</b> (its <i>Active Condition</i> group, <i>Own condition</i>). Use this when the trigger is about the <i>house</i>, not the card:</p>
+      <ul>
+        <li><b>Whole-house signals:</b> a "Leak Alert" style that turns any card's border red while any leak sensor is wet, or an "Alarm Armed" or "Away" style. Define the trigger once and add the style to the cards that should react.</li>
+        <li><b>A second trigger on one card:</b> Garage Doors glows blue while a door is open (the card's Active), and an overlay style with its own condition turns it red when a door has been open for over 30 minutes or the alarm is armed.</li>
+        <li><b>Time or mode:</b> a "Night" style with a softer glow, active while the sun is down or the house mode is Night.</li>
+        <li><b>Sharing:</b> an exported style keeps its own condition; the card's Active setting stays with the card.</li>
+      </ul>
+      <p><b>Which one wins:</b> a style with its own condition uses it. A style without one follows the card. If neither is set, the style is never Active.</p>
+      <p>A part with no Show setting still only appears while the style's own condition holds, as before. <i>Try on this card</i> always draws a style as if Active.</p>`;
+  }
+  _openInfo(key) {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'font-size:13px;line-height:1.5;';
+    wrap.innerHTML = this._infoHtml(key) + `<div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="ees-info-close" style="padding:8px 14px;border:none;border-radius:6px;background:var(--primary-color,#2196F3);color:#fff;cursor:pointer;font-size:13px;">Close</button></div>`;
+    const m = this._showModal(wrap);
+    wrap.querySelector('.ees-info-close').onclick = () => m.close();
+    return m;
   }
 
   // v256: does the card have a cards section anywhere (groups included)?
@@ -10103,7 +10203,7 @@ class SEEDCardEditor extends HTMLElement {
             ${box('collapsed', 'When Collapsed', off)}
           </div>
           ${hint ? `<span class="seed-ed-hint">${hint}</span>` : ''}
-          ${sh.active && !framePresetHasCondition(fx) ? `<span class="seed-ed-hint">Set 'Only apply when…' below to define Active.</span>` : ''}`;
+          ${sh.active && !framePresetHasCondition(fx) && !this._config.card_active ? `<span class="seed-ed-hint">Active comes from the card's Active setting (Card Appearance → Card Frame), which this card doesn't have yet, or from the style's own Active Condition below.</span>` : ''}`;
   }
 
   // v254: the Active strength slider for glow / shadow (a multiple of the regular strength), shown when
@@ -13299,6 +13399,9 @@ class SEEDCardEditor extends HTMLElement {
         .fx-prev-mode { padding: 2px 8px; border: 1px solid var(--ltek-c-accent, #2196F3); cursor: pointer; }
         .fx-prev-mode:first-of-type { border-radius: 6px 0 0 6px; } .fx-prev-mode:last-of-type { border-radius: 0 6px 6px 0; border-left: none; }
         .fx-prev-mode.on { background: var(--ltek-c-accent, #2196F3); color: var(--text-primary-color, #fff); }
+        /* v265 */
+        .seed-ed-fxg-note { display: block; padding: 0 var(--ltek-sp-4) 8px; }
+        .seed-ed-group-div .ees-info-btn, .seed-ed-fxg-head .ees-info-btn { --mdc-icon-size: 18px; margin-left: 6px; vertical-align: middle; }
         /* v263: Try on this card */
         .seed-ed-icon-btn.fx-tryon.on { color: var(--ltek-c-accent, var(--primary-color, #2196F3)); }
         .seed-ed-tryon-hint { display: flex; align-items: center; gap: 6px; color: var(--ltek-c-accent, var(--primary-color, #2196F3)); }
@@ -14144,6 +14247,7 @@ class SEEDCardEditor extends HTMLElement {
         ${this._edCardSub('card-frame', 'Card Frame', `
         <span class="seed-ed-hint">The card's frame (border / glow / shadow / background / edges) comes from Frame Styles, layered here — independent of the per-section frames.</span>
         ${this._atFrameRefEditor('__card_frame__', this._config.card_frame)}
+        ${this._edCardActiveHtml()}
         `)}
         ${this._edCardSub('visibility', 'Conditional Visibility', `
         ${this._visibilityRulesHtml('card', this._config.visibility_rules)}
@@ -17082,6 +17186,21 @@ class SEEDCardEditor extends HTMLElement {
       });
     }
 
+    // v265: card Active kind (structural: each kind has its own fields)
+    const caKind = this.querySelector('#ed-card-active-kind');
+    if (caKind) caKind.addEventListener('change', () => {
+      const k = caKind.value;
+      if (!k) delete this._config.card_active;
+      else this._config.card_active = normalizeCardActive(k === 'section' ? { kind: k, section: '' }
+        : k === 'rule_set' ? { kind: k, ref: '', when: { op: 'gt', value: 0 } } : { kind: k, entities: [], when: { op: 'is_on' } });
+      this._fireConfigChanged(); this._saveOpenState(); this._rendered = false; this.renderEditor();
+    });
+    // v265: (i) help pop-ups
+    this.querySelectorAll('.ees-info-btn').forEach(el => {
+      const open = (ev) => { ev.preventDefault(); ev.stopPropagation(); this._openInfo(el.dataset.info); };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') open(ev); });
+    });
     const preloadEl = this.querySelector('#ed-card-preload-children');
     if (preloadEl) preloadEl.addEventListener('change', () => {
       if (preloadEl.checked) this._config.card_preload_children = true; else delete this._config.card_preload_children;

@@ -99,6 +99,26 @@ background:
 
 While you edit a shared style, the card preview in HA's editor shows your unsaved changes. Switch it between **Saved** and **Edited** next to Save / Discard. Other cards keep the saved style until you press Save. The eye icon on any style (**Try on this card**) shows it on the card preview, even if the card doesn't use it, without changing the card.
 
+#### Active: when and how to use it
+
+A style part can show **When Active**, and glow and shadow can be stronger while Active. What "Active" means is set in one of two places:
+
+1. **On the card** (Card Appearance → Card Frame → *Card is Active when*). Use this most of the time: it says what *this card* is about. For example, a Shades card is Active while its section counts an open shade, and an Entries card while a door is open or a lock is unlocked. It can be a section's count, any or all of a list of entities, or a Rule Set count. Every style on the card (card frame and section frames) that has no condition of its own follows it, so one shared library style works on all your cards, each with its own meaning.
+
+   ```yaml
+   card_active:
+     kind: section        # or: entities (entities, match, when) / rule_set (ref, when)
+     section: sec_shades
+   ```
+
+2. **On the Frame Style** (its *Active Condition* group, *Own condition*). Use this when the trigger is about the house, not the card:
+   - **Whole-house signals:** a "Leak Alert" style that turns any card's border red while any leak sensor is wet, or an "Alarm Armed" or "Away" style. You define the trigger once and add the style to the cards that should react.
+   - **A second trigger on one card:** Garage Doors glows blue while a door is open (the card's Active), and an overlay style with its own condition turns it red when a door has been open too long or the alarm is armed.
+   - **Time or mode:** a "Night" style with a softer glow while the sun is down or the house mode is Night.
+   - **Sharing:** an exported style keeps its own condition; the card's Active setting stays with the card.
+
+**Which one wins:** a style with its own condition uses it. A style without one follows the card. If neither is set, the style is never Active. The ⓘ buttons in the editor show this guide.
+
 *Storage key:* `ltek_frame_library`
 
 ### Header Rules
