@@ -5,6 +5,14 @@ resets. Newest first.
 
 ---
 
+## v2026.11.26.268
+
+- **Card Appearance says what draws the card.** A line at the top of Card Appearance reads, for example,
+  *Using: Frame Styles: EES Card Frame, Active shadow*, *Using: Your theme's card style*, or *Using: No
+  frame*. It notes styles that are switched off, and library styles that are missing.
+- **Fixed:** a card whose Frame Styles were all switched off drew no frame at all. It now uses the
+  theme's card style, like a card with no Frame Style.
+
 ## v2026.11.26.267
 
 - **A card with no Frame Style now looks like a themed HA card.** It uses your theme's card background,
