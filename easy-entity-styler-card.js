@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.25.266
+// Version: v2026.11.26.267
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.25.266';
+const BUILD_NUMBER = 'v2026.11.26.267';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1259,6 +1259,7 @@ function normalizeEdges(edges) {
       out[side].enabled = en;
     });
   }
+  if (edges.show) out.show = normalizeShow(edges.show, false);   // v267: Show / Hide like the other parts
   return out;
 }
 
@@ -1361,7 +1362,7 @@ function normalizeFramePreset(fx) {
 // glow / shadow is multiplied by active_boost. A group with no `show` follows the preset's condition, as
 // before (and edges always do).
 const GLOW_BOOST_DEFAULT = 1.6;
-const FRAME_SHOW_GROUPS = ['glow', 'shadow', 'border', 'background'];
+const FRAME_SHOW_GROUPS = ['glow', 'shadow', 'border', 'background', 'edges'];   // v267: + edges
 const FRAME_BOOST_GROUPS = ['glow', 'shadow'];
 function normalizeShow(g, boostable) {
   g = g || {};
@@ -1760,7 +1761,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.25.266: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.26.267: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3731,7 +3732,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.25.266: card-level links to one section.
+// v2026.11.26.267: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3747,6 +3748,8 @@ function cardSectionLinkKeys(c) {
   }
   // v256 (EES-FEATURE-GAPS item 12): build embedded cards while the card is closed (old behaviour)
   if (c.card_preload_children === true) out.card_preload_children = true;
+  // v267: with no Frame Style on the card, it draws the theme's card look; false = draw nothing
+  if (c.card_theme_style === false) out.card_theme_style = false;
   // v265: what makes this card Active, for Frame Styles that have no condition of their own
   { const a = normalizeCardActive(c.card_active); if (a) out.card_active = a; }
   return out;
@@ -3770,7 +3773,7 @@ function normalizeCardActive(a) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.25.266: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.26.267: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3803,7 +3806,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.25.266: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.26.267: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3823,7 +3826,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.25.266: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.26.267: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3849,7 +3852,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.25.266 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.26.267 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3871,7 +3874,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.25.266 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.26.267 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3889,7 +3892,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.25.266 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.26.267 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3913,7 +3916,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.25.266 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.26.267 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3958,7 +3961,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.25.266: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.26.267: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4068,7 +4071,7 @@ function stripCardPopupKeys(m) {
 }
 function stripCardSectionLinkKeys(m) {
   const keep = cardSectionLinkKeys(m);
-  ['card_count_section', 'card_expand_when_section', 'card_expand_mode', 'card_preload_children', 'card_active'].forEach(k => {
+  ['card_count_section', 'card_expand_when_section', 'card_expand_mode', 'card_preload_children', 'card_active', 'card_theme_style'].forEach(k => {
     if (!(k in keep)) delete m[k]; else m[k] = keep[k];
   });
   return m;
@@ -4456,6 +4459,14 @@ class SEEDCard extends HTMLElement {
     return map;
   }
 
+  // v267: does the card draw the theme's card look (no Frame Style on it)?
+  _usesThemeCardStyle() {
+    const c = this._config || {};
+    if (c.card_theme_style === false) return false;
+    const fr = c.card_frame;
+    return !(fr && Array.isArray(fr.presets) && fr.presets.length);
+  }
+
   // v266: for a card that doesn't collapse itself, "Expanded" follows its content: it is expanded
   // while any top-level collapsible section (or group) is open, and collapsed when all are closed.
   // A card with no collapsible top-level section is always expanded, as before.
@@ -4777,6 +4788,17 @@ class SEEDCard extends HTMLElement {
     // them absolutely; when it resolves to nothing (no card_frame, or all
     // conditional presets inactive), the wrapper has no frame at all.
     const frameRef = this._tryOnRef() || this._config.card_frame;
+    // v267: no Frame Style listed on the card = the HA theme's own card look (ha-card's background,
+    // border, radius and shadow), until a Frame Style is added. card_theme_style: false = no frame.
+    const themeLook = !this._tryOnRef() && this._usesThemeCardStyle();
+    wrapper.classList.toggle('ees-theme-card', themeLook);
+    if (themeLook) {
+      ['boxShadow', 'backgroundImage', 'borderTop', 'borderBottom', 'borderLeft', 'borderRight', 'borderRadius'].forEach(k => { wrapper.style[k] = ''; });
+      wrapper.style.removeProperty('--seed-card-bg');
+      this._setBgLayer(wrapper, null); this._applyEdge(wrapper, null, false);
+      wrapper.style.backgroundImage = '';
+      return;
+    }
     const fx = frameRef
       ? this._resolveFrame(frameRef, null, { expanded: wrapper.tagName === 'DETAILS' ? wrapper.open : this._cardContentOpen() })
       : null;
@@ -5134,6 +5156,13 @@ class SEEDCard extends HTMLElement {
         /* v240: background-COLOR only, so an inline edge background-image (a frame's gradient
            edges) is no longer reset by the shorthand. */
         details.easy-entity-styler-card-wrapper { background-color: var(--seed-card-bg) !important; }
+        /* v267: no Frame Style on the card = the theme's own card look, as HA's ha-card draws it */
+        .easy-entity-styler-card-wrapper.ees-theme-card {
+          background: var(--ha-card-background, var(--card-background-color, #1c1c1c)) !important;
+          border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--divider-color, #e0e0e0));
+          border-radius: var(--ha-card-border-radius, 12px);
+          box-shadow: var(--ha-card-box-shadow, none);
+        }
         /* v258: see-through theme background (works for gradients / images): the theme's card
            background on a layer behind the content, faded with opacity */
         .ees-bg-layer { position: relative; isolation: isolate; }
@@ -10061,7 +10090,8 @@ class SEEDCardEditor extends HTMLElement {
           </div>
           ${(fx.edges && fx.edges.all_same)
             ? this._atEdgeSideEditor(fid, fx, 'top', 'All edges')
-            : this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}` : ''}
+            : this._AT_EDGE_SIDES.map(([s]) => this._atEdgeSideEditor(fid, fx, s)).join('')}
+          ${this._atShowEditor(fid, fx, 'edges')}` : ''}
           ${this._fxGrpClose(!!fx.edges)}
 
           ${this._fxGrpOpen(fid, 'when', 'Active Condition', condActive, `<label class="fx-grp-toggle"><input type="checkbox" class="fx-when-toggle" data-fx-id="${fid}" ${condActive ? 'checked' : ''}/> Own condition</label>${this._infoBtn('active')}`)}
@@ -10198,7 +10228,7 @@ class SEEDCardEditor extends HTMLElement {
     const off = sh.always ? 'disabled title="Always is ticked"' : '';
     const sel = (k, opts, cur) => `<select class="at-input fx-show-sel" data-fx-id="${fid}" data-g="${g}" data-k="${k}">${this._atOpts(opts, cur)}</select>`;
     const ticked = ['active', 'expanded', 'collapsed'].filter(k => sh[k]);
-    const name = { glow: 'glow', shadow: 'shadow', border: 'border', background: 'background' }[g];
+    const name = { glow: 'glow', shadow: 'shadow', border: 'border', background: 'background', edges: 'edge' }[g];
     let hint = '';
     if (!sh.always && !ticked.length) hint = hide ? `No box ticked: this ${name} always shows.` : `No box ticked: this ${name} never shows.`;
     else if (sh.always && hide) hint = `Hide when Always: this ${name} never shows.`;
@@ -14259,6 +14289,11 @@ class SEEDCardEditor extends HTMLElement {
         ${this._edCardSub('card-frame', 'Card Frame', `
         <span class="seed-ed-hint">The card's frame (border / glow / shadow / background / edges) comes from Frame Styles, layered here — independent of the per-section frames.</span>
         ${this._atFrameRefEditor('__card_frame__', this._config.card_frame)}
+        ${(this._config.card_frame && (this._config.card_frame.presets || []).length) ? '' : `
+        <div class="seed-ed-checkbox-row">
+          <label><input type="checkbox" id="ed-card-theme-style" ${this._config.card_theme_style === false ? '' : 'checked'}/> No Frame Style: use the theme's card style</label>
+        </div>
+        <span class="seed-ed-hint">Until you add a Frame Style, the card uses your theme's card background, border, corners and shadow, like HA's own cards. Untick for no frame at all.</span>`}
         ${this._edCardActiveHtml()}
         `)}
         ${this._edCardSub('visibility', 'Conditional Visibility', `
@@ -17198,6 +17233,12 @@ class SEEDCardEditor extends HTMLElement {
       });
     }
 
+    // v267: theme card style when there is no Frame Style
+    const themeEl = this.querySelector('#ed-card-theme-style');
+    if (themeEl) themeEl.addEventListener('change', () => {
+      if (themeEl.checked) delete this._config.card_theme_style; else this._config.card_theme_style = false;
+      this._fireConfigChanged();
+    });
     // v265: card Active kind (structural: each kind has its own fields)
     const caKind = this.querySelector('#ed-card-active-kind');
     if (caKind) caKind.addEventListener('change', () => {

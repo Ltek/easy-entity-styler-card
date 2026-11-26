@@ -5,6 +5,18 @@ resets. Newest first.
 
 ---
 
+## v2026.11.26.267
+
+- **A card with no Frame Style now looks like a themed HA card.** It uses your theme's card background,
+  border, corners and shadow (`ha-card-background`, `ha-card-border-width` / `-color` / `-radius`,
+  `ha-card-box-shadow`), as HA's own cards do. Once you add a Frame Style to the card, the styles take
+  over. Before, such a card drew no frame at all.
+  - *No Frame Style: use the theme's card style* is under Card Appearance → Card Frame, on by default.
+    Untick it (`card_theme_style: false`) to keep the old no-frame look.
+  - **This changes cards that have no Frame Style today:** they gain your theme's card look.
+- **Edges** has the same **Show when / Hide when**, any / all, and Always / Active / Expanded /
+  Collapsed options as the other parts.
+
 ## v2026.11.25.266
 
 - **Fixed: a card that collapses through its sections always counted as expanded.** For a card that

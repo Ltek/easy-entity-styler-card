@@ -82,7 +82,9 @@ Both this card and the **Color Light & Scene Manager** card share the same two s
 ### Frame Styles
 Named, reusable frame bundles — borders, glow, shadow, background, and per-side edge lines. Each style is **sparse** (it stores only the properties you set), so you can layer an ordered list on a section or the whole card and the last one wins per property. Styles can be **conditional** — applied only when an entity is in a given state, or when a section currently has / has no visible entities.
 
-Each of a style's **glow, shadow, border and background** has its own visibility: **Show when** or **Hide when**, **any of** or **all of** the ticked boxes **Always**, **When Active** (the style's condition holds), **When Expanded** and **When Collapsed**. Glow and shadow have a **Regular** and an **Active strength** (×1–×3 of regular). A background can be see-through (**Opacity**). A part with no visibility set follows the condition, as before.
+A card with **no Frame Style** uses your theme's card look (`ha-card-background`, `ha-card-border-*`, `ha-card-box-shadow`), like HA's own cards, until you add one. Untick *No Frame Style: use the theme's card style* (`card_theme_style: false`) for no frame at all.
+
+Each of a style's **glow, shadow, border, background and edges** has its own visibility: **Show when** or **Hide when**, **any of** or **all of** the ticked boxes **Always**, **When Active** (the style's condition holds), **When Expanded** and **When Collapsed**. Glow and shadow have a **Regular** and an **Active strength** (×1–×3 of regular). A background can be see-through (**Opacity**). A part with no visibility set follows the condition, as before.
 
 ```yaml
 glow:
