@@ -5,6 +5,12 @@ resets. Newest first.
 
 ---
 
+## v2026.11.26.270
+
+- **Fixed: Frame Styles couldn't be added to a section inside a group.** The section's Frame panel
+  showed, but Add, remove, move and switch off did nothing, because the editor only looked for
+  top-level sections.
+
 ## v2026.11.26.269
 
 - **Theme card layer.** A built-in Frame Style, **Theme card (your HA theme)** (`theme:card`). Put it
