@@ -5,6 +5,16 @@ resets. Newest first.
 
 ---
 
+## v2026.11.26.273
+
+- **Fixed: frosted boxes around child cards with a glass theme.** Themes that set
+  `ha-card-backdrop-filter` (blur / saturate) make every card blur what's behind it. *Child cards
+  inherit parent card style (clear children)* cleared the children's background, border and shadow
+  but not that filter, so each child card still showed as a lighter, frosted box. It's now cleared
+  too.
+- The theme card look (no Frame Style, or the **Theme card** layer) now also applies the theme's
+  backdrop filter, so an EES card is frosted like HA's own cards in a glass theme.
+
 ## v2026.11.26.272
 
 - **New table columns: last update.** *Time since last update* (`last_updated_ago`) and *Last update

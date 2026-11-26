@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.26.272
+// Version: v2026.11.26.273
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.26.272';
+const BUILD_NUMBER = 'v2026.11.26.273';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1777,7 +1777,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.26.272: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.26.273: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3748,7 +3748,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.26.272: card-level links to one section.
+// v2026.11.26.273: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3789,7 +3789,7 @@ function normalizeCardActive(a) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.26.272: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.26.273: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3822,7 +3822,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.26.272: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.26.273: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3842,7 +3842,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.26.272: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.26.273: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3868,7 +3868,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.26.272 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.26.273 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3890,7 +3890,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.26.272 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.26.273 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3908,7 +3908,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.26.272 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.26.273 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3932,7 +3932,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.26.272 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.26.273 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3977,7 +3977,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.26.272: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.26.273: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4675,7 +4675,7 @@ class SEEDCard extends HTMLElement {
       parts.push(this._buildDropShadow(scolor, acc.shadow.x, acc.shadow.y, acc.shadow.blur, acc.shadow.spread, acc.shadow.opacity));
     }
     // v269: the Theme card layer's shadow stays under the glow / shadow added by later styles
-    if (acc._themeShadow) { const ts = this._themeShadowValue(ctx && ctx.el); if (ts) parts.push(ts); }
+    if (acc._themeShadow) { const ts = this._themeShadowValue(ctx && ctx.el); if (ts) parts.push(ts); out.themeLayer = true; }
     out.boxShadow = parts.filter(s => s && s !== 'none').join(', ') || 'none';
     if (acc.border && acc.border._theme) {
       const line = `var(--ha-card-border-width, 1px) solid ${THEME_BORDER_COLOR}`;
@@ -4799,6 +4799,7 @@ class SEEDCard extends HTMLElement {
         if (fx.bgLayer) { el.style.backgroundColor = 'transparent'; el.style.setProperty('--sec-bg', 'transparent'); }
         this._setBgLayer(el, fx.bgLayer);   // v258
         this._applyEdge(el, fx.edge, !!fx.bgLayer);   // v260
+        el.style.backdropFilter = fx.themeLayer ? 'var(--ha-card-backdrop-filter, none)' : '';   // v273
       } else {
         el.style.boxShadow = 'none';
         el.style.backgroundImage = '';
@@ -4859,6 +4860,7 @@ class SEEDCard extends HTMLElement {
       else wrapper.style.removeProperty('--seed-card-bg');
       this._setBgLayer(wrapper, fx.bgLayer);
       this._applyEdge(wrapper, fx.edge, !!fx.bgLayer);   // v260
+      wrapper.style.backdropFilter = fx.themeLayer ? 'var(--ha-card-backdrop-filter, none)' : '';   // v273
     } else {
       wrapper.style.boxShadow = 'none';
       wrapper.style.backgroundImage = '';
@@ -5196,6 +5198,7 @@ class SEEDCard extends HTMLElement {
         /* v267: no Frame Style on the card = the theme's own card look, as HA's ha-card draws it */
         .easy-entity-styler-card-wrapper.ees-theme-card {
           background: var(--ha-card-background, var(--card-background-color, #1c1c1c)) !important;
+          backdrop-filter: var(--ha-card-backdrop-filter, none);   /* v273: glass themes */
           border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--divider-color, #e0e0e0));
           border-radius: var(--ha-card-border-radius, 12px);
           box-shadow: var(--ha-card-box-shadow, none);
@@ -5421,6 +5424,9 @@ class SEEDCard extends HTMLElement {
              colour variable is left alone: HA's logbook paints its floating "Today · …" date row with
              it, and a transparent one let the date float over the list. */
           --ha-card-background: transparent;
+          /* v273: a glass theme blurs / saturates what's behind each card (ha-card-backdrop-filter);
+             under clear children that showed as a frosted box around every child card */
+          --ha-card-backdrop-filter: none;
           --ha-card-border-width: 0px;
           --ha-card-border-color: transparent;
           --ha-card-box-shadow: none;
