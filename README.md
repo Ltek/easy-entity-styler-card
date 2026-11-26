@@ -84,6 +84,15 @@ Named, reusable frame bundles — borders, glow, shadow, background, and per-sid
 
 A card with **no Frame Style** uses your theme's card look (`ha-card-background`, `ha-card-border-*`, `ha-card-box-shadow`), like HA's own cards, until you add one. Untick *No Frame Style: use the theme's card style* (`card_theme_style: false`) for no frame at all.
 
+To keep the theme's look **and** add effects on top, put the built-in **Theme card** layer first in the card's Frame Styles. It draws the theme's card background, border, corners and shadow from the theme itself (live: switching or editing the theme updates the card). The styles after it change only the parts they set, and their glow and shadow are added to the theme's shadow:
+
+```yaml
+card_frame:
+  presets:
+    - theme:card              # your HA theme's card look
+    - lib:active_shadow_color # e.g. a shadow that shows When Active
+```
+
 Each of a style's **glow, shadow, border, background and edges** has its own visibility: **Show when** or **Hide when**, **any of** or **all of** the ticked boxes **Always**, **When Active** (the style's condition holds), **When Expanded** and **When Collapsed**. Glow and shadow have a **Regular** and an **Active strength** (×1–×3 of regular). A background can be see-through (**Opacity**). A part with no visibility set follows the condition, as before.
 
 ```yaml

@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.26.268
+// Version: v2026.11.26.269
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.26.268';
+const BUILD_NUMBER = 'v2026.11.26.269';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1440,6 +1440,12 @@ function _framePreviewNotify() {
     try { window.dispatchEvent(new CustomEvent('ees-frame-preview')); } catch (e) {}
   });
 }
+// v269: the Theme card layer. Listed in a frame like any style; it draws the HA theme's own card look
+// from the theme's variables (live, so a theme change shows at once), and the styles after it change
+// only the parts they set. Its shadow is kept and the later glow / shadow are added on top.
+const THEME_FRAME_ID = 'theme:card';
+const THEME_BORDER_COLOR = 'var(--ha-card-border-color, var(--divider-color, #e0e0e0))';
+function themeFramePreset() { return { id: THEME_FRAME_ID, name: 'Theme card', _theme: true }; }
 // v268: the Frame Styles a frame ref actually applies (listed and not switched off)
 function enabledFrameIds(fr) {
   if (!fr || !Array.isArray(fr.presets)) return [];
@@ -1767,7 +1773,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.26.268: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.26.269: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3738,7 +3744,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.26.268: card-level links to one section.
+// v2026.11.26.269: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3779,7 +3785,7 @@ function normalizeCardActive(a) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.26.268: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.26.269: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3812,7 +3818,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.26.268: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.26.269: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3832,7 +3838,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.26.268: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.26.269: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3858,7 +3864,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.26.268 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.26.269 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3880,7 +3886,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.26.268 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.26.269 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3898,7 +3904,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.26.268 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.26.269 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3922,7 +3928,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.26.268 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.26.269 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3967,7 +3973,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.26.268: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.26.269: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -4458,11 +4464,22 @@ class SEEDCard extends HTMLElement {
     Object.keys(lib).forEach(slug => { const id = 'lib:' + slug; if (!map[id]) map[id] = lib[slug]; });
     // The read-only Built-In is always available as a fallback frame.
     if (!map[BUILTIN_FRAME_ID]) map[BUILTIN_FRAME_ID] = builtinFramePreset();
+    map[THEME_FRAME_ID] = themeFramePreset();   // v269
     // v255: in HA's editor preview, unsaved library edits (see _FRAME_PREVIEW)
     if (_FRAME_PREVIEW.mode === 'edited' && this._isEditorPreview()) {
       Object.keys(_FRAME_PREVIEW.drafts).forEach(slug => { map['lib:' + slug] = _FRAME_PREVIEW.drafts[slug]; });
     }
     return map;
+  }
+
+  // v269: the theme's card shadow (ha-card-box-shadow), read where the card sits. Read as a value, not
+  // var(), because it is joined with other shadows and a theme's "none" would void the whole list.
+  // It is re-read on every state update, which includes a theme change.
+  _themeShadowValue(el) {
+    try {
+      const v = getComputedStyle(el || this).getPropertyValue('--ha-card-box-shadow').trim();
+      return (!v || v === 'none') ? '' : v;
+    } catch (e) { return ''; }
   }
 
   // v267: does the card draw the theme's card look (no Frame Style on it)?
@@ -4599,6 +4616,12 @@ class SEEDCard extends HTMLElement {
     layerIds.forEach(id => {
       const fx = byId[id];
       if (!fx) return;
+      if (fx._theme) {   // v269: the theme's card look as the base layer
+        acc.background = { mode: 'theme' };
+        acc.border = { _theme: true, color: THEME_BORDER_COLOR, sides: ['top', 'bottom', 'left', 'right'] };
+        acc._themeShadow = true; any = true;
+        return;
+      }
       // Skip conditional presets that aren't active — UNLESS this application
       // opted to ignore the condition (then the layer always applies). The
       // per-location override (if any) rebinds the condition entity here.
@@ -4647,8 +4670,13 @@ class SEEDCard extends HTMLElement {
       const scolor = acc.shadow.follow_icon ? iconCol : (acc.shadow.follow_border && bCol) ? bCol : acc.shadow.color;   // v261
       parts.push(this._buildDropShadow(scolor, acc.shadow.x, acc.shadow.y, acc.shadow.blur, acc.shadow.spread, acc.shadow.opacity));
     }
+    // v269: the Theme card layer's shadow stays under the glow / shadow added by later styles
+    if (acc._themeShadow) { const ts = this._themeShadowValue(ctx && ctx.el); if (ts) parts.push(ts); }
     out.boxShadow = parts.filter(s => s && s !== 'none').join(', ') || 'none';
-    if (acc.border) {
+    if (acc.border && acc.border._theme) {
+      const line = `var(--ha-card-border-width, 1px) solid ${THEME_BORDER_COLOR}`;
+      out.borderVars = { top: line, bottom: line, left: line, right: line, radius: 'var(--ha-card-border-radius, 12px)' };
+    } else if (acc.border) {
       const bc0 = acc.border.follow_icon ? this._sectionIconColor(section) : acc.border.color;
       const bc = (acc.border.opacity != null && acc.border.opacity < 1) ? this._hexToRgba(bc0, acc.border.opacity) : bc0;   // v261
       const bw = acc.border.width, br = acc.border.radius;
@@ -4753,7 +4781,7 @@ class SEEDCard extends HTMLElement {
       // all of them (Replace). A stack that resolves to nothing (empty, or all
       // conditional presets inactive) leaves the section with no frame at all.
       // v252: a section that isn't a <details> (not collapsible) counts as expanded
-      const fx = this._resolveFrame(section.frame, section, { expanded: el.tagName !== 'DETAILS' || el.open });
+      const fx = this._resolveFrame(section.frame, section, { expanded: el.tagName !== 'DETAILS' || el.open, el });
       if (fx) {
         el.style.overflow = 'visible';
         el.style.boxShadow = fx.boxShadow;
@@ -4805,7 +4833,7 @@ class SEEDCard extends HTMLElement {
       return;
     }
     const fx = frameRef
-      ? this._resolveFrame(frameRef, null, { expanded: wrapper.tagName === 'DETAILS' ? wrapper.open : this._cardContentOpen() })
+      ? this._resolveFrame(frameRef, null, { expanded: wrapper.tagName === 'DETAILS' ? wrapper.open : this._cardContentOpen(), el: wrapper })
       : null;
     // v260: the card paints a theme background with the `background` shorthand, so for a gradient /
     // image theme it IS a background-image, and edge lines (also background-images) replaced it. With
@@ -10140,6 +10168,7 @@ class SEEDCardEditor extends HTMLElement {
     const local = {}; (this._config.frame_presets || []).forEach(f => { if (f && f.id) local[f.id] = f; });
     const nameOf = id => {
       if (id === BUILTIN_FRAME_ID) return 'Built-In';
+      if (id === THEME_FRAME_ID) return 'Theme card';
       if (id.startsWith('lib:')) { const e = lib[id.slice(4)]; return e ? (e.name || id.slice(4)) : `${id.slice(4)} (not in library)`; }
       return local[id] ? (local[id].name || id) : `${id} (missing)`;
     };
@@ -11065,6 +11094,7 @@ class SEEDCardEditor extends HTMLElement {
       let html = `<option value="" ${!sel ? 'selected' : ''}>${escapeHtml(placeholder || '— none —')}</option>`;
       // Built-In fallback always available.
       html += `<option value="${BUILTIN_FRAME_ID}" ${sel === BUILTIN_FRAME_ID ? 'selected' : ''}>Built-In</option>`;
+      html += `<option value="${THEME_FRAME_ID}" ${sel === THEME_FRAME_ID ? 'selected' : ''}>Theme card (your HA theme)</option>`;   // v269
       if (libSlugs.length) {
         html += `<optgroup label="System Presets">` +
           libSlugs.map(slug => `<option value="lib:${escapeHtml(slug)}" ${sel === 'lib:' + slug ? 'selected' : ''}>${escapeHtml(lib[slug].name || slug)}</option>`).join('') +
@@ -11079,6 +11109,7 @@ class SEEDCardEditor extends HTMLElement {
     };
     const nameOf = id => {
       if (id === BUILTIN_FRAME_ID) return 'Built-In';
+      if (id === THEME_FRAME_ID) return 'Theme card (your HA theme)';
       if (typeof id === 'string' && id.startsWith('lib:')) {
         const slug = id.slice(4); const p = lib[slug];
         return (p ? (p.name || slug) : slug) + ' (System)';
@@ -11094,6 +11125,7 @@ class SEEDCardEditor extends HTMLElement {
     // _framePresetsById lives on SEEDCard, not this editor class.
     const presetById = id => {
       if (id === BUILTIN_FRAME_ID) return builtinFramePreset();
+      if (id === THEME_FRAME_ID) return themeFramePreset();
       if (typeof id === 'string' && id.startsWith('lib:')) return lib[id.slice(4)] || null;
       return legacyLocal.find(f => f.id === id) || null;
     };
@@ -14323,7 +14355,7 @@ class SEEDCardEditor extends HTMLElement {
         `)}
 
         ${this._edCardSub('card-frame', 'Card Frame', `
-        <span class="seed-ed-hint">The card's frame (border / glow / shadow / background / edges) comes from Frame Styles, layered here — independent of the per-section frames.</span>
+        <span class="seed-ed-hint">The card's frame (border / glow / shadow / background / edges) comes from Frame Styles, layered here — independent of the per-section frames. Put <b>Theme card</b> first to start from your HA theme's card look; the styles after it change only what they set, and their glow / shadow is added to the theme's shadow.</span>
         ${this._atFrameRefEditor('__card_frame__', this._config.card_frame)}
         ${enabledFrameIds(this._config.card_frame).length ? '' : `
         <div class="seed-ed-checkbox-row">

@@ -5,6 +5,17 @@ resets. Newest first.
 
 ---
 
+## v2026.11.26.269
+
+- **Theme card layer.** A built-in Frame Style, **Theme card (your HA theme)** (`theme:card`). Put it
+  first in a card's (or section's) Frame Styles to start from your theme's card look, then add effects
+  for specific states with the styles after it.
+  - It draws the theme's background, border, corners and shadow from the theme's own variables, live:
+    switching themes, light/dark mode or editing the theme updates the card.
+  - Later styles replace only the parts they set (for example a border).
+  - Their glow and shadow are **added** to the theme's shadow, not replacing it, so the theme look
+    stays and the extra glow appears only while its Show settings hold.
+
 ## v2026.11.26.268
 
 - **Card Appearance says what draws the card.** A line at the top of Card Appearance reads, for example,
