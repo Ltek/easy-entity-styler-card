@@ -5,6 +5,13 @@ resets. Newest first.
 
 ---
 
+## v2026.11.26.271
+
+- **Cards sections: "Embedded cards: style & spacing" panel.** The *clear children* option was hidden
+  inside the Section Header panel. It's now in its own panel, renamed **Child cards inherit parent card
+  style (clear children)** with a line on what it does. The gap and padding settings for embedded cards
+  moved there too. No config changes.
+
 ## v2026.11.26.270
 
 - **Fixed: Frame Styles couldn't be added to a section inside a group.** The section's Frame panel
