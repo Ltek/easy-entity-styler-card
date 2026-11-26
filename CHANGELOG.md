@@ -5,6 +5,15 @@ resets. Newest first.
 
 ---
 
+## v2026.11.25.266
+
+- **Fixed: a card that collapses through its sections always counted as expanded.** For a card that
+  doesn't collapse itself (`card_collapsible: false`), a Frame Style's *When Expanded* / *When
+  Collapsed* now follows its top-level sections and groups: expanded while any of them is open,
+  collapsed when all are closed. A card with no collapsible section is always expanded, as before.
+  The frame updates as you open and close sections, so these cards now look the same as collapsible
+  cards using the same styles.
+
 ## v2026.11.23.265
 
 - **The card defines Active.** Card Appearance → Card Frame → **Card is Active when**: a section has
