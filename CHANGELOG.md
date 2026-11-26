@@ -5,6 +5,13 @@ resets. Newest first.
 
 ---
 
+## v2026.11.26.272
+
+- **New table columns: last update.** *Time since last update* (`last_updated_ago`) and *Last update
+  clock time* (`last_updated_time`) show when an entity last reported (its state or attributes
+  changed), next to the existing *Time since change* / *Change clock time*. That's useful for
+  battery sensors such as leak detectors, whose state rarely changes. Also available for sorting.
+
 ## v2026.11.26.271
 
 - **Cards sections: "Embedded cards: style & spacing" panel.** The *clear children* option was hidden

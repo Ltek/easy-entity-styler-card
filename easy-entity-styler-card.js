@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.26.271
+// Version: v2026.11.26.272
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.26.271';
+const BUILD_NUMBER = 'v2026.11.26.272';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -628,14 +628,18 @@ function resolveValueRef(entityId, ref, hass) {
   const attrs = st && st.attributes ? st.attributes : {};
 
   let raw = null;
+  // v272: last_updated_* = the entity last reported (state OR attributes changed), e.g. "is this
+  // battery sensor still checking in"; last_changed_* = its state last changed.
+  const stampKey = (source === 'last_updated_ago' || source === 'last_updated_time') ? 'last_updated' : 'last_changed';
+  const stamp = st ? (st[stampKey] || st.last_changed) : null;
   if (source === 'attribute') raw = attrs[ref.attribute];
-  else if (source === 'last_changed_ago') raw = (st && st.last_changed)
-    ? Math.max(0, Math.floor((Date.now() - new Date(st.last_changed).getTime()) / 1000)) : null;
-  else if (source === 'last_changed_time') {
+  else if (source === 'last_changed_ago' || source === 'last_updated_ago') raw = stamp
+    ? Math.max(0, Math.floor((Date.now() - new Date(stamp).getTime()) / 1000)) : null;
+  else if (source === 'last_changed_time' || source === 'last_updated_time') {
     // Exact local clock time of the last change, e.g. "12:02 PM" (mirrors the
     // template's second time column). Returned pre-formatted in `display`.
-    if (st && st.last_changed) {
-      const d = new Date(st.last_changed);
+    if (stamp) {
+      const d = new Date(stamp);
       let h = d.getHours(); const m = d.getMinutes();
       const ampm = h >= 12 ? 'PM' : 'AM';
       h = h % 12; if (h === 0) h = 12;
@@ -673,7 +677,7 @@ function resolveValueRef(entityId, ref, hass) {
   }
 
   let display;
-  if (source === 'last_changed_ago') {
+  if (source === 'last_changed_ago' || source === 'last_updated_ago') {
     display = formatDurationShort(raw);
   } else if (badState) {
     display = '—';
@@ -685,7 +689,7 @@ function resolveValueRef(entityId, ref, hass) {
   }
   if (ref.unit && display !== '—' && display !== '') display = display + ref.unit;
 
-  return { raw, num, display, seconds: source === 'last_changed_ago' ? raw : null, badState };
+  return { raw, num, display, seconds: (source === 'last_changed_ago' || source === 'last_updated_ago') ? raw : null, badState };
 }
 
 // The text a value/name column actually shows, given an already-resolved ref.
@@ -1773,7 +1777,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.26.271: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.26.272: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -2758,7 +2762,7 @@ function normalizeRowStyle(rs) {
 // optional label prefix and full styling (color, size, indent, weight, italic).
 function normalizeSecondaryInfo(si) {
   si = si || {};
-  const SOURCES = ['attribute', 'state', 'last_changed_ago', 'last_changed_time', 'area', 'entity_id', 'integration'];
+  const SOURCES = ['attribute', 'state', 'last_changed_ago', 'last_changed_time', 'last_updated_ago', 'last_updated_time', 'area', 'entity_id', 'integration'];
   return {
     enabled: si.enabled === true,
     source: SOURCES.includes(si.source) ? si.source : 'attribute',
@@ -3744,7 +3748,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.26.271: card-level links to one section.
+// v2026.11.26.272: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3785,7 +3789,7 @@ function normalizeCardActive(a) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.26.271: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.26.272: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3818,7 +3822,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.26.271: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.26.272: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3838,7 +3842,7 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.26.271: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+// v2026.11.26.272: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
 //   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
 //   card_title_icon_gap                                             px; absent = 8
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
@@ -3864,7 +3868,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.26.271 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.26.272 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3886,7 +3890,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.26.271 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.26.272 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3904,7 +3908,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.26.271 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.26.272 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3928,7 +3932,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.26.271 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.26.272 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3973,7 +3977,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.26.271: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.26.272: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -7144,11 +7148,13 @@ class SEEDCard extends HTMLElement {
     // second and made rows swap order continuously). Using -timestamp keeps the
     // same visual ordering as ago-seconds (larger timestamp = smaller ago =
     // more recent) while being invariant to the current clock.
-    const isAgo = tieRef.source === 'last_changed_ago';
+    const isAgo = tieRef.source === 'last_changed_ago' || tieRef.source === 'last_updated_ago';
+    const tieKey = tieRef.source === 'last_updated_ago' ? 'last_updated' : 'last_changed';   // v272
     const tieOf = id => {
       if (isAgo) {
         const st = hass.states[id];
-        return st && st.last_changed ? -new Date(st.last_changed).getTime() : 0;
+        const ts = st && (st[tieKey] || st.last_changed);
+        return ts ? -new Date(ts).getTime() : 0;
       }
       const r = resolveValueRef(id, tieRef, hass);
       return r.num != null ? r.num : (r.seconds != null ? r.seconds : 0);
@@ -9574,6 +9580,7 @@ class SEEDCardEditor extends HTMLElement {
   _AT_VALUE_SOURCES = [
     ['state', 'State'], ['attribute', 'Attribute'], ['last_changed_ago', 'Time since change'],
     ['last_changed_time', 'Change clock time'],
+    ['last_updated_ago', 'Time since last update'], ['last_updated_time', 'Last update clock time'],
     ['name', 'Name'], ['entity_id', 'Entity ID'], ['area', 'Area'], ['related', 'Matched entity'],
     ['visibility', 'Visibility (shown/hidden)'], ['field', 'Array field']
   ];
@@ -11779,6 +11786,7 @@ class SEEDCardEditor extends HTMLElement {
   _AT_SI_SOURCES = [
     ['attribute', 'Attribute'], ['state', 'State'], ['area', 'Area'],
     ['last_changed_ago', 'Time since change'], ['last_changed_time', 'Change clock time'],
+    ['last_updated_ago', 'Time since last update'], ['last_updated_time', 'Last update clock time'],
     ['entity_id', 'Entity ID'], ['integration', 'Integration']
   ];
 
