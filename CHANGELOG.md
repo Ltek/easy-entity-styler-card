@@ -5,6 +5,16 @@ resets. Newest first.
 
 ---
 
+## v2026.11.27.274
+
+- **One header look by default.** All header types now default to a **36px icon**: the card title
+  bar (was 22px), section headers (was 20px) and table headers (was 30px). The card title bar's default
+  padding is now **10px top/bottom and 16px left** (was 8px / 12px). With these defaults, every
+  collapsed header is the same height (58px at no outer padding), with its icon at the same position
+  and its text the same 8px from the icon.
+- Only defaults changed: a card or section that sets its own icon size or padding keeps it. Cards that
+  relied on the old defaults get the larger icon and a slightly taller header.
+
 ## v2026.11.26.273
 
 - **Fixed: frosted boxes around child cards with a glass theme.** Themes that set
