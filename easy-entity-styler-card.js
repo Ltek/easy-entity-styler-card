@@ -10,7 +10,7 @@
 //   Entity Tables with rule-based color / icons / sorting
 //    ... all in a super easy to use Visual Editor — YAML optional, never required
 //
-// Version: v2026.11.27.274
+// Version: v2026.11.27.275
 //
 // Author:  LTek
 // Card:    https://github.com/Ltek/easy-entity-styler-card
@@ -23,7 +23,7 @@ function debugLog(...args) {
   if (DEBUG) console.log('[easy-entity-styler-card]', ...args);
 }
 
-const BUILD_NUMBER = 'v2026.11.27.274';
+const BUILD_NUMBER = 'v2026.11.27.275';
 
 const DOMAIN_ICONS = {
   switch: 'mdi:toggle-switch-outline',
@@ -1777,7 +1777,7 @@ function _migrateLegacyFrameLibrary(hass, scope, st, onChange) {
 // callback (the `subscribed` guard returns early afterwards), so whichever consumer — card or editor —
 // registered second was never told the library changed. Symptom: editing a style did not refresh the
 // card beside it. Tolerates a missing set so any call site is safe.
-// v2026.11.27.274: _LIB_REV counts library updates, so a card taken off the page (and therefore
+// v2026.11.27.275: _LIB_REV counts library updates, so a card taken off the page (and therefore
 // no longer listening) can tell on its return whether it missed one.
 let _LIB_REV = 0;
 function _notifyLibListeners(st) {
@@ -3748,7 +3748,7 @@ function dividerLineHtml(section, cfg) {
 // Main Card
 // ============================================================================
 
-// v2026.11.27.274: card-level links to one section.
+// v2026.11.27.275: card-level links to one section.
 //   card_count_section       -> the card title shows that section's live count ("Title - 3")
 //   card_expand_when_section -> a collapsible card opens when that section has entities
 //   card_expand_mode         -> 'load' (default): decided when the card renders, a manual collapse
@@ -3789,7 +3789,7 @@ function normalizeCardActive(a) {
 }
 // The spreads above copy the raw keys through `...config`; drop anything cardSectionLinkKeys
 // declined (blank ids, a mode without a section, the default mode).
-// v2026.11.27.274: a collapsible card can open its body in a POP-UP instead of expanding in place
+// v2026.11.27.275: a collapsible card can open its body in a POP-UP instead of expanding in place
 // (a card near the bottom of the screen otherwise expands off it).
 //   card_open_mode: 'popup'             absent = expand in place (unchanged behaviour)
 //   card_popup_trigger: 'icon'          absent = tapping the header opens it; 'icon' = a header
@@ -3822,7 +3822,7 @@ function cardPopupKeys(c) {
   const blur = int(c.card_popup_blur, 0, 30); if (blur !== null) out.card_popup_blur = blur;
   return out;
 }
-// v2026.11.27.274: per-SECTION pop-up. A collapsible section with its title row shown can open
+// v2026.11.27.275: per-SECTION pop-up. A collapsible section with its title row shown can open
 // its body in a pop-up from its own header, instead of expanding in place. Same options as the
 // card-level pop-up, prefixed `popup_` on the section:
 //   open_mode: 'popup' · popup_size: small|large|full · popup_title: false ·
@@ -3842,9 +3842,10 @@ function sectionPopupKeys(s) {
   const blur = int(s.popup_blur, 0, 30); if (blur !== null) out.popup_blur = blur;
   return out;
 }
-// v2026.11.27.274: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
-//   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 8 / 12 / 12
-//   card_title_icon_gap                                             px; absent = 8
+// v2026.11.27.275: card title bar spacing + chevron look (EES-FEATURE-GAPS items 1 and 4).
+//   card_title_pad_v / card_title_pad_left / card_title_pad_right   px; absent = 0 / 22 / 16 (v275)
+//   card_title_icon_gap                                             px; absent = 14 (v275)
+//   card_title_height                                               px; absent = 60 (v275)
 //   card_chevron_icon   mdi glyph; absent = mdi:chevron-down
 //   card_chevron_color  any colour (four-mode control); absent = the card's secondary text colour
 // All optional and written only when set, so an untouched card is byte-identical.
@@ -3872,7 +3873,7 @@ function cardTitleBarKeys(c) {
   if (typeof c.card_chevron_color === 'string' && c.card_chevron_color.trim()) out.card_chevron_color = c.card_chevron_color.trim();
   return out;
 }
-// v2026.11.27.274 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
+// v2026.11.27.275 (EES-FEATURE-GAPS 3b): text on the RIGHT of a header, for the card title and
 // every section header alike. Same four keys at both levels (card ones prefixed `card_`):
 //   title_right        template; {entity:ID} = HA-formatted state ("1.84 kW"),
 //                      {entity:ID:attr} = HA-formatted attribute, {entity:ID:raw} = the bare state
@@ -3894,7 +3895,7 @@ function titleRightKeys(c, prefix = '') {
   const sz = optPx(c[k('title_right_size')], 48); if (sz !== null && sz >= 6) out[k('title_right_size')] = sz;
   return out;
 }
-// v2026.11.27.274 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
+// v2026.11.27.275 (EES-FEATURE-GAPS item 9, Option A): any card as the card's title bar, like
 // expander-card's `title-card`.
 //   card_header_card: { type: …, … }   that card's own config, verbatim
 //   card_header_card_tap: 'card'        taps go to the header card (its own tap/hold actions run);
@@ -3912,7 +3913,7 @@ function stripCardHeaderCardKeys(m) {
   ['card_header_card', 'card_header_card_tap'].forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.27.274 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
+// v2026.11.27.275 (EES-FEATURE-GAPS 9.3 / 9.5), same keys on the card (prefix card_) and sections:
 //   title_suffix (template), title_suffix_color, title_suffix_size  — a smaller part right after
 //       the title ("Living Room TV  - Plex"); a rule's set_title_suffix replaces it
 //   title_right2 (template), title_right2_color, title_right2_size  — a second right-side line,
@@ -3936,7 +3937,7 @@ function stripTitleExtraKeys(m, prefix = '') {
   TITLE_EXTRA_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// v2026.11.27.274 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
+// v2026.11.27.275 (EES-FEATURE-GAPS 9.6 / 9.7), on the card title:
 //   title_icon_source: entity_picture   draw an entity's picture instead of the mdi icon
 //   title_icon_entity                   whose picture (image.*, person.*, camera.* …)
 //   title_icon_ring / _ring_color       a ring around the picture (px; colour; a rule's
@@ -3981,7 +3982,7 @@ function stripTitleRightKeys(m, prefix = '') {
   TITLE_RIGHT_KEYS.map(n => prefix + n).forEach(k => { if (!(k in keep)) delete m[k]; else m[k] = keep[k]; });
   return m;
 }
-// ---- v2026.11.27.274: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
+// ---- v2026.11.27.275: header template engine (EES-FEATURE-GAPS 9.1) --------------------------
 // One small, FIXED token language for every header text: card title, section names, right-side
 // text and the rules' set_right / set_title. No conditionals: those belong in Header Rules.
 //   {entity:ID}            state as HA formats it ("1.84 kW")
@@ -5153,7 +5154,7 @@ class SEEDCard extends HTMLElement {
           padding: 0 var(--seed-pad);
           display: flex;
           align-items: center;
-          gap: var(--seed-ctb-gap, 8px);
+          gap: var(--seed-ctb-gap, 14px);   /* v275 default */
         }
         .seed-title ha-icon {
           color: var(--seed-card-title-icon-color);
@@ -5223,10 +5224,10 @@ class SEEDCard extends HTMLElement {
           display: flex;
           align-items: center;
           gap: 8px;
-          /* v274 defaults: 10px top/bottom, 16px left, so the title bar lines up with a section header */
-          padding: var(--seed-ctb-pad-v, calc(var(--seed-pad) * 1.25)) var(--seed-ctb-pad-r, calc(var(--seed-pad) * 1.5))
-                   var(--seed-ctb-pad-v, calc(var(--seed-pad) * 1.25)) var(--seed-ctb-pad-l, calc(var(--seed-pad) * 2));
-          min-height: var(--seed-ctb-h, 0px);
+          /* v275 defaults: 0 top/bottom inside a 60px-tall bar (content centred), 22px left, 16px right */
+          padding: var(--seed-ctb-pad-v, 0px) var(--seed-ctb-pad-r, 16px)
+                   var(--seed-ctb-pad-v, 0px) var(--seed-ctb-pad-l, 22px);
+          min-height: var(--seed-ctb-h, 60px);   /* v275 default */
           box-sizing: border-box;
         }
         .easy-entity-styler-card-summary::-webkit-details-marker { display: none; }
@@ -13538,6 +13539,9 @@ class SEEDCardEditor extends HTMLElement {
         .seed-ed-look-status { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; padding: 6px 10px;
           border: 1px solid var(--ltek-c-panel-border); border-radius: var(--ltek-r-ctrl); font-size: var(--ltek-fs-body); }
         .seed-ed-look-status ha-icon { --mdc-icon-size: 18px; color: var(--ees-c-theme-accent); flex: 0 0 auto; }
+        /* v275: per-setting reset */
+        .ees-reset-one { --mdc-icon-size: 18px; flex: 0 0 auto; opacity: 0.55; cursor: pointer; }
+        .ees-reset-one:hover { opacity: 1; color: var(--ltek-c-accent, var(--primary-color)); }
         /* v265 */
         .seed-ed-fxg-note { display: block; padding: 0 var(--ltek-sp-4) 8px; }
         .seed-ed-group-div .ees-info-btn, .seed-ed-fxg-head .ees-info-btn { --mdc-icon-size: 18px; margin-left: 6px; vertical-align: middle; }
@@ -14295,12 +14299,12 @@ class SEEDCardEditor extends HTMLElement {
         ` : ''}
 
         <div class="seed-ed-group-div">Title bar spacing${this._edOptPxReset(['card_title_height', 'card_title_pad_v', 'card_title_pad_left', 'card_title_pad_right', 'card_title_icon_gap'], 'Reset')}</div>
-        <span class="seed-ed-hint">Padding applies to a collapsible card's title bar (and a pop-up card's header). Default matches earlier versions: 8px top/bottom, 12px left/right, 8px between icon and text.</span>
-        ${this._edOptPx('card_title_height', 'Height (at least)', 0, 120)}
-        ${this._edOptPx('card_title_pad_v', 'Padding (top/bottom)', 10, 32)}
-        ${this._edOptPx('card_title_pad_left', 'Padding (left)', 16, 48)}
-        ${this._edOptPx('card_title_pad_right', 'Padding (right)', 12, 48)}
-        ${this._edOptPx('card_title_icon_gap', 'Icon ↔ text gap', 8, 40)}
+        <span class="seed-ed-hint">Applies to a collapsible card's title bar (and a pop-up card's header). Defaults: 60px tall with the content centred, no extra padding top/bottom, 22px left, 16px right, 14px between icon and text.</span>
+        ${this._edOptPx('card_title_height', 'Height (at least)', 60, 120)}
+        ${this._edOptPx('card_title_pad_v', 'Padding (top/bottom)', 0, 32)}
+        ${this._edOptPx('card_title_pad_left', 'Padding (left)', 22, 48)}
+        ${this._edOptPx('card_title_pad_right', 'Padding (right)', 16, 48)}
+        ${this._edOptPx('card_title_icon_gap', 'Icon ↔ text gap', 14, 40)}
 
         ${this._atHeaderRuleRefEditor('__card__', this._config, { flush: true })}
         `)}
@@ -14559,6 +14563,7 @@ class SEEDCardEditor extends HTMLElement {
 
     this.innerHTML = html;
     this.attachEditorListeners();
+    this._addResetButtons();   // v275
     this._updateYamlPreview();
     this._rendered = true;
     this._lastKnownJSON = JSON.stringify(this._config);
@@ -14573,6 +14578,89 @@ class SEEDCardEditor extends HTMLElement {
         this._saveOpenState();
       });
     });
+  }
+
+  // v275: a "reset to default" button on every numeric and colour setting. Added after each render to
+  // any slider / colour row that doesn't have one; a click removes the stored value, so the card's
+  // default applies again. Keys are found from the control's own data attributes, else by class / id.
+  _ED_RESET_CLASS_KEYS = {
+    'ed-cards-gap': 'card_gap', 'ed-group-gap': 'card_gap', 'ed-section-icon-color': 'icon_color',
+    'ed-section-title-color': 'title_color', 'ed-section-title-indent': 'title_indent', 'ed-section-header-pad-v': 'header_pad_v',
+    'ed-sec-row-indent': 'row_indent', 'ed-sec-row-border-color': 'row_border_color', 'ed-sec-row-border-width': 'row_border_width',
+    'ed-sec-row-border-radius': 'row_border_radius', 'ed-count-color': 'count_color', 'ed-entity-icon-color': 'entity_icon_color',
+    'ed-entity-text-color': 'entity_text_color', 'ed-chip-bg': 'chip_bg', 'ed-chip-border-color': 'chip_border_color',
+    'ed-chip-text-color': 'chip_text_color', 'ed-chip-scale': 'chip_scale', 'ed-chip-radius': 'chip_radius',
+    'ed-count-font-size': 'count_font_size', 'ed-entity-font-size': 'entity_font_size', 'ed-entity-icon-size': 'entity_icon_size',
+    'ed-section-icon-size': 'icon_size', 'ed-section-title-size': 'title_font_size',
+    'ed-si-color': 'si:color', 'ed-si-font-size': 'si:font_size', 'ed-si-indent': 'si:indent'
+  };
+  _ED_RESET_ID_KEYS = {
+    'ed-title-font-size': 'title_font_size', 'ed-color-title-text': 'title_text_color', 'ed-title-icon-size': 'title_icon_size',
+    'ed-color-title-icon': 'title_icon_color', 'ed-section-header-pad-v': 'section_header_pad_v', 'ed-scale-slider': 'scale',
+    'ed-icon-scale': 'icon_scale', 'ed-title-icon-scale': 'title_icon_scale', 'ed-title-text-scale': 'title_text_scale',
+    'ed-entity-text-scale': 'entity_text_scale', 'ed-slider-max-width': 'slider_max_width', 'ed-card-padding-v': 'card_padding_v',
+    'ed-card-padding-h': 'card_padding_h', 'ed-min-refresh': 'min_refresh_seconds', 'ed-row-indent': 'row_indent',
+    'ed-color-icon': 'colors.icon', 'ed-row-border-width': 'row_border_width', 'ed-color-row-border': 'colors.row_border',
+    'ed-row-border-radius': 'row_border_radius', 'ed-card-popup-auto-close': 'card_popup_auto_close',
+    'ed-card-popup-dim': 'card_popup_dim', 'ed-card-popup-blur': 'card_popup_blur'
+  };
+  _edResetTarget(row) {
+    const q = sel => row.querySelector(sel);
+    let el = q('select.ed-color-mode[data-ed-key]');
+    if (el) {
+      const scope = el.dataset.edScope, key = el.dataset.edKey, sid = el.dataset.sectionId || '';
+      if (scope === 'config') return { kind: 'card', path: key };
+      if (scope === 'colors') return { kind: 'card', path: 'colors.' + key };
+      if (scope === 'si') return { kind: 'section', sid, path: 'secondary_info.' + key };
+      return { kind: 'section', sid, path: key };
+    }
+    el = q('[data-at-sid][data-at-path]');
+    if (el && (el.type === 'range' || el.type === 'number' || el.type === 'color' || el.classList.contains('at-color-mode'))) {
+      return { kind: 'at', sid: el.dataset.atSid, path: el.dataset.atPath };
+    }
+    el = q('.ed-opt-px[data-key]');
+    if (el) return el.dataset.sectionId ? { kind: 'section', sid: el.dataset.sectionId, path: el.dataset.key } : { kind: 'card', path: el.dataset.key };
+    el = q('[data-tr-key]');
+    if (el) return el.dataset.sectionId ? { kind: 'section', sid: el.dataset.sectionId, path: el.dataset.trKey } : { kind: 'card', path: el.dataset.trKey };
+    el = q('.ed-sec-pop[data-sp-key]');
+    if (el) return { kind: 'section', sid: el.dataset.sectionId, path: el.dataset.spKey };
+    el = q('.ed-div-input[data-div-key]');
+    if (el) return { kind: 'section', sid: el.dataset.divSid, path: el.dataset.divKey };
+    for (const inp of row.querySelectorAll('input[type="range"], input[type="color"], input[type="number"]')) {
+      if (inp.id && this._ED_RESET_ID_KEYS[inp.id]) return { kind: 'card', path: this._ED_RESET_ID_KEYS[inp.id] };
+      const cls = [...inp.classList].find(c => this._ED_RESET_CLASS_KEYS[c]);
+      if (cls && inp.dataset.sectionId) {
+        const k = this._ED_RESET_CLASS_KEYS[cls];
+        return { kind: 'section', sid: inp.dataset.sectionId, path: k.startsWith('si:') ? 'secondary_info.' + k.slice(3) : k };
+      }
+    }
+    return null;
+  }
+  _addResetButtons() {
+    const rows = this.querySelectorAll('.seed-ed-slider-row, .seed-ed-color-row, .seed-ed-color-field, .seed-ed-color, .seed-ed-style-field');
+    rows.forEach(row => {
+      if (row.querySelector('.ees-reset-one, .at-slider-reset')) return;
+      if (row.parentElement && row.parentElement.closest('.seed-ed-color-row, .seed-ed-color-field') && !row.matches('.seed-ed-slider-row')) return;
+      if (!row.querySelector('input[type="range"], input[type="color"], input[type="number"], select.ed-color-mode, select.at-color-mode')) return;
+      const t = this._edResetTarget(row);
+      if (!t || !t.path) return;
+      const b = document.createElement('ha-icon');
+      b.className = 'seed-ed-icon-btn ees-reset-one';
+      b.setAttribute('icon', 'mdi:restore');
+      b.title = 'Reset to default';
+      b.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); this._edResetTo(t); });
+      row.appendChild(b);
+    });
+  }
+  _edResetTo(t) {
+    if (t.kind === 'at') { this._atApply(t.sid, o => this._atDelete(o, t.path)); return; }
+    const obj = t.kind === 'card' ? this._config : this._findSectionDeep(t.sid);
+    if (!obj) return;
+    if (t.path.startsWith('colors.') && t.kind === 'card') {
+      const k = t.path.slice(7); const c = { ...(this._config.colors || {}) }; delete c[k]; this._config.colors = c;
+    } else this._atDelete(obj, t.path);
+    this._fireConfigChanged();
+    this._saveOpenState(); this._rendered = false; this.renderEditor();
   }
 
   // Dispatch one section (any type) to its editor-row builder. Extracted from the

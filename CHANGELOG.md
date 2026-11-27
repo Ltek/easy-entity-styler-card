@@ -5,6 +5,17 @@ resets. Newest first.
 
 ---
 
+## v2026.11.27.275
+
+- **New title bar spacing defaults** (taken from the Play Room TV card). A collapsible card's title
+  bar is now **60px tall** with its content centred, **no extra padding top/bottom**, **22px left**,
+  **16px right** and **14px between icon and text** (was 8 / 12 / 12 / 8px with no minimum height).
+  Only cards that leave these settings unset change.
+- **Reset to default on every numeric and colour setting.** Each slider, number and colour control in
+  the editor now has a reset icon. Clicking it removes the stored value, so the default applies again.
+  This covers card, section and Frame Style / Header Rule settings. Gradient stops on dividers, which
+  have no single default, keep their pattern picker instead.
+
 ## v2026.11.27.274
 
 - **One header look by default.** All header types now default to a **36px icon**: the card title
